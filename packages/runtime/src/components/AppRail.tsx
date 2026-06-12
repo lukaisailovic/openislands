@@ -12,11 +12,11 @@ function tileLabel(app: WorkspaceAppInfo): string {
 function AppTile({ app, active }: { app: WorkspaceAppInfo; active: boolean }) {
   const Icon = app.icon ? pageIcon(app.icon) : null;
   return (
-    <div className="group relative flex shrink-0 justify-center md:w-full">
+    <div className="group relative flex w-full shrink-0 justify-center">
       <span
         aria-hidden
         className={cn(
-          "absolute top-1/2 left-0 hidden w-1 -translate-y-1/2 rounded-r-full bg-kumo-contrast transition-[height,opacity] duration-200 motion-reduce:transition-none md:block",
+          "absolute top-1/2 left-0 w-1 -translate-y-1/2 rounded-r-full bg-kumo-contrast transition-[height,opacity] duration-200 motion-reduce:transition-none",
           active ? "h-6 opacity-100" : "h-2 opacity-0 group-hover:opacity-60",
         )}
       />
@@ -33,14 +33,16 @@ function AppTile({ app, active }: { app: WorkspaceAppInfo; active: boolean }) {
             className={cn(
               "relative grid size-10 cursor-pointer place-items-center transition-[border-radius,color] duration-200 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-kumo-focus focus-visible:outline-none",
               active
-                ? "rounded-lg bg-kumo-tint text-kumo-strong max-md:ring-1 max-md:ring-kumo-line"
+                ? "rounded-lg bg-kumo-tint text-kumo-strong"
                 : "rounded-xl bg-kumo-tint text-kumo-subtle hover:rounded-lg hover:text-kumo-strong",
             )}
           >
             {Icon ? (
               <Icon size={20} />
             ) : (
-              <span className="text-sm font-medium">{(app.title.trim()[0] ?? "?").toUpperCase()}</span>
+              <span className="text-sm font-medium">
+                {(app.title.trim()[0] ?? "?").toUpperCase()}
+              </span>
             )}
             {app.errorCount > 0 ? (
               <WarningCircle
@@ -59,14 +61,14 @@ function AppTile({ app, active }: { app: WorkspaceAppInfo; active: boolean }) {
 
 /**
  * The Discord-style workspace switcher: one icon tile per served app.
- * A vertical left rail from md up; a horizontal scrollable strip on mobile.
+ * Desktop only — on mobile the app picker lives inside the sidebar drawer.
  */
 export function AppRail({ apps }: { apps: WorkspaceAppInfo[] }) {
   const { appId } = useParams({ strict: false });
   return (
     <nav
       aria-label="Apps"
-      className="flex h-14 w-full shrink-0 items-center gap-2 overflow-x-auto border-b border-kumo-hairline bg-kumo-recessed px-3 md:h-auto md:w-14 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:px-0 md:py-3"
+      className="hidden w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-kumo-hairline bg-kumo-recessed py-3 md:flex"
     >
       {apps.map((app) => (
         <AppTile key={app.id} app={app} active={app.id === appId} />

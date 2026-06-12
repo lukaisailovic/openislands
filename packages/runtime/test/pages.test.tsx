@@ -34,7 +34,7 @@ function renderAtPage(manifest: Manifest, pageId: string, group?: string) {
         : undefined;
       return (
         <AppIdContext.Provider value={params.appId}>
-          <AppShell manifest={manifest} manifestErrors={[]}>
+          <AppShell manifest={manifest} manifestErrors={[]} apps={[]}>
             <Dashboard manifest={manifest} page={page} activeGroup={active} />
           </AppShell>
         </AppIdContext.Provider>
@@ -44,9 +44,7 @@ function renderAtPage(manifest: Manifest, pageId: string, group?: string) {
   const router = createRouter({
     routeTree: rootRoute.addChildren([pageRoute]),
     history: createMemoryHistory({
-      initialEntries: [
-        group ? `/${APP_ID}/${pageId}?group=${group}` : `/${APP_ID}/${pageId}`,
-      ],
+      initialEntries: [group ? `/${APP_ID}/${pageId}?group=${group}` : `/${APP_ID}/${pageId}`],
     }),
   });
   render(

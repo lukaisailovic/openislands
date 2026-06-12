@@ -13,9 +13,10 @@ export const Route = createFileRoute("/_shell/$appId")({
 function AppLayout() {
   const { appId } = Route.useParams();
   const { manifest, manifestErrors } = Route.useLoaderData();
+  const apps = useLoaderData({ from: "/_shell" });
   return (
     <AppIdContext.Provider value={appId}>
-      <AppShell manifest={manifest} manifestErrors={manifestErrors}>
+      <AppShell manifest={manifest} manifestErrors={manifestErrors} apps={apps}>
         <Outlet />
       </AppShell>
     </AppIdContext.Provider>
