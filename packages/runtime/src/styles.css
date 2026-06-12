@@ -1,0 +1,91 @@
+@source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles";
+@import "tailwindcss";
+
+:root:not([data-mode]) {
+  color-scheme: light dark;
+}
+
+@theme {
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/*
+ * transitions.dev "Modal open / close" (06-modal), driven by Base UI's dialog
+ * lifecycle attributes instead of .is-open/.is-closing — Kumo's Dialog already
+ * orchestrates those states, so no JS snippet is needed.
+ */
+:root {
+  --modal-open-dur: 250ms;
+  --modal-close-dur: 150ms;
+  --modal-scale: 0.96;
+  --modal-scale-close: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-modal {
+  transition-duration: var(--modal-open-dur);
+  transition-timing-function: var(--modal-ease) !important;
+}
+.t-modal[data-starting-style] {
+  scale: var(--modal-scale);
+  opacity: 0;
+}
+.t-modal[data-ending-style] {
+  scale: var(--modal-scale-close);
+  opacity: 0;
+  transition-duration: var(--modal-close-dur);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-modal {
+    transition: none !important;
+  }
+}
+
+/*
+ * Responsive span floor. Explicit spans can leave a tile too narrow once the
+ * grid itself shrinks, so we size the grid as a container and floor each tile's
+ * column count against the container width — never below ~260-300px of usable
+ * width. The span lives in --oi-span (set per tile); container queries override
+ * the declared span as the container narrows.
+ */
+.oi-grid {
+  container-type: inline-size;
+  container-name: oi-grid;
+}
+
+.oi-tile {
+  grid-column: span var(--oi-span) / span var(--oi-span);
+}
+
+.oi-row {
+  grid-column: 1 / -1;
+}
+
+/* Middle band: floor every tile at half-width so KPIs can't be squeezed. */
+@container oi-grid (max-width: 900px) {
+  .oi-tile {
+    grid-column: span max(var(--oi-span), 6) / span max(var(--oi-span), 6);
+  }
+}
+
+/* Narrow: one tile per row. */
+@container oi-grid (max-width: 640px) {
+  .oi-tile {
+    grid-column: 1 / -1;
+  }
+}

@@ -1,0 +1,22 @@
+ts,date,sport,title,duration_min,strain,avg_hr,max_hr,kcal,note
+2026-05-15 18:20,2026-05-15,walk,Long walk,39,12.2,103,129,289,
+2026-05-16 17:45,2026-05-16,zone2,Zone 2 — 45 min easy,40,6.8,136,161,260,felt strong
+2026-05-17 12:15,2026-05-17,walk,Long walk,51,11.3,94,110,388,
+2026-05-19 12:15,2026-05-19,run,Tempo run,36,12.4,153,185,313,new route
+2026-05-20 17:45,2026-05-20,lift,Upper body B,61,8.0,109,132,576,felt strong
+2026-05-21 17:45,2026-05-21,lift,Lower body B,68,9.9,111,140,688,"cut short, low energy"
+2026-05-22 07:30,2026-05-22,zone2,Zone 2 — 45 min easy,46,11.7,133,154,462,
+2026-05-23 12:15,2026-05-23,zone2,Zone 2 — 45 min easy,49,6.9,137,168,422,"cut short, low energy"
+2026-05-24 17:45,2026-05-24,walk,Long walk,60,12.8,93,123,390,felt strong
+2026-05-25 07:30,2026-05-25,walk,Evening walk,41,6.0,106,125,304,
+2026-05-26 17:45,2026-05-26,run,Easy run,48,8.7,144,166,463,"cut short, low energy"
+2026-05-28 18:20,2026-05-28,walk,Long walk,65,6.4,105,126,552,new route
+2026-05-29 17:45,2026-05-29,zone2,Zone 2 — 45 min easy,41,7.4,136,160,387,new route
+2026-05-30 07:30,2026-05-30,lift,Lower body A,54,12.3,116,146,441,"cut short, low energy"
+2026-05-31 18:20,2026-05-31,walk,Long walk,36,12.3,97,122,339,felt strong
+2026-06-01 07:10,2026-06-01,walk,Evening walk,64,6.8,102,119,487,felt strong
+2026-06-03 07:10,2026-06-03,lift,Lower body B,54,7.4,109,135,510,"cut short, low energy"
+2026-06-04 17:45,2026-06-04,run,Intervals 6x400m,48,6.4,144,178,377,
+2026-06-06 07:10,2026-06-06,run,Tempo run,38,12.7,149,176,367,new route
+2026-06-07 07:30,2026-06-07,cycle,Outdoor ride,40,9.6,134,161,380,"cut short, low energy"
+2026-06-11 07:30,2026-06-11,lift,Lower body A,61,8.9,111,145,613,

@@ -1,0 +1,4 @@
+ts,title,severity
+2026-06-02,Gateway latency spike,Sev-2
+2026-05-28,Auth token refresh errors,Sev-3
+2026-05-21,Search index lag,Sev-3

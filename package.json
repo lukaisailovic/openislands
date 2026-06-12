@@ -1,0 +1,37 @@
+{
+  "name": "openislands-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenIslands — agent-built dashboards over data you own, that don't rot.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Luka Isailovic",
+  "homepage": "https://github.com/lukaisailovic/openislands",
+  "repository": { "type": "git", "url": "https://github.com/lukaisailovic/openislands.git" },
+  "engines": { "node": ">=20" },
+  "packageManager": "pnpm@11.5.1",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "oxlint",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "validate:templates": "tsx packages/cli/src/index.ts validate templates/finance && tsx packages/cli/src/index.ts validate templates/health && tsx packages/cli/src/index.ts validate templates/operations",
+    "e2e": "node scripts/e2e.mjs",
+    "demo": "tsx packages/cli/src/index.ts serve templates/finance",
+    "oi": "tsx packages/cli/src/index.ts",
+    "example": "sh -c 'exec tsx packages/cli/src/index.ts serve apps/examples/\"$0\"'",
+    "examples": "tsx packages/cli/src/index.ts serve apps/examples"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.10",
+    "oxfmt": "^0.54.0",
+    "oxlint": "^1.69.0",
+    "tsdown": "^0.22.2",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

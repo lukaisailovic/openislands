@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "title": "Finance Overview",
+  "datasets": {
+    "net_worth_monthly": { "source": "data/net_worth_monthly.csv", "description": "monthly net worth, after-tax, cash, income + house target" },
+    "allocation": { "sql": "models/transforms/allocation.sql", "description": "portfolio value + share by asset class" },
+    "holdings": { "sql": "models/transforms/holdings_pnl.sql", "description": "positions with unrealized gain/loss" },
+    "goals": { "source": "data/goals.csv", "description": "savings goals: target vs. current" },
+    "transactions": { "source": "data/transactions.csv", "description": "recent money movements" },
+    "strategy_notes": { "source": "docs/strategy.md", "description": "crypto + house strategy (markdown)" }
+  },
+  "pages": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "islands": [
+        { "type": "layout.row", "id": "kpis", "islands": [
+          { "type": "metric.kpi", "title": "Net worth", "dataset": "net_worth_monthly", "value": "net_worth_eur", "compareTo": "prev", "format": "eur", "span": 3 },
+          { "type": "metric.kpi", "title": "After-tax net worth", "dataset": "net_worth_monthly", "value": "after_tax_eur", "compareTo": "prev", "format": "eur", "span": 3 },
+          { "type": "metric.kpi", "title": "Liquid cash", "dataset": "net_worth_monthly", "value": "cash_eur", "compareTo": "prev", "format": "eur", "span": 3 },
+          { "type": "metric.kpi", "title": "Monthly income", "dataset": "net_worth_monthly", "value": "monthly_income_eur", "compareTo": "prev", "format": "eur", "span": 3 }
+        ] },
+
+        { "type": "layout.row", "id": "worth", "islands": [
+          { "type": "timeseries.line", "title": "Net worth vs. €500K target", "dataset": "net_worth_monthly", "x": "month", "y": "net_worth_eur", "options": { "goalField": "target_eur", "area": true }, "span": 7 },
+          { "type": "breakdown.treemap", "title": "Allocation by class", "dataset": "allocation", "label": "class", "value": "value_eur", "span": 5 }
+        ] },
+
+        { "type": "table.grid", "title": "Holdings", "dataset": "holdings", "span": 12, "columns": [
+          { "field": "asset", "label": "Asset" },
+          { "field": "class", "label": "Class" },
+          { "field": "units", "label": "Units" },
+          { "field": "value_eur", "label": "Value", "format": "eur" },
+          { "field": "cost_basis_eur", "label": "Cost basis", "format": "eur" },
+          { "field": "gain_loss_eur", "label": "Gain / loss", "format": "eur", "status": {} },
+          { "field": "gain_loss_pct", "label": "%", "format": "pct", "status": {} }
+        ] },
+
+        { "type": "layout.row", "id": "plans", "islands": [
+          { "type": "note.card", "title": "Allocation strategy", "span": 6, "markdown": "## Boring on purpose\n\nMonthly DCA into a global index core. **70% index / 20% crypto / 10% cash.**\n\n- Automate the buys, ignore the noise\n- No leverage, no margin\n- Crypto sleeve capped at 25% of net worth" },
+          { "type": "note.card", "title": "Apartment down payment", "span": 6, "markdown": "## Plan\n\nTarget **€60K** by 2027-03.\n\n- €1.5K/month auto-transfer\n- Parked in short-term bonds\n- Don't raid the emergency fund" }
+        ] },
+
+        { "type": "layout.row", "id": "activity", "islands": [
+          { "type": "category.bar", "title": "Goals — target vs. current", "dataset": "goals", "x": "goal", "y": "current_eur", "span": 7 },
+          { "type": "timeline.feed", "title": "Recent transactions", "dataset": "transactions", "ts": "ts", "titleField": "description", "detail": "category", "span": 5 }
+        ] },
+
+        { "type": "source.doc", "title": "Strategy source", "kind": "markdown", "file": "docs/strategy.md", "span": 12 }
+      ]
+    }
+  ]
+}

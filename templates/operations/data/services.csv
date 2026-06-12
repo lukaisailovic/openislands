@@ -1,0 +1,6 @@
+service,status,p95_ms,error_rate,owner
+gateway,degraded,340,0.012,platform
+auth,healthy,90,0.001,identity
+payments,healthy,150,0.002,payments
+search,healthy,210,0.004,discovery
+notifications,healthy,120,0.003,growth

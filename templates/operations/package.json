@@ -1,0 +1,11 @@
+{
+  "name": "operations-dashboard",
+  "private": true,
+  "type": "module",
+  "description": "Editor types only — OpenIslands runs this project without node_modules.",
+  "devDependencies": {
+    "@openislands/connector-kit": "^0.1.0",
+    "@types/react": "^19.2.0",
+    "zod": "^4.4.3"
+  }
+}

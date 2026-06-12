@@ -1,0 +1,331 @@
+{
+  "version": 1,
+  "title": "Health",
+  "datasets": {
+    "macros_daily": { "source": "data/macros_daily.csv", "description": "daily nutrition totals + goals (kcal band, protein/carb/fat, sat-fat limit, fiber, sugar, hydration)" },
+    "meals": { "source": "data/meals.csv", "description": "one row per meal: typed, timed, per-meal macros, confidence, note" },
+    "meal_components": { "source": "data/meal_components.csv", "description": "components inside each meal, grouped by meal_id with full micro-detail" },
+    "weight": { "source": "data/weight.csv", "description": "body weight over time, with source (whoop / scale)" },
+    "wearable_daily": { "source": "data/wearable_daily.csv", "description": "sleep score / recovery / HRV / resting HR / sleep-stage minutes per day" },
+    "biomarkers": { "source": "data/biomarkers.csv", "description": "blood-panel marker history: one row per marker per draw, with reference + optimal ranges" },
+    "biomarkers_status": { "sql": "models/transforms/biomarkers_status.sql", "description": "latest value per marker with a derived in-range / out-of-range / optimal verdict" },
+    "panels": { "source": "data/panels.csv", "description": "blood draws: named panel + draw date + lab" },
+    "workouts": { "source": "data/workouts.csv", "description": "workouts: sport, duration, strain, heart rate, kcal" },
+    "training_weekly": { "sql": "models/transforms/training_weekly.sql", "description": "weekly training minutes by sport" },
+    "sleep_stages": { "sql": "models/transforms/sleep_stages_long.sql", "description": "sleep-stage minutes in long form (date, stage, minutes) for a stacked bar" },
+    "batches_status": { "sql": "models/transforms/batches_status.sql", "description": "cooked batches with remaining grams and macros, depleted by logged intake" },
+    "protocol": { "source": "data/protocol.csv", "description": "supplements, targets, training and habit protocol items" },
+    "whoop_recovery": { "source": "data/whoop_recovery.csv", "description": "daily Whoop recovery: score, resting heart rate, HRV (synced by the whoop connector)" },
+    "whoop_sleep": { "source": "data/whoop_sleep.csv", "description": "per-sleep Whoop performance + stage durations (synced by the whoop connector)" },
+    "whoop_workouts": { "source": "data/whoop_workouts.csv", "description": "per-workout Whoop strain + heart rate (synced by the whoop connector)" }
+  },
+  "actions": {
+    "log_meal": {
+      "dataset": "meals",
+      "mode": "append",
+      "description": "Log a meal (totals row). Follow with log_meal_components using the same meal_id.",
+      "fields": {
+        "meal_type": { "enum": ["breakfast", "lunch", "dinner", "snack"] },
+        "kcal": { "min": 0, "max": 5000 },
+        "protein_g": { "min": 0, "max": 500 },
+        "carb_g": { "min": 0, "max": 1000 },
+        "fat_g": { "min": 0, "max": 500 },
+        "confidence": { "min": 0, "max": 1 },
+        "items": { "min": 1, "max": 50 }
+      }
+    },
+    "log_meal_components": {
+      "dataset": "meal_components",
+      "mode": "append",
+      "description": "Log the components of a meal; meal_id must match an existing meals row.",
+      "fields": {
+        "kind": { "enum": ["food", "recipe", "batch"] },
+        "grams": { "min": 0, "max": 3000 },
+        "kcal": { "min": 0, "max": 3000 }
+      }
+    },
+    "log_weight": {
+      "dataset": "weight",
+      "mode": "append",
+      "description": "Log a body-weight measurement",
+      "fields": {
+        "kg": { "min": 30, "max": 200 },
+        "source": { "enum": ["whoop", "scale", "manual"], "default": "manual" }
+      }
+    },
+    "log_workout": {
+      "dataset": "workouts",
+      "mode": "append",
+      "description": "Log a workout",
+      "fields": {
+        "sport": { "enum": ["lift", "zone2", "run", "cycle", "walk", "other"] },
+        "duration_min": { "min": 1, "max": 600 },
+        "avg_hr": { "min": 30, "max": 220 },
+        "max_hr": { "min": 30, "max": 230 }
+      }
+    },
+    "log_panel": {
+      "dataset": "panels",
+      "mode": "append",
+      "description": "Register a blood draw; follow with log_biomarkers using the same panel_id"
+    },
+    "log_biomarkers": {
+      "dataset": "biomarkers",
+      "mode": "append",
+      "description": "Append biomarker results for a panel; panel_id / panel_name / draw_date must match the panels row",
+      "fields": {
+        "category": { "enum": ["lipids", "metabolic", "cbc", "liver", "kidney", "electrolytes", "other"] }
+      }
+    }
+  },
+  "connectors": {
+    "whoop": {
+      "module": "connectors/whoop",
+      "datasets": { "recovery": "whoop_recovery", "sleep": "whoop_sleep", "workouts": "whoop_workouts" },
+      "schedule": "6h",
+      "config": { "lookbackDays": 30 },
+      "description": "Sync Whoop recovery, sleep, and workouts"
+    }
+  },
+  "pages": [
+    {
+      "id": "today",
+      "title": "Today",
+      "icon": "heart",
+      "islands": [
+        { "type": "layout.row", "id": "gauges", "islands": [
+          { "type": "gauge.rings", "title": "Macros vs goals", "dataset": "macros_daily", "span": 7, "rings": [
+            { "value": "protein_g", "max": "protein_goal_g", "label": "Protein", "direction": "atLeast" },
+            { "value": "carb_g", "max": "carb_goal_g", "label": "Carbs", "direction": "atLeast" },
+            { "value": "fat_g", "max": "fat_goal_g", "label": "Fat", "direction": "atLeast" },
+            { "value": "sat_fat_g", "max": "sat_fat_limit_g", "label": "Sat fat", "direction": "atMost" }
+          ] },
+          { "type": "gauge.goal", "title": "Calories in range", "dataset": "macros_daily", "value": "kcal", "goal": { "min": "kcal_goal_low", "max": "kcal_goal_high" }, "label": "kcal", "format": "int", "span": 5 }
+        ] },
+
+        { "type": "layout.row", "id": "vitals", "islands": [
+          { "type": "metric.kpi", "title": "Calories today", "dataset": "macros_daily", "value": "kcal", "compareTo": "prev", "format": "int", "unit": "kcal", "span": 3 },
+          { "type": "metric.kpi", "title": "Weight", "dataset": "weight", "value": "kg", "compareTo": "prev", "format": "kg", "span": 3 },
+          { "type": "metric.kpi", "title": "Resting HR", "dataset": "wearable_daily", "value": "resting_hr", "compareTo": "prev", "format": "int", "unit": "bpm", "span": 3 },
+          { "type": "metric.kpi", "title": "HRV", "dataset": "wearable_daily", "value": "hrv_rmssd", "compareTo": "prev", "format": "int", "unit": "ms", "color": "#22C55E", "span": 3 }
+        ] },
+
+        { "type": "layout.row", "id": "today-log", "islands": [
+          { "type": "timeline.feed", "title": "Meals", "dataset": "meals", "ts": "ts", "titleField": "name", "span": 7,
+            "highlight": { "field": "kcal", "format": "int", "unit": "kcal" },
+            "stats": [
+              { "field": "protein_g", "label": "P", "unit": "g" },
+              { "field": "carb_g", "label": "C", "unit": "g" },
+              { "field": "fat_g", "label": "F", "unit": "g" }
+            ],
+            "footer": [
+              { "field": "meal_type", "pill": true },
+              { "field": "items", "unit": "items" }
+            ],
+            "details": [
+              { "field": "fiber_g", "label": "Fiber (g)" },
+              { "field": "sugar_g", "label": "Sugar (g)" },
+              { "field": "sat_fat_g", "label": "Sat fat (g)" },
+              { "field": "sodium_mg", "label": "Sodium (mg)" },
+              { "field": "confidence", "label": "Confidence" },
+              { "field": "note", "label": "Note" }
+            ],
+            "drilldown": {
+              "island": { "type": "table.grid", "title": "Components", "dataset": "meal_components", "columns": [
+                { "field": "component", "label": "Component" },
+                { "field": "grams", "label": "Grams", "format": "int" },
+                { "field": "kcal", "label": "Kcal", "format": "int" },
+                { "field": "protein_g", "label": "P (g)" },
+                { "field": "carb_g", "label": "C (g)" },
+                { "field": "fat_g", "label": "F (g)" }
+              ] },
+              "match": { "meal_id": "meal_id" }
+            } },
+          { "type": "table.grid", "title": "Protocol", "dataset": "protocol", "span": 5, "columns": [
+            { "field": "item", "label": "Item" },
+            { "field": "dose", "label": "Dose" },
+            { "field": "unit", "label": "Unit" },
+            { "field": "timing", "label": "When" }
+          ], "details": [
+            { "field": "kind", "label": "Kind" },
+            { "field": "active", "label": "Active" },
+            { "field": "note", "label": "Note" }
+          ] }
+        ] }
+      ]
+    },
+    {
+      "id": "nutrition",
+      "title": "Nutrition",
+      "icon": "list-bullets",
+      "filters": [
+        { "id": "period", "type": "daterange", "label": "Period",
+          "bind": { "macros_daily": "date", "meals": "ts", "meal_components": "meal_ts" } }
+      ],
+      "groups": [
+        { "id": "log", "title": "Log", "islands": [
+          { "type": "timeline.feed", "title": "Meal components", "dataset": "meal_components", "ts": "meal_ts", "titleField": "component", "detail": "kind", "span": 12,
+            "groupBy": { "field": "meal_id", "titleField": "meal_name", "subtitleField": "meal_ts" },
+            "details": [
+              { "field": "grams", "label": "Grams" },
+              { "field": "kcal", "label": "Kcal", "format": "int" },
+              { "field": "protein_g", "label": "P (g)" },
+              { "field": "carb_g", "label": "C (g)" },
+              { "field": "fat_g", "label": "F (g)" },
+              { "field": "fiber_g", "label": "Fiber (g)" },
+              { "field": "sugar_g", "label": "Sugar (g)" },
+              { "field": "sat_fat_g", "label": "Sat fat (g)" },
+              { "field": "sodium_mg", "label": "Sodium (mg)" },
+              { "field": "note", "label": "Note" }
+            ] }
+        ] },
+        { "id": "trends", "title": "Trends", "islands": [
+          { "type": "layout.row", "id": "goal-trends", "islands": [
+            { "type": "timeseries.line", "title": "Calories vs goal", "dataset": "macros_daily", "x": "date", "y": "kcal", "options": { "goalField": "kcal_goal_high" }, "span": 6 },
+            { "type": "timeseries.line", "title": "Protein vs goal", "dataset": "macros_daily", "x": "date", "y": "protein_g", "options": { "goalField": "protein_goal_g" }, "span": 6 }
+          ] },
+          { "type": "layout.row", "id": "composition-trends", "islands": [
+            { "type": "timeseries.line", "title": "Carbs & fat", "dataset": "macros_daily", "x": "date", "y": ["carb_g", "fat_g"], "span": 6 },
+            { "type": "timeseries.line", "title": "Fiber & sugar", "dataset": "macros_daily", "x": "date", "y": ["fiber_g", "sugar_g"], "span": 6 }
+          ] },
+          { "type": "timeseries.line", "title": "Hydration", "dataset": "macros_daily", "x": "date", "y": "hydration_ml", "options": { "goalField": "hydration_goal_ml" }, "span": 12 }
+        ] },
+        { "id": "batches", "title": "Batches", "islands": [
+          { "type": "table.grid", "title": "Cooked batches", "dataset": "batches_status", "span": 12, "columns": [
+            { "field": "name", "label": "Batch" },
+            { "field": "cooked_date", "label": "Cooked" },
+            { "field": "remaining_g", "label": "Left (g)", "format": "int" },
+            { "field": "remaining_pct", "label": "Left", "format": "pct" },
+            { "field": "kcal_left", "label": "Kcal left", "format": "int" },
+            { "field": "status", "label": "Status" }
+          ], "details": [
+            { "field": "total_g", "label": "Total (g)", "format": "int" },
+            { "field": "protein_g_left", "label": "Protein left (g)", "format": "int" },
+            { "field": "carb_g_left", "label": "Carbs left (g)", "format": "int" },
+            { "field": "fat_g_left", "label": "Fat left (g)", "format": "int" }
+          ] }
+        ] }
+      ]
+    },
+    {
+      "id": "labs",
+      "title": "Labs",
+      "icon": "flask",
+      "groups": [
+        { "id": "latest", "title": "Latest", "islands": [
+          { "type": "layout.row", "id": "latest-values", "islands": [
+            { "type": "table.grid", "title": "Latest biomarker values", "dataset": "biomarkers_status", "span": 7, "columns": [
+              { "field": "name", "label": "Marker" },
+              { "field": "value_text", "label": "Value" },
+              { "field": "unit", "label": "Unit" },
+              { "field": "status", "label": "Status", "status": { "signal": "status_signal" } }
+            ], "details": [
+              { "field": "category", "label": "Category" },
+              { "field": "ref_low", "label": "Ref low" },
+              { "field": "ref_high", "label": "Ref high" },
+              { "field": "optimal_low", "label": "Optimal low" },
+              { "field": "optimal_high", "label": "Optimal high" },
+              { "field": "panel_name", "label": "Panel" },
+              { "field": "draw_date", "label": "Drawn" }
+            ] },
+            { "type": "note.card", "title": "Lab notes", "span": 5,
+              "markdown": "## Last panel\n\n- **Vitamin D 28 ng/mL** — below range, bumped D3 to 4000 IU, recheck in 8 weeks\n- **LDL-C 112** and **hs-CRP 1.6** above optimal but in range — keep an eye on them\n- ApoB down from 96 → 78 over the year, trending the right way\n- Everything else optimal" }
+          ] }
+        ] },
+        { "id": "panels", "title": "Panels", "islands": [
+          { "type": "layout.row", "id": "panel-history", "islands": [
+            { "type": "table.grid", "title": "Blood panels", "dataset": "biomarkers", "span": 8,
+              "groupBy": { "field": "panel_id", "titleField": "panel_name", "subtitleField": "draw_date" },
+              "columns": [
+                { "field": "name", "label": "Marker" },
+                { "field": "value_text", "label": "Value" },
+                { "field": "unit", "label": "Unit" }
+              ],
+              "details": [
+                { "field": "category", "label": "Category" },
+                { "field": "ref_low", "label": "Ref low" },
+                { "field": "ref_high", "label": "Ref high" },
+                { "field": "optimal_low", "label": "Optimal low" },
+                { "field": "optimal_high", "label": "Optimal high" }
+              ] },
+            { "type": "timeline.feed", "title": "Draw history", "dataset": "panels", "ts": "draw_date", "titleField": "panel_name", "detail": "lab", "span": 4,
+              "details": [ { "field": "note", "label": "Note" } ] }
+          ] }
+        ] },
+        { "id": "history", "title": "History", "islands": [
+          { "type": "timeseries.line", "title": "Biomarker history", "dataset": "biomarkers", "x": "draw_date", "y": "value", "series": "name", "span": 12 },
+          { "type": "source.doc", "title": "Full lab report (PDF)", "kind": "link", "href": "https://example.com/labs/2026-05-28.pdf", "span": 12 }
+        ] }
+      ]
+    },
+    {
+      "id": "training",
+      "title": "Training & recovery",
+      "icon": "pulse",
+      "filters": [
+        { "id": "period", "type": "daterange", "label": "Period",
+          "bind": { "workouts": "date", "wearable_daily": "date", "weight": "date", "sleep_stages": "date" } }
+      ],
+      "islands": [
+        { "type": "layout.row", "id": "recovery-kpis", "islands": [
+          { "type": "metric.kpi", "title": "Sleep score", "dataset": "wearable_daily", "value": "sleep_score", "compareTo": "prev", "format": "int", "span": 3 },
+          { "type": "metric.kpi", "title": "Recovery", "dataset": "wearable_daily", "value": "recovery", "compareTo": "prev", "format": "int", "unit": "%", "span": 3 },
+          { "type": "metric.kpi", "title": "HRV", "dataset": "wearable_daily", "value": "hrv_rmssd", "compareTo": "prev", "format": "int", "unit": "ms", "color": "#22C55E", "span": 3 },
+          { "type": "metric.kpi", "title": "Resting HR", "dataset": "wearable_daily", "value": "resting_hr", "compareTo": "prev", "format": "int", "unit": "bpm", "span": 3 }
+        ] },
+
+        { "type": "layout.row", "id": "body-trends", "islands": [
+          { "type": "timeseries.line", "title": "Weight", "dataset": "weight", "x": "date", "y": "kg", "span": 6 },
+          { "type": "timeseries.line", "title": "HRV & resting HR", "dataset": "wearable_daily", "x": "date", "y": ["hrv_rmssd", "resting_hr"], "colors": ["#4290F0", "#22C55E"], "span": 6 }
+        ] },
+
+        { "type": "layout.row", "id": "load", "islands": [
+          { "type": "category.bar", "title": "Weekly training minutes", "dataset": "training_weekly", "x": "week", "y": "minutes", "group": "sport", "stacked": true, "span": 6 },
+          { "type": "category.bar", "title": "Sleep stages", "dataset": "sleep_stages", "x": "date", "y": "minutes", "group": "stage", "stacked": true, "span": 6 }
+        ] },
+
+        { "type": "timeline.feed", "title": "Workouts", "dataset": "workouts", "ts": "ts", "titleField": "title", "span": 12,
+          "highlight": { "field": "kcal", "format": "int", "unit": "kcal" },
+          "stats": [
+            { "field": "duration_min", "label": "Time", "unit": "min" },
+            { "field": "strain", "label": "Strain" },
+            { "field": "avg_hr", "label": "Avg HR", "unit": "bpm" }
+          ],
+          "footer": [
+            { "field": "sport", "pill": true }
+          ],
+          "details": [
+            { "field": "max_hr", "label": "Max HR" },
+            { "field": "note", "label": "Note" }
+          ] }
+      ]
+    },
+    {
+      "id": "whoop",
+      "title": "Whoop",
+      "icon": "pulse",
+      "islands": [
+        { "type": "layout.row", "id": "whoop-kpis", "islands": [
+          { "type": "metric.kpi", "title": "Recovery", "dataset": "whoop_recovery", "value": "recovery_score", "compareTo": "prev", "format": "int", "unit": "%", "span": 4 },
+          { "type": "metric.kpi", "title": "Resting HR", "dataset": "whoop_recovery", "value": "resting_heart_rate", "compareTo": "prev", "format": "int", "unit": "bpm", "span": 4 },
+          { "type": "metric.kpi", "title": "HRV", "dataset": "whoop_recovery", "value": "hrv_ms", "compareTo": "prev", "format": "int", "unit": "ms", "color": "#22C55E", "span": 4 }
+        ] },
+
+        { "type": "layout.row", "id": "whoop-trends", "islands": [
+          { "type": "timeseries.line", "title": "Recovery & HRV", "dataset": "whoop_recovery", "x": "date", "y": ["recovery_score", "hrv_ms"], "span": 7 },
+          { "type": "timeseries.line", "title": "Sleep performance", "dataset": "whoop_sleep", "x": "start", "y": "performance_pct", "span": 5 }
+        ] },
+
+        { "type": "timeline.feed", "title": "Workouts (Whoop)", "dataset": "whoop_workouts", "ts": "start", "titleField": "sport", "span": 12,
+          "highlight": { "field": "strain", "format": "int" },
+          "stats": [
+            { "field": "avg_hr", "label": "Avg HR", "format": "int", "unit": "bpm" },
+            { "field": "max_hr", "label": "Max HR", "format": "int", "unit": "bpm" }
+          ],
+          "footer": [
+            { "field": "kilojoules", "label": "kJ", "format": "int" }
+          ] }
+      ]
+    }
+  ]
+}

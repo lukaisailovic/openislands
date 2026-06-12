@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+**/dist
+.turbo
+**/.turbo
+.git
+.github
+.changeset
+.claude
+.agents
+apps
+**/.openislands
+**/*.tsbuildinfo
+*.log
+.DS_Store
+PLAN.md

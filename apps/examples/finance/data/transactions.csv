@@ -1,0 +1,11 @@
+ts,account,description,amount_eur,category
+2026-06-02,Bank,Salary,5400,Income
+2026-06-01,Bank,Rent income (studio),650,Income
+2026-05-28,IBKR,Bought VWCE (12 sh),-1500,Equities
+2026-05-20,Bank,Salary,5400,Income
+2026-05-15,Kraken,Bought BTC (0.01),-940,Crypto
+2026-05-12,IBKR,Dividend (SXR8),120,Income
+2026-05-02,Bank,Home insurance,-340,Expenses
+2026-04-28,IBKR,Sold AAPL (profit EUR 1.1K),4300,Equities
+2026-04-20,Bank,Salary,5300,Income
+2026-04-05,Revolut,Bought USDC,-1000,Crypto

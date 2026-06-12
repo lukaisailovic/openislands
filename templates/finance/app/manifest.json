@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "title": "Finance Overview",
+  "datasets": {
+    "net_worth_monthly": { "source": "data/net_worth_monthly.csv", "description": "monthly net worth, after-tax, cash, income + target" },
+    "allocation": { "sql": "models/transforms/allocation.sql", "description": "value + share by asset class (derived from holdings)" },
+    "holdings": { "sql": "models/transforms/holdings_pnl.sql", "description": "positions with derived gain/loss" },
+    "transactions": { "source": "data/transactions.csv", "description": "recent money movements" },
+    "strategy_notes": { "source": "docs/strategy.md", "description": "portfolio strategy (markdown)" }
+  },
+  "actions": {
+    "log_transaction": {
+      "dataset": "transactions",
+      "mode": "append",
+      "description": "Record a money movement in the transactions log"
+    }
+  },
+  "pages": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "icon": "house",
+      "filters": [
+        { "id": "period", "type": "daterange", "label": "Period", "bind": { "net_worth_monthly": "month" } }
+      ],
+      "islands": [
+        { "type": "metric.kpi", "title": "Net worth", "dataset": "net_worth_monthly", "value": "net_worth_eur", "compareTo": "prev", "format": "eur", "span": 3 },
+        { "type": "metric.kpi", "title": "After-tax net worth", "dataset": "net_worth_monthly", "value": "after_tax_eur", "compareTo": "prev", "format": "eur", "span": 3 },
+        { "type": "metric.kpi", "title": "Liquid cash", "dataset": "net_worth_monthly", "value": "cash_eur", "compareTo": "prev", "format": "eur", "span": 3 },
+        { "type": "metric.kpi", "title": "Monthly income", "dataset": "net_worth_monthly", "value": "monthly_income_eur", "compareTo": "prev", "format": "eur", "span": 3 },
+
+        { "type": "timeseries.line", "title": "Net worth vs. target", "dataset": "net_worth_monthly", "x": "month", "y": "net_worth_eur", "options": { "goalField": "target_eur", "area": true }, "span": 7 },
+        { "type": "breakdown.treemap", "title": "Allocation by class", "dataset": "allocation", "label": "class", "value": "value_eur", "span": 5 }
+      ]
+    },
+    {
+      "id": "holdings",
+      "title": "Holdings",
+      "icon": "wallet",
+      "filters": [
+        { "id": "period", "type": "daterange", "label": "Period", "bind": { "transactions": "ts" } }
+      ],
+      "groups": [
+        {
+          "id": "positions",
+          "title": "Positions",
+          "islands": [
+            { "type": "table.grid", "title": "Holdings", "dataset": "holdings", "span": 12, "columns": [
+              { "field": "asset", "label": "Asset" },
+              { "field": "class", "label": "Class" },
+              { "field": "units", "label": "Units" },
+              { "field": "value_eur", "label": "Value", "format": "eur" },
+              { "field": "cost_basis_eur", "label": "Cost basis", "format": "eur" },
+              { "field": "gain_loss_eur", "label": "Gain / loss", "format": "eur", "status": {} },
+              { "field": "gain_loss_pct", "label": "%", "format": "pct", "status": {} }
+            ] },
+            { "type": "breakdown.treemap", "title": "Allocation by class", "dataset": "allocation", "label": "class", "value": "value_eur", "span": 12 }
+          ]
+        },
+        {
+          "id": "activity",
+          "title": "Activity",
+          "islands": [
+            { "type": "timeline.feed", "title": "Recent transactions", "dataset": "transactions", "ts": "ts", "titleField": "description", "detail": "category", "span": 12 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "docs",
+      "title": "Docs",
+      "icon": "files",
+      "islands": [
+        { "type": "note.card", "title": "Strategy", "span": 6, "markdown": "## Strategy\n\nReplace this with your own thesis, or read it from the `strategy_notes` markdown dataset.\n\n- Keep an explicit allocation target per class\n- Note tax assumptions that move after-tax net worth\n- Write down the rule you'd want to follow under pressure" },
+        { "type": "source.doc", "title": "Strategy source", "kind": "markdown", "file": "docs/strategy.md", "span": 6 }
+      ]
+    }
+  ]
+}

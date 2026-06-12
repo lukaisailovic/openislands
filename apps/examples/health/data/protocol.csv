@@ -1,0 +1,7 @@
+item,kind,dose,unit,timing,active,note
+Creatine,supplement,5,g,morning,true,
+Omega-3,supplement,2,g,morning,true,EPA + DHA combined
+Magnesium glycinate,supplement,300,mg,evening,true,
+Protein floor,target,150,g/day,,true,front-load at breakfast
+Zone 2,training,3,x/week,,true,40 min easy
+Lights out,habit,23:00,,evening,true,screens off 30 min before

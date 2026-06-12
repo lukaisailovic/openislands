@@ -1,0 +1,65 @@
+{
+  "name": "@openislands/runtime",
+  "version": "0.1.0",
+  "description": "OpenIslands runtime \u2014 the TanStack Start SSR app and island registry.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/lukaisailovic/openislands",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lukaisailovic/openislands.git",
+    "directory": "packages/runtime"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./server": "./dist/server/server.js"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build && tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cloudflare/kumo": "^2.5.1",
+    "@duckdb/node-api": "1.5.3-r.3",
+    "@openislands/compiler": "workspace:*",
+    "@openislands/schema": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-router": "^1.170.15",
+    "@tanstack/react-start": "^1.168.25",
+    "chokidar": "^5.0.0",
+    "echarts": "^6.1.0",
+    "esbuild": "^0.28.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "happy-dom": "^20.10.2",
+    "tailwindcss": "^4.3.0",
+    "vite": "^8.0.0",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^3.2.4"
+  }
+}

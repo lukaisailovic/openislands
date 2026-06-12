@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "title": "Operations Review",
+  "datasets": {
+    "summary": { "source": "data/summary.csv" },
+    "throughput": { "source": "data/throughput.csv" },
+    "services": { "source": "data/services.csv" },
+    "incidents": { "source": "data/incidents.csv" }
+  },
+  "pages": [
+    {
+      "id": "review",
+      "title": "Weekly review",
+      "islands": [
+        { "type": "metric.kpi", "title": "Open issues", "dataset": "summary", "value": "open_issues", "format": "int", "span": 3 },
+        { "type": "metric.kpi", "title": "Shipped this week", "dataset": "summary", "value": "throughput_week", "format": "int", "span": 3 },
+        { "type": "metric.kpi", "title": "p95 latency", "dataset": "summary", "value": "p95_latency_ms", "unit": "ms", "format": "int", "span": 3 },
+        { "type": "metric.kpi", "title": "Uptime", "dataset": "summary", "value": "uptime_pct", "format": "pct", "span": 3 },
+
+        { "type": "timeseries.line", "title": "Throughput vs commitment", "dataset": "throughput", "x": "week", "y": "shipped", "options": { "goalField": "committed" }, "span": 7 },
+        { "type": "category.bar", "title": "p95 by service", "dataset": "services", "x": "service", "y": "p95_ms", "span": 5 },
+
+        { "type": "table.grid", "title": "Services", "dataset": "services", "span": 12, "columns": [
+          { "field": "service", "label": "Service" },
+          { "field": "status", "label": "Status" },
+          { "field": "p95_ms", "label": "p95 (ms)" },
+          { "field": "error_rate", "label": "Error rate", "format": "pct" },
+          { "field": "owner", "label": "Owner" }
+        ] },
+
+        { "type": "timeline.feed", "title": "Recent incidents", "dataset": "incidents", "ts": "ts", "titleField": "title", "detail": "severity", "span": 7 },
+        { "type": "note.card", "title": "Focus", "span": 5, "markdown": "## This week\n\n- Cut p95 on **gateway** below 200ms\n- Close the auth migration\n- Zero Sev-1s" }
+      ]
+    }
+  ]
+}

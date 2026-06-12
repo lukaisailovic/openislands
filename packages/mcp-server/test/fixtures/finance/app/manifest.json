@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "title": "Finance Overview",
+  "datasets": {
+    "net_worth_monthly": { "source": "data/net_worth_monthly.csv" },
+    "allocation": { "source": "data/allocation.csv" },
+    "notes": { "source": "data/notes.csv" }
+  },
+  "actions": {
+    "log_allocation": {
+      "dataset": "allocation",
+      "mode": "append",
+      "description": "Record a new asset-class allocation.",
+      "fields": {
+        "class": { "type": "string", "enum": ["BTC", "ETH", "Cash", "Stocks"] },
+        "value_eur": { "type": "number", "min": 0 }
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "islands": [
+        { "type": "metric.kpi", "title": "Net worth", "dataset": "net_worth_monthly", "value": "net_worth_eur", "compareTo": "prev", "format": "eur", "span": 4 },
+        { "type": "timeseries.line", "title": "Net worth over time", "dataset": "net_worth_monthly", "x": "month", "y": "net_worth_eur", "options": { "goalField": "target_eur" }, "span": 8 },
+        { "type": "breakdown.treemap", "title": "Allocation", "dataset": "allocation", "label": "class", "value": "value_eur", "span": 12 }
+      ]
+    }
+  ]
+}

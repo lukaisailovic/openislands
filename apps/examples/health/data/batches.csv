@@ -1,0 +1,4 @@
+batch_id,name,cooked_date,total_g,kcal_total,protein_g_total,carb_g_total,fat_g_total,status
+b_chickenrice_2026-06-09,Chicken & rice batch — 2026-06-09,2026-06-09,900,1530,150,160,28,active
+b_lentilchili_2026-06-08,Lentil chili batch — 2026-06-08,2026-06-08,800,1090,64,150,22,active
+b_oats_2026-06-07,Overnight oats batch — 2026-06-07,2026-06-07,500,640,24,95,16,archived

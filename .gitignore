@@ -1,0 +1,44 @@
+node_modules/
+dist/
+generated/
+*.tsbuildinfo
+.turbo/
+.DS_Store
+*.log
+
+# Local implementation plan — the vault owns strategy, the repo owns code
+PLAN.md
+
+# Local analysis of the real health-mcp app — contains personal data, never commit
+docs/health-mcp-analysis.md
+
+# User data is never committed — files are the source of truth, and they're yours.
+# The whole data/ dir is ignored so real exports stay private; the committed
+# sample stand-ins and the README are force-added below so the example still boots.
+apps/examples/*/data/**
+!apps/examples/*/data/README.md
+!apps/examples/*/data/net_worth_monthly.csv
+!apps/examples/*/data/holdings.csv
+!apps/examples/*/data/goals.csv
+!apps/examples/*/data/transactions.csv
+!apps/examples/*/data/macros_daily.csv
+!apps/examples/*/data/weight.csv
+!apps/examples/*/data/biomarkers.csv
+!apps/examples/*/data/panels.csv
+!apps/examples/*/data/meal_components.csv
+!apps/examples/*/data/batches.csv
+!apps/examples/*/data/workouts.csv
+!apps/examples/*/data/protocol.csv
+!apps/examples/*/data/wearable_daily.csv
+!apps/examples/*/data/meals.csv
+!apps/examples/*/data/whoop_recovery.csv
+!apps/examples/*/data/whoop_sleep.csv
+!apps/examples/*/data/whoop_workouts.csv
+.openislands/
+
+# Connector secrets — never commit; .env.example documents the keys.
+.env
+!.env.example
+
+# Generated at CLI build: repo templates copied next to the built CLI for publish.
+packages/cli/templates/

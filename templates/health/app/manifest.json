@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "title": "Health",
+  "datasets": {
+    "macros_daily": { "source": "data/macros_daily.csv", "description": "daily nutrition totals + goals (kcal band, protein/carb/fat)" },
+    "meals": { "source": "data/meals.csv", "description": "one row per meal: typed, timed, per-meal macros, note" },
+    "weight": { "source": "data/weight.csv", "description": "body weight over time" },
+    "biomarkers": { "source": "data/biomarkers.csv", "description": "blood-panel marker history: one row per marker per draw, with reference + optimal ranges" }
+  },
+  "actions": {
+    "log_meal": {
+      "dataset": "meals",
+      "mode": "append",
+      "description": "Log a meal to the meals timeline",
+      "fields": {
+        "meal_type": { "enum": ["breakfast", "lunch", "dinner", "snack"] },
+        "kcal": { "min": 0, "max": 5000 },
+        "protein_g": { "min": 0, "max": 500 },
+        "carb_g": { "min": 0, "max": 1000 },
+        "fat_g": { "min": 0, "max": 500 }
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "today",
+      "title": "Today",
+      "icon": "heart",
+      "islands": [
+        { "type": "gauge.rings", "title": "Macros vs goals", "dataset": "macros_daily", "span": 5, "rings": [
+          { "value": "protein_g", "max": "protein_goal_g", "label": "Protein", "direction": "atLeast" },
+          { "value": "carb_g", "max": "carb_goal_g", "label": "Carbs", "direction": "atLeast" },
+          { "value": "fat_g", "max": "fat_goal_g", "label": "Fat", "direction": "atLeast" }
+        ] },
+        { "type": "metric.kpi", "title": "Calories today", "dataset": "macros_daily", "value": "kcal", "compareTo": "prev", "format": "int", "unit": "kcal", "span": 3 },
+        { "type": "metric.kpi", "title": "Weight", "dataset": "weight", "value": "kg", "compareTo": "prev", "format": "kg", "span": 4 },
+
+        { "type": "timeline.feed", "title": "Meals", "dataset": "meals", "ts": "ts", "titleField": "name", "detail": "meal_type", "span": 7,
+          "details": [
+            { "field": "kcal", "label": "Kcal", "format": "int" },
+            { "field": "note", "label": "Note" }
+          ] },
+
+        { "type": "note.card", "title": "Protocol", "span": 5,
+          "markdown": "## Dialed in\n\n- Protein floor **160 g** — front-load it at breakfast\n- Creatine 5 g, Vitamin D 4000 IU\n- Zone 2 today, 40 min easy\n- Lights out by 22:30" }
+      ]
+    },
+    {
+      "id": "trends",
+      "title": "Trends",
+      "icon": "chart-line",
+      "islands": [
+        { "type": "timeseries.line", "title": "Weight", "dataset": "weight", "x": "date", "y": "kg", "span": 6 },
+        { "type": "timeseries.line", "title": "Calories vs goal", "dataset": "macros_daily", "x": "date", "y": "kcal", "options": { "goalField": "kcal_goal_high" }, "span": 6 },
+
+        { "type": "table.grid", "title": "Blood panels", "dataset": "biomarkers", "span": 12,
+          "groupBy": { "field": "panel_id", "titleField": "panel_name", "subtitleField": "draw_date" },
+          "columns": [
+            { "field": "name", "label": "Marker" },
+            { "field": "value_text", "label": "Value" },
+            { "field": "unit", "label": "Unit" }
+          ],
+          "details": [
+            { "field": "category", "label": "Category" },
+            { "field": "ref_low", "label": "Ref low" },
+            { "field": "ref_high", "label": "Ref high" },
+            { "field": "optimal_low", "label": "Optimal low" },
+            { "field": "optimal_high", "label": "Optimal high" }
+          ] }
+      ]
+    }
+  ]
+}

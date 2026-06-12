@@ -1,0 +1,34 @@
+{
+  "name": "openislands",
+  "version": "0.1.0",
+  "description": "Agent-built dashboards over data you own, that don't rot. The OpenIslands CLI.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/lukaisailovic/openislands",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lukaisailovic/openislands.git",
+    "directory": "packages/cli"
+  },
+  "bin": {
+    "openislands": "./dist/index.mjs"
+  },
+  "publishConfig": {
+    "bin": { "openislands": "./dist/index.mjs" }
+  },
+  "files": ["dist", "templates"],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm && node scripts/copy-templates.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@openislands/compiler": "workspace:*",
+    "@openislands/runtime": "workspace:*",
+    "@openislands/schema": "workspace:*",
+    "commander": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0"
+  }
+}
