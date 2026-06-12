@@ -1,0 +1,15 @@
+ingredient_id,name,category,kcal_100g,protein_100g,carb_100g,fat_100g,fiber_100g,sugar_100g,sat_fat_100g,sodium_mg_100g,default_serving_g,note
+f_almonds,Almonds,nuts,579,21.2,21.6,49.9,12.5,4.4,3.8,1,25,
+f_apple,Apple,fruit,52,0.3,14,0.2,2.4,10.4,0,1,150,
+f_banana,Banana,fruit,89,1.1,22.8,0.3,2.6,12.2,0.1,1,120,
+f_blueberries,Blueberries,fruit,57,0.7,14.5,0.3,2.4,10,0,1,90,frozen works just as well
+f_cottage,Cottage cheese,dairy,98,11,3.4,4.3,0,2.7,1.7,330,200,
+f_greek_yogurt,Greek yogurt 5%,dairy,97,9,3.9,5,0,3.2,3.1,35,170,
+f_olive_oil,Olive oil,fats,884,0,0,100,0,0,13.8,2,10,extra virgin
+f_sourdough,Sourdough bread,grains,240,8,47,1.5,2.4,2,0.3,420,90,from the saturday market
+f_whey,Whey protein powder,supplements,380,76,8,6,2,6,2,180,30,vanilla
+f_chicken_breast,Chicken breast,meat,165,31,0,3.6,0,0,1,74,150,base of the chicken & rice batch
+f_rice,White rice (cooked),grains,130,2.7,28,0.3,0.4,0.1,0.1,1,180,
+f_lentils,Lentils (cooked),legumes,116,9,20,0.4,7.9,1.8,0.1,2,150,base of the lentil chili batch
+f_oats,Rolled oats,grains,379,13.2,67.7,6.5,10.1,1,1.2,6,50,base of the overnight oats batch
+f_eggs,Egg,eggs,155,13,1.1,11,0,1.1,3.3,124,60,per 100 g ≈ 2 small eggs

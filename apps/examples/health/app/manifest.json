@@ -5,6 +5,7 @@
     "macros_daily": { "source": "data/macros_daily.csv", "description": "daily nutrition totals + goals (kcal band, protein/carb/fat, sat-fat limit, fiber, sugar, hydration)" },
     "meals": { "source": "data/meals.csv", "description": "one row per meal: typed, timed, per-meal macros, confidence, note" },
     "meal_components": { "source": "data/meal_components.csv", "description": "components inside each meal, grouped by meal_id with full micro-detail" },
+    "ingredients": { "source": "data/ingredients.csv", "description": "regularly used ingredients (per-100 g macros + default serving), referenced by meal_components.ref_id" },
     "weight": { "source": "data/weight.csv", "description": "body weight over time, with source (whoop / scale)" },
     "wearable_daily": { "source": "data/wearable_daily.csv", "description": "sleep score / recovery / HRV / resting HR / sleep-stage minutes per day" },
     "biomarkers": { "source": "data/biomarkers.csv", "description": "blood-panel marker history: one row per marker per draw, with reference + optimal ranges" },
@@ -203,6 +204,27 @@
             { "field": "protein_g_left", "label": "Protein left (g)", "format": "int" },
             { "field": "carb_g_left", "label": "Carbs left (g)", "format": "int" },
             { "field": "fat_g_left", "label": "Fat left (g)", "format": "int" }
+          ] }
+        ] },
+        { "id": "ingredients", "title": "Ingredients", "islands": [
+          { "type": "search.box", "title": "Find an ingredient", "dataset": "ingredients", "span": 6,
+            "fields": ["name", "category"], "titleField": "name", "detail": "category",
+            "placeholder": "Search ingredients…" },
+          { "type": "table.grid", "title": "Pantry", "dataset": "ingredients", "span": 12, "columns": [
+            { "field": "name", "label": "Ingredient" },
+            { "field": "category", "label": "Category" },
+            { "field": "kcal_100g", "label": "Kcal /100g", "format": "int" },
+            { "field": "protein_100g", "label": "P /100g" },
+            { "field": "carb_100g", "label": "C /100g" },
+            { "field": "fat_100g", "label": "F /100g" },
+            { "field": "default_serving_g", "label": "Serving (g)", "format": "int" }
+          ], "details": [
+            { "field": "ingredient_id", "label": "Id" },
+            { "field": "fiber_100g", "label": "Fiber /100g" },
+            { "field": "sugar_100g", "label": "Sugar /100g" },
+            { "field": "sat_fat_100g", "label": "Sat fat /100g" },
+            { "field": "sodium_mg_100g", "label": "Sodium (mg) /100g" },
+            { "field": "note", "label": "Note" }
           ] }
         ] }
       ]
