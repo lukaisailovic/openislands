@@ -129,6 +129,31 @@ describe("islandRequirements", () => {
     expect(table.fields.toSorted()).toEqual(["name", "row_id"]);
   });
 
+  it("extracts every meter's value and string max for gauge.meter, skipping numeric maxes", () => {
+    const r = islandRequirements({
+      type: "gauge.meter",
+      dataset: "usage",
+      meters: [
+        { value: "used_gb", max: "quota_gb" },
+        { value: "req", max: 1000 },
+      ],
+    });
+    expect(r.dataset).toBe("usage");
+    expect(r.fields.toSorted()).toEqual(["quota_gb", "req", "used_gb"]);
+  });
+
+  it("extracts the match fields, titleField, and detail for search.box", () => {
+    const r = islandRequirements({
+      type: "search.box",
+      dataset: "tracks",
+      fields: ["name", "artist"],
+      titleField: "name",
+      detail: "album",
+    });
+    expect(r.dataset).toBe("tracks");
+    expect(r.fields.toSorted()).toEqual(["album", "artist", "name"]);
+  });
+
   it("extracts value and string goal bounds for gauge.goal, skipping numeric bounds", () => {
     const r = islandRequirements({
       type: "gauge.goal",
@@ -406,6 +431,56 @@ describe("compile (groupBy contract check)", () => {
     });
     const report = await compile(dir);
     expect(report.ok, report.errors.join(" ")).toBe(true);
+  });
+});
+
+const sqliteManifest = (table: string) => ({
+  version: 1,
+  title: "T",
+  datasets: { tracks: { source: "data/library.sqlite", table } },
+  pages: [{
+    id: "p",
+    islands: [{ type: "search.box", title: "Tracks", dataset: "tracks", fields: ["name", "artist"], titleField: "name" }],
+  }],
+});
+
+async function sqliteProject(table: string): Promise<string> {
+  const dir = project(sqliteManifest(table), {});
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(join(dir, "data", "library.sqlite"));
+  db.exec("CREATE TABLE tracks (id INTEGER, name TEXT, artist TEXT)");
+  db.exec("INSERT INTO tracks VALUES (1, 'Alpha', 'Ann'), (2, 'Beta', 'Bob')");
+  db.close();
+  return dir;
+}
+
+describe("compile (sqlite dataset)", () => {
+  it("registers a sqlite table as a queryable view and passes the contract check", async () => {
+    const dir = await sqliteProject("tracks");
+    const report = await compile(dir);
+    expect(report.ok, report.errors.join(" ")).toBe(true);
+    expect(report.snapshots.tracks!.rows).toEqual([
+      { id: 1, name: "Alpha", artist: "Ann" },
+      { id: 2, name: "Beta", artist: "Bob" },
+    ]);
+    const result = await query(dir, "tracks", { match: [{ field: "artist", value: "Bob" }] });
+    expect(result.rows.map((r) => r.name)).toEqual(["Beta"]);
+  });
+
+  it("fails loudly on a missing table", async () => {
+    const dir = await sqliteProject("ghosts");
+    const report = await compile(dir);
+    expect(report.ok).toBe(false);
+    expect(report.errors.join(" ")).toContain("ghosts");
+  });
+
+  it("fails compile when a sqlite dataset omits its table", async () => {
+    const manifest = sqliteManifest("tracks") as { datasets: { tracks: Record<string, unknown> } };
+    delete manifest.datasets.tracks.table;
+    const dir = project(manifest, {});
+    const report = await compile(dir);
+    expect(report.ok).toBe(false);
+    expect(report.errors.join(" ")).toContain("sqlite source needs a 'table'");
   });
 });
 

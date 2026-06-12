@@ -1,12 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BreakdownTreemap } from "../src/islands/BreakdownTreemap.js";
 import { CategoryBar } from "../src/islands/CategoryBar.js";
 import { CustomPlaceholder } from "../src/islands/CustomPlaceholder.js";
 import { GaugeGoal } from "../src/islands/GaugeGoal.js";
+import { GaugeMeter } from "../src/islands/GaugeMeter.js";
 import { GaugeRings } from "../src/islands/GaugeRings.js";
 import { MetricKpi } from "../src/islands/MetricKpi.js";
 import { NoteCard } from "../src/islands/NoteCard.js";
+import { SearchBox } from "../src/islands/SearchBox.js";
 import { TableGrid } from "../src/islands/TableGrid.js";
 import { TimeseriesLine } from "../src/islands/TimeseriesLine.js";
 import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
@@ -40,6 +42,14 @@ describe("island registry", () => {
 
   it("resolves the gauge.goal renderer", () => {
     expect(resolveRenderer("gauge.goal")).toBe(GaugeGoal);
+  });
+
+  it("resolves the gauge.meter renderer", () => {
+    expect(resolveRenderer("gauge.meter")).toBe(GaugeMeter);
+  });
+
+  it("resolves the search.box renderer", () => {
+    expect(resolveRenderer("search.box")).toBe(SearchBox);
   });
 
   it("resolves unknown custom types to the placeholder", () => {
@@ -164,6 +174,73 @@ describe("island registry", () => {
       />,
     );
     expect(screen.getByTestId("gauge-goal").dataset.status).toBe("within");
+  });
+
+  it("renders gauge.meter bars from the last row with per-meter colors", () => {
+    const { container } = render(
+      <GaugeMeter
+        config={{
+          type: "gauge.meter",
+          dataset: "usage",
+          meters: [
+            { value: "used_gb", max: "quota_gb", label: "Storage", color: "#34c759" },
+            { value: "req", max: 1000 },
+          ],
+        }}
+        data={{
+          dataset: "usage",
+          columns: [],
+          rows: [
+            { used_gb: 10, quota_gb: 100, req: 1 },
+            { used_gb: 65, quota_gb: 100, req: 750 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Storage")).toBeInTheDocument();
+    expect(screen.getByText("65 / 100")).toBeInTheDocument();
+    expect(screen.getByText("req")).toBeInTheDocument();
+    expect(screen.getByText("750 / 1000")).toBeInTheDocument();
+    expect(container.querySelector('[style*="--gauge-meter-color: #34c759"]')).not.toBeNull();
+  });
+
+  it("renders search.box and drops down case-insensitive matches across fields", async () => {
+    render(
+      <SearchBox
+        config={{ type: "search.box", dataset: "tracks", fields: ["name", "artist"], titleField: "name", detail: "artist", placeholder: "Find a track", limit: 10 }}
+        data={{
+          dataset: "tracks",
+          columns: [{ name: "name", type: "string" }, { name: "artist", type: "string" }],
+          rows: [
+            { name: "Alpha", artist: "Ann" },
+            { name: "Beta", artist: "Bob" },
+            { name: "Gamma", artist: "alphaville" },
+          ],
+        }}
+      />,
+    );
+    const input = screen.getByPlaceholderText("Find a track");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "ALPHA" } });
+    expect(await screen.findByText("Alpha")).toBeInTheDocument();
+    expect(screen.getByText("Gamma")).toBeInTheDocument(); // matched via the artist field
+    expect(screen.queryByText("Beta")).not.toBeInTheDocument();
+  });
+
+  it("caps search.box results at the configured limit", async () => {
+    const rows = Array.from({ length: 5 }, (_, i) => ({ name: `Track ${i}` }));
+    render(
+      <SearchBox
+        config={{ type: "search.box", dataset: "tracks", fields: ["name"], titleField: "name", limit: 2 }}
+        data={{ dataset: "tracks", columns: [{ name: "name", type: "string" }], rows }}
+      />,
+    );
+    const input = screen.getByPlaceholderText("Search…");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "track" } });
+    expect(await screen.findByText("Track 0")).toBeInTheDocument();
+    expect(screen.getByText("Track 1")).toBeInTheDocument();
+    expect(screen.queryByText("Track 2")).not.toBeInTheDocument();
   });
 
   it("renders note.card markdown", () => {

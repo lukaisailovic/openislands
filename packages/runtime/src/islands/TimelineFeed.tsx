@@ -1,6 +1,7 @@
 import { Badge, ChartPalette, Text, cn } from "@cloudflare/kumo";
 import type { FooterItemSpec, HighlightSpec, StatSpec } from "@openislands/schema";
 import type { Row } from "@openislands/compiler";
+import { NoData } from "../components/EmptyState.js";
 import { Paged } from "../components/Paged.js";
 import { SeeAllDialog } from "../components/SeeAllDialog.js";
 import { GroupedRowsView, groupRows, type GroupBySpec } from "../components/GroupedRows.js";
@@ -234,6 +235,8 @@ export function TimelineFeed({ config, data }: IslandRenderProps) {
     (config.title as string | undefined) ?? "Details",
     spec.drilldown,
   );
+
+  if (rows.length === 0) return <NoData />;
 
   if (groupBy) {
     return (

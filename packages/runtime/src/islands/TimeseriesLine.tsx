@@ -7,10 +7,9 @@ import {
   TimeseriesChart,
 } from "@cloudflare/kumo";
 import type { TimeseriesData } from "@cloudflare/kumo/components/chart";
-import { ChartLine } from "@phosphor-icons/react";
 import type { ValueFormat } from "@openislands/schema";
 import type { Row } from "@openislands/compiler";
-import { ChartEmpty } from "../components/EmptyState.js";
+import { NoData } from "../components/EmptyState.js";
 import type { IslandRenderProps } from "../types.js";
 import { echarts } from "./echarts.js";
 import { formatValue, toNumber } from "./format.js";
@@ -203,7 +202,7 @@ export function TimeseriesLine({ config, data }: IslandRenderProps) {
   const mode = pickerMode(spec, names.length);
   const [selected, setSelected] = useState(() => names[0] ?? "");
 
-  if (rows.length === 0) return <ChartEmpty icon={<ChartLine size={24} weight="duotone" />} />;
+  if (rows.length === 0) return <NoData />;
 
   const active = mode === "none" ? undefined : names.includes(selected) ? selected : names[0];
   const format = (value: number) => formatValue(value, spec.format);

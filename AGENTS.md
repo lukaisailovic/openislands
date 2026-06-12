@@ -43,7 +43,8 @@ Use the MCP server (`@openislands/mcp`) — it is read-many / write-one:
   file-write tool and no git dependency by design — rollback safety is `.openislands/history/`
   snapshots (count + byte capped, oldest pruned first).
 - **The data write path — Actions:** a manifest-declared, typed append into a `source` dataset
-  (CSV / JSON(L) only; `sql` datasets are derived and never writable). Discover with `list_actions`
+  (CSV / JSON(L) only; `sql` datasets are derived and sqlite sources are read-only — neither is
+  ever writable). Discover with `list_actions`
   (declared actions + their resolved row JSON Schema, derived from the live data merged with the
   action's `fields` overrides), then `run_action(name, rows)` — every row is validated first; a bad
   row rejects the whole call with an error naming the row index + field and nothing is written.
@@ -136,7 +137,10 @@ always bundles against its own copies.
   "version": 1,
   "title": "Finance Overview",
   "icon": "wallet",                                            // optional — the app's tile in the workspace app rail
-  "datasets": { "nw": { "source": "data/net_worth.csv" } },   // or { "sql": "models/x.sql" }
+  "datasets": { "nw": { "source": "data/net_worth.csv" } },   // or { "sql": "models/x.sql" },
+                                                               // or a read-only SQLite table:
+                                                               // { "source": "data/library.sqlite", "table": "tracks" }
+                                                               // (a .sqlite/.db source requires "table"; "table" anywhere else is an error)
   "pages": [{
     "id": "overview",                                          // one sidebar entry per page
     "icon": "house",                                           // optional, curated set (PAGE_ICONS)
@@ -160,7 +164,7 @@ always bundles against its own copies.
 
 `span` is a 1–12 grid column count; each group gets its own 12-column grid. Every island type
 has a minimum span below which it stops being legible (`ISLAND_MIN_SPAN` in
-`packages/schema/src/index.ts`): `metric.kpi`/`source.doc`/`gauge.goal` 2, `note.card` 3, `table.grid` 5,
+`packages/schema/src/index.ts`): `metric.kpi`/`source.doc`/`gauge.goal` 2, `note.card`/`gauge.meter`/`search.box` 3, `table.grid` 5,
 everything else 4. An explicit `span` below its type's minimum is a named validation error
 (e.g. "span 1 is below the minimum 4 for timeseries.line"). The runtime additionally floors
 spans responsively — below ~640px every tile goes full-width, and in a middle band spans render
@@ -194,6 +198,8 @@ includes that month.
 | `timeline.feed` | `dataset`, `ts`, `titleField` | `detail`, `kind` optional; `ts` renders smartly with no config (a date-only/midnight value as `Jun 11, 2026`, a real timestamp as `Jun 11, 21:30`); `details: [{field,label?,format?}]` makes rows clickable, revealing those fields in a dialog; `groupBy: {field,titleField?,subtitleField?}` renders rows as collapsible sections by `field`; rich rows via `highlight: {field,format?,unit?}` (emphasized value, right of the title), `stats: [{field,label?,format?,unit?,color?}]` (labeled stats under the title; label colors default to a palette, `color` pins a CSS color), `footer: [{field,label?,format?,unit?,pill?}]` (meta line led by the timestamp; `pill: true` renders a badge) — any of the three switches the row from a one-liner to the header/stats/footer layout; `drilldown: {island, match}` and `expand: false` as on `table.grid` |
 | `gauge.rings` | `dataset`, `rings` | concentric goal rings off the last row; `rings: [{value, max, label?, color?, direction?}]`, `max` a column or a number; `direction: atLeast` (default, fills toward a goal) \| `atMost` (a budget — over the limit turns the ring danger-red) |
 | `gauge.goal` | `dataset`, `value`, `goal` | single ring vs a goal off the last row; `goal: {min?, max?}` (each a column or a number, at least one — both = a target band); within the goal is success-green, under is amber, over is danger-red; hover shows `value (goal …)` |
+| `gauge.meter` | `dataset`, `meters` | one or more horizontal usage bars off the last row; `meters: [{value, max, label?, color?}]`, `max` a column or a number; each meter shows `value / max` and fills proportionally in its own color (built-in palette by default) |
+| `search.box` | `dataset`, `fields`, `titleField` | a search input over a dataset — typing matches rows case-insensitively across `fields` (client-side substring), results drop down as an autocomplete showing `titleField` (+ optional `detail` secondary line); selecting a result opens the full row in a details dialog; `placeholder?`, `limit?` (default 10) caps visible results |
 | `note.card` | `markdown` | no dataset |
 | `source.doc` | — | `file` or `href`; `kind: pdf\|markdown\|image\|link` |
 | `layout.row` | `islands` | a full-width structural row holding other islands — children render on their own 12-column grid row; no `span`/`title`, no nesting, no data binding |

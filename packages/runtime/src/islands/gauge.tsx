@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
+import { toNumber } from "./format.js";
 
 export const SIZE = 200;
 export const CENTER = SIZE / 2;
 export const FILL_MS = 700;
 export const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
+
+/** A gauge's `max`: either a fixed number or the name of a field on the row. */
+export function resolveMax(max: string | number, row: Record<string, unknown>): number {
+  if (typeof max === "number") return max;
+  return toNumber(row[max]) ?? 0;
+}
 
 export function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);

@@ -1,6 +1,6 @@
 import { Tooltip } from "@cloudflare/kumo";
 import type { IslandRenderProps } from "../types.js";
-import { CENTER, EASE_OUT, FILL_MS, GaugeRing, SIZE, useMountedFill, usePrefersReducedMotion } from "./gauge.js";
+import { CENTER, EASE_OUT, FILL_MS, GaugeRing, resolveMax, SIZE, useMountedFill, usePrefersReducedMotion } from "./gauge.js";
 import { toNumber } from "./format.js";
 
 interface RingConfig {
@@ -27,11 +27,6 @@ const STAGGER_MS = 90;
 function ringStroke(count: number): number {
   const usable = CENTER * (1 - CENTER_CLEARANCE) - GAP * (count - 1);
   return usable / count;
-}
-
-function resolveMax(max: string | number, row: Record<string, unknown>): number {
-  if (typeof max === "number") return max;
-  return toNumber(row[max]) ?? 0;
 }
 
 export function GaugeRings({ config, data }: IslandRenderProps) {

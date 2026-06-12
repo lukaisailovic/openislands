@@ -221,6 +221,34 @@ export const GaugeGoal = z.object({
   format: ValueFormat.optional(),
 }).describe("A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range.");
 
+const MeterSpec = z.object({
+  value: z.string().describe("field holding the meter's current value"),
+  max: z.union([z.string(), z.number()]).describe("capacity: a field name or a fixed number"),
+  label: z.string().optional(),
+  color: z.string().optional().describe("CSS color; defaults to a built-in palette"),
+});
+
+export const GaugeMeter = z.object({
+  type: z.literal("gauge.meter"),
+  ...baseFields,
+  dataset: z.string(),
+  meters: z
+    .array(MeterSpec)
+    .min(1)
+    .describe("horizontal usage bars, top to bottom; reads the last row"),
+}).describe("One or more horizontal usage meters read off the last row — use for quota- or capacity-style values.");
+
+export const SearchBox = z.object({
+  type: z.literal("search.box"),
+  ...baseFields,
+  dataset: z.string(),
+  fields: z.array(z.string()).min(1).describe("columns the query matches against"),
+  titleField: z.string().describe("field each result shows"),
+  detail: z.string().optional().describe("field shown as a secondary line under each result"),
+  placeholder: z.string().optional(),
+  limit: z.number().int().positive().default(10).describe("max visible results"),
+}).describe("A search box over a dataset — typing matches rows case-insensitively across `fields`, results drop down as an autocomplete; selecting a result opens the row's details.");
+
 export const NoteCard = z.object({
   type: z.literal("note.card"),
   ...baseFields,
@@ -250,6 +278,8 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   TimelineFeedBase,
   GaugeRings,
   GaugeGoal,
+  GaugeMeter,
+  SearchBox,
   NoteCard,
   SourceDoc,
 ]);
@@ -278,6 +308,8 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "timeline.feed": TimelineFeed,
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,
+  "gauge.meter": GaugeMeter,
+  "search.box": SearchBox,
   "note.card": NoteCard,
   "source.doc": SourceDoc,
 } as const;
@@ -296,6 +328,8 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "note.card": 3,
   "gauge.rings": 4,
   "gauge.goal": 2,
+  "gauge.meter": 3,
+  "search.box": 3,
   "timeseries.line": 4,
   "category.bar": 4,
   "timeline.feed": 4,
@@ -312,6 +346,8 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   TimelineFeed,
   GaugeRings,
   GaugeGoal,
+  GaugeMeter,
+  SearchBox,
   NoteCard,
   SourceDoc,
 ]);
@@ -330,11 +366,19 @@ export type IslandEntry = z.infer<typeof IslandEntry>;
 // --- Manifest -------------------------------------------------------------------
 
 export const DatasetSpec = z.object({
-  source: z.string().optional().describe("path to a CSV / JSON / Parquet file"),
+  source: z.string().optional().describe("path to a CSV / JSON / Parquet / SQLite file"),
+  table: z.string().optional().describe("table within a .sqlite/.db source — required for sqlite, invalid elsewhere"),
   sql: z.string().optional().describe("path to a DuckDB SQL transform"),
   description: z.string().optional(),
 });
 export type DatasetSpec = z.infer<typeof DatasetSpec>;
+
+export const SQLITE_SOURCE_EXTENSIONS = [".sqlite", ".db"];
+
+/** A SQLite database source — read through DuckDB's sqlite extension, never writable. */
+export function isSqliteSource(source: string): boolean {
+  return SQLITE_SOURCE_EXTENSIONS.includes(source.slice(source.lastIndexOf(".")).toLowerCase());
+}
 
 /** Curated Phosphor icon names a page may use in the sidebar. */
 export const PAGE_ICONS = [
@@ -567,6 +611,10 @@ export function validateManifest(input: unknown): ValidationResult {
       errors.push({ page: "-", index: -1, type: "-", message: `datasets.${name}: ${r.error.issues[0]?.message ?? "invalid"}` });
     } else if (!r.data.source && !r.data.sql) {
       errors.push({ page: "-", index: -1, type: "-", message: `datasets.${name}: needs a 'source' file or a 'sql' transform` });
+    } else if (r.data.source && isSqliteSource(r.data.source) && !r.data.table) {
+      errors.push({ page: "-", index: -1, type: "-", message: `datasets.${name}: a sqlite source needs a 'table'` });
+    } else if (r.data.table && (!r.data.source || !isSqliteSource(r.data.source))) {
+      errors.push({ page: "-", index: -1, type: "-", message: `datasets.${name}: 'table' only applies to a .sqlite/.db source` });
     }
   }
 
@@ -589,8 +637,11 @@ export function validateManifest(input: unknown): ValidationResult {
       continue;
     }
     const source = target.source ?? "";
-    const ext = source.slice(source.lastIndexOf(".")).toLowerCase();
-    if (!WRITABLE_SOURCE_EXTENSIONS.includes(ext)) {
+    if (isSqliteSource(source)) {
+      rootError(`actions.${name}: dataset '${r.data.dataset}' is a sqlite source — sqlite datasets are read-only`);
+      continue;
+    }
+    if (!isWritableSource(source)) {
       rootError(`actions.${name}: source '${source}' is not writable — append supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
     }
   }
@@ -614,6 +665,10 @@ export function validateManifest(input: unknown): ValidationResult {
         continue;
       }
       const source = target.source ?? "";
+      if (isSqliteSource(source)) {
+        rootError(`connectors.${name}: output '${output}' targets sqlite source '${source}' — sqlite datasets are read-only`);
+        continue;
+      }
       if (!isWritableSource(source)) {
         rootError(`connectors.${name}: output '${output}' targets source '${source}', not writable — supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
       }

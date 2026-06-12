@@ -14,7 +14,7 @@ import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, extname, basename, isAbsolute } from "node:path";
 import duckdb from "@duckdb/node-api";
-import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
+import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
 import { queryResultToArrowIPC } from "./arrow.js";
 import { checkCustomIsland } from "./customSchema.js";
 import { checkConnectors } from "./connectors.js";
@@ -146,6 +146,10 @@ async function buildEngine(projectDir: string): Promise<Engine> {
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
   await conn.run(`SET file_search_path=${quoteLiteral(projectDir)}`);
+  const specs = Object.values(manifest.datasets);
+  if (specs.some((spec) => spec.source && isSqliteSource(spec.source))) {
+    await conn.run("INSTALL sqlite; LOAD sqlite;");
+  }
   const registered = new Set<string>();
   for (const [name, spec] of Object.entries(manifest.datasets)) {
     await registerDataset(conn, projectDir, name, spec);
@@ -194,6 +198,9 @@ function fileReaderExpr(absPath: string): string {
       return `read_json_auto(${lit})`;
     case ".parquet":
       return `read_parquet(${lit})`;
+    case ".sqlite":
+    case ".db":
+      throw new Error(`sqlite source ${absPath} can only be read through a dataset declaring its 'table'`);
     default:
       throw new Error(`unsupported source type '${ext}' for ${absPath}`);
   }
@@ -213,6 +220,12 @@ async function registerDataset(conn: DuckDBConnection, projectDir: string, name:
   const ext = sourceExtension(spec.source);
   if (ext === ".md" || ext === ".markdown") {
     await registerMarkdownDataset(conn, name, absPath);
+    return;
+  }
+  if (isSqliteSource(spec.source)) {
+    if (!spec.table) throw new Error(`dataset '${name}': a sqlite source needs a 'table'`);
+    if (!existsSync(absPath)) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
+    await conn.run(`CREATE VIEW ${view} AS SELECT * FROM sqlite_scan(${quoteLiteral(absPath)}, ${quoteLiteral(spec.table)})`);
     return;
   }
   if (!absPath.includes("*") && !existsSync(absPath)) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
@@ -572,6 +585,17 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       }
       break;
     }
+    case "gauge.meter": {
+      const meters = island.meters;
+      if (Array.isArray(meters)) {
+        for (const meter of meters) {
+          const spec = meter as Record<string, unknown>;
+          add(spec.value);
+          add(spec.max);
+        }
+      }
+      break;
+    }
     case "gauge.goal": {
       add(island.value);
       const goal = island.goal as Record<string, unknown> | undefined;
@@ -579,6 +603,13 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
         add(goal.min);
         add(goal.max);
       }
+      break;
+    }
+    case "search.box": {
+      const searchFields = island.fields;
+      if (Array.isArray(searchFields)) searchFields.forEach(add);
+      add(island.titleField);
+      add(island.detail);
       break;
     }
     // note.card, source.doc, and custom islands bind to no dataset

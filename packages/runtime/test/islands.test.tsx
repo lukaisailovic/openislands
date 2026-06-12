@@ -316,6 +316,32 @@ describe("table.grid renderer", () => {
     expect(screen.getByText("-\u20ac120")).toHaveClass("text-kumo-danger");
   });
 
+  it("renders the shared empty state when there are no rows", () => {
+    render(
+      <TableGrid
+        config={{ type: "table.grid", dataset: "holdings" }}
+        data={{ dataset: "holdings", columns: [...columns], rows: [] }}
+      />,
+    );
+    expect(screen.getByText("No data yet")).toBeInTheDocument();
+  });
+
+  it("pages the see-all dialog with Kumo pagination controls", () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ asset: `A${i}`, gain: i }));
+    render(
+      <TableGrid
+        config={{ type: "table.grid", dataset: "holdings" }}
+        data={{ dataset: "holdings", columns: [...columns], rows: many }}
+      />,
+    );
+    fireEvent.click(screen.getByText("See all 20"));
+    expect(screen.getByText("A14")).toBeInTheDocument();
+    expect(screen.queryByText("A15")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Next page"));
+    expect(screen.getByText("A19")).toBeInTheDocument();
+    expect(screen.queryByText("A14")).toBeNull();
+  });
+
   it("caps card rows and offers a see-all affordance", () => {
     const many = Array.from({ length: 20 }, (_, i) => ({ asset: `A${i}`, gain: i }));
     render(

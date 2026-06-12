@@ -1,8 +1,7 @@
 import { Chart, ChartPalette, type KumoChartOption } from "@cloudflare/kumo";
-import { ChartBar } from "@phosphor-icons/react";
 import type { ValueFormat } from "@openislands/schema";
 import type { Row } from "@openislands/compiler";
-import { ChartEmpty } from "../components/EmptyState.js";
+import { NoData } from "../components/EmptyState.js";
 import type { IslandRenderProps } from "../types.js";
 import { tooltip, usePrefersDark } from "./chart.js";
 import { echarts } from "./echarts.js";
@@ -89,7 +88,7 @@ export function BreakdownTreemap({ config, data }: IslandRenderProps) {
   const rows = data?.rows ?? [];
   const dark = usePrefersDark();
 
-  if (rows.length === 0) return <ChartEmpty icon={<ChartBar size={24} weight="duotone" />} />;
+  if (rows.length === 0) return <NoData />;
 
   return (
     <div className="w-full">

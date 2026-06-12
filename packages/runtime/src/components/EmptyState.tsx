@@ -1,37 +1,24 @@
-import { Text } from "@cloudflare/kumo";
-import type { ReactNode } from "react";
+import { Empty, type EmptyProps, cn } from "@cloudflare/kumo";
+import { Database } from "@phosphor-icons/react";
 
-interface EmptyStateProps {
-  icon: ReactNode;
-  title: string;
-  description?: string;
-  detail?: ReactNode;
-}
-
-export function EmptyState({ icon, title, description, detail }: EmptyStateProps) {
+/** Kumo's Empty, restyled to sit flush inside an island card. */
+export function IslandEmpty({ className, ...props }: EmptyProps) {
   return (
-    <div className="flex min-h-40 grow flex-col items-center justify-center gap-3 px-6 py-8 text-center">
-      <div className="flex size-12 items-center justify-center rounded-2xl border border-kumo-hairline bg-kumo-tint text-kumo-subtle">
-        {icon}
-      </div>
-      <div className="flex flex-col items-center gap-1">
-        <Text size="sm" as="p" className="font-medium text-kumo-strong">
-          {title}
-        </Text>
-        {detail}
-        {description ? (
-          <Text variant="secondary" size="sm" as="p" className="max-w-60 text-balance">
-            {description}
-          </Text>
-        ) : null}
-      </div>
-    </div>
+    <Empty
+      size="sm"
+      {...props}
+      className={cn("min-h-40 grow justify-center border-0 bg-transparent", className)}
+    />
   );
 }
 
-/** The shared empty state for chart islands whose dataset returned no rows. */
-export function ChartEmpty({ icon }: { icon: ReactNode }) {
+/** The shared empty state for data-bound islands whose dataset returned no rows. */
+export function NoData() {
   return (
-    <EmptyState icon={icon} title="No data yet" description="This dataset returned no rows." />
+    <IslandEmpty
+      icon={<Database size={28} weight="duotone" className="text-kumo-subtle" />}
+      title="No data yet"
+      description="This dataset returned no rows."
+    />
   );
 }

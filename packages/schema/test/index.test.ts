@@ -82,6 +82,39 @@ describe("validateManifest", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("accepts a sqlite dataset declaring its table", () => {
+    const m = structuredClone(goodManifest);
+    m.datasets.net_worth = { source: "data/library.sqlite", table: "tracks" } as never;
+    const r = validateManifest(m);
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+  });
+
+  it("rejects a sqlite dataset without a table", () => {
+    for (const source of ["data/library.sqlite", "data/library.db"]) {
+      const m = structuredClone(goodManifest);
+      m.datasets.net_worth = { source } as never;
+      const r = validateManifest(m);
+      expect(r.ok).toBe(false);
+      expect(r.errors.some((e) => /datasets\.net_worth.*sqlite source needs a 'table'/.test(e.message))).toBe(true);
+    }
+  });
+
+  it("rejects a table on a non-sqlite dataset", () => {
+    const m = structuredClone(goodManifest);
+    m.datasets.net_worth = { source: "data/net_worth.csv", table: "tracks" } as never;
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /datasets\.net_worth.*'table' only applies/.test(e.message))).toBe(true);
+  });
+
+  it("rejects a table on a sql dataset", () => {
+    const m = structuredClone(goodManifest);
+    m.datasets.net_worth = { sql: "models/x.sql", table: "tracks" } as never;
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /datasets\.net_worth.*'table' only applies/.test(e.message))).toBe(true);
+  });
+
   it("treats unknown island types as custom (the extension point), not errors", () => {
     const withCustom = structuredClone(goodManifest);
     withCustom.pages[0]!.islands.push({ type: "gauge.ring", title: "Macros", dataset: "net_worth" } as never);
@@ -508,6 +541,15 @@ describe("validateManifest — actions", () => {
     expect(r.errors.some((e) => e.page === "-" && /sql transform|derived/.test(e.message))).toBe(true);
   });
 
+  it("rejects an action bound to a sqlite dataset as read-only", () => {
+    const m = structuredClone(actionManifest) as Record<string, unknown> & typeof actionManifest;
+    (m.datasets as Record<string, unknown>).library = { source: "data/library.sqlite", table: "tracks" };
+    m.actions.log_entry.dataset = "library";
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.page === "-" && /sqlite datasets are read-only/.test(e.message))).toBe(true);
+  });
+
   it("rejects an action whose source extension is not writable", () => {
     const m = structuredClone(actionManifest);
     m.actions.log_entry.dataset = "strategy";
@@ -581,6 +623,15 @@ describe("validateManifest — connectors", () => {
     expect(r.errors.some((e) => e.page === "-" && /sql transform|derived/.test(e.message))).toBe(true);
   });
 
+  it("rejects a connector output bound to a sqlite dataset as read-only", () => {
+    const m = structuredClone(connectorManifest) as Record<string, unknown> & typeof connectorManifest;
+    (m.datasets as Record<string, unknown>).library = { source: "data/library.db", table: "tracks" };
+    m.connectors.whoop.datasets.recovery = "library";
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.page === "-" && /sqlite datasets are read-only/.test(e.message))).toBe(true);
+  });
+
   it("rejects a connector output whose source extension is not writable", () => {
     const m = structuredClone(connectorManifest);
     m.connectors.whoop.datasets.recovery = "strategy";
@@ -625,6 +676,8 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
   },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [{ value: "protein_g", max: "protein_goal_g", label: "Protein" }, { value: "carb_g", max: 250, color: "#0a84ff" }] },
   "gauge.goal": { type: "gauge.goal", dataset: "d", value: "kcal", goal: { min: "kcal_low", max: "kcal_high" }, label: "kcal", format: "int" },
+  "gauge.meter": { type: "gauge.meter", dataset: "d", meters: [{ value: "used_gb", max: "quota_gb", label: "Storage" }, { value: "req", max: 1000, color: "#0a84ff" }] },
+  "search.box": { type: "search.box", dataset: "d", fields: ["name", "artist"], titleField: "name", detail: "artist", placeholder: "Search tracks…", limit: 5 },
   "note.card": { type: "note.card", markdown: "# hello" },
   "source.doc": { type: "source.doc", file: "doc.pdf", kind: "pdf" },
 };
@@ -638,6 +691,8 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "timeline.feed": { type: "timeline.feed", dataset: "d", ts: "at", titleField: "t", stats: [{ label: "P" }] },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [] },
   "gauge.goal": { type: "gauge.goal", dataset: "d", goal: { max: "kcal_high" } },
+  "gauge.meter": { type: "gauge.meter", dataset: "d", meters: [] },
+  "search.box": { type: "search.box", dataset: "d", fields: [], titleField: "name" },
   "note.card": { type: "note.card" },
   "source.doc": { type: "source.doc", kind: "spreadsheet" },
 };

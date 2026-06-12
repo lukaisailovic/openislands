@@ -1,6 +1,7 @@
-import { Table, Text, cn } from "@cloudflare/kumo";
+import { Table, cn } from "@cloudflare/kumo";
 import type { ValueFormat } from "@openislands/schema";
 import type { Column, Row } from "@openislands/compiler";
+import { NoData } from "../components/EmptyState.js";
 import { Paged } from "../components/Paged.js";
 import { SeeAllDialog } from "../components/SeeAllDialog.js";
 import { GroupedRowsView, groupRows, type GroupBySpec } from "../components/GroupedRows.js";
@@ -132,12 +133,7 @@ export function TableGrid({ config, data }: IslandRenderProps) {
     drilldown,
   );
 
-  if (rows.length === 0)
-    return (
-      <Text variant="secondary" size="sm">
-        no rows
-      </Text>
-    );
+  if (rows.length === 0) return <NoData />;
 
   if (groupBy) {
     return (
