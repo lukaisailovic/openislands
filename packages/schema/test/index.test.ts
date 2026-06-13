@@ -657,6 +657,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
   "category.pie": { type: "category.pie", dataset: "d", label: "cat", value: "amount", donut: true, format: "eur" },
   "correlation.scatter": { type: "correlation.scatter", dataset: "d", x: "spend", y: "conv", series: "channel", size: "customers", label: "channel", format: "int", xFormat: "eur" },
   "distribution.heatmap": { type: "distribution.heatmap", dataset: "d", x: "hour", y: "day", value: "count", format: "int" },
+  "activity.calendar": { type: "activity.calendar", dataset: "d", date: "day", value: "count", format: "int" },
   "table.grid": {
     type: "table.grid",
     dataset: "d",
@@ -691,6 +692,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "category.pie": { type: "category.pie", dataset: "d", label: "cat" },
   "correlation.scatter": { type: "correlation.scatter", dataset: "d", x: "spend" },
   "distribution.heatmap": { type: "distribution.heatmap", dataset: "d", x: "hour", y: "day" },
+  "activity.calendar": { type: "activity.calendar", dataset: "d", date: "day" },
   "table.grid": { type: "table.grid", columns: [{ field: "f", format: "usd" }] },
   "timeline.feed": { type: "timeline.feed", dataset: "d", ts: "at", titleField: "t", stats: [{ label: "P" }] },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [] },

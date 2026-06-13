@@ -318,3 +318,53 @@ the last value seen for a repeated cell.
   cell labels show for small grids.
 - `colors`: gradient stops overriding the default blues; `format` styles cells, tooltip,
   and the legend.
+
+## activity.calendar
+
+A calendar heatmap of a daily value, GitHub-contributions style: each day is a cell shaded
+by its value, laid out in weeks across the months the data spans. Any parseable date works,
+and rows landing on the same day sum. Give it a half-width or wider tile.
+
+<LiveIsland
+  type="activity.calendar"
+  config={{ title: "Commits per day", date: "day", value: "commits", format: "int" }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "commits", type: "int" },
+    ],
+    [
+      { day: "2026-04-02", commits: 4 },
+      { day: "2026-04-03", commits: 7 },
+      { day: "2026-04-06", commits: 2 },
+      { day: "2026-04-09", commits: 11 },
+      { day: "2026-04-14", commits: 5 },
+      { day: "2026-04-20", commits: 9 },
+      { day: "2026-04-27", commits: 3 },
+      { day: "2026-05-04", commits: 6 },
+      { day: "2026-05-08", commits: 13 },
+      { day: "2026-05-12", commits: 1 },
+      { day: "2026-05-19", commits: 8 },
+      { day: "2026-05-26", commits: 4 },
+      { day: "2026-06-01", commits: 10 },
+      { day: "2026-06-05", commits: 2 },
+      { day: "2026-06-09", commits: 7 },
+    ],
+    "commits",
+  )}
+/>
+
+```jsonc
+{
+  "type": "activity.calendar",
+  "title": "Commits per day",
+  "dataset": "commits",
+  "date": "day",
+  "value": "commits",
+  "format": "int"
+}
+```
+
+- `date`: the day field; any parseable date or timestamp, bucketed to a UTC day (required).
+- `value`: a numeric field mapped to each day's color; same-day rows sum (required).
+- `colors`: gradient stops overriding the default blues; `format` styles the tooltip value.

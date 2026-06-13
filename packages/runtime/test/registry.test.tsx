@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { ActivityCalendar } from "../src/islands/ActivityCalendar.js";
 import { BreakdownTreemap } from "../src/islands/BreakdownTreemap.js";
 import { CategoryBar } from "../src/islands/CategoryBar.js";
 import { CategoryPie } from "../src/islands/CategoryPie.js";
@@ -26,6 +27,10 @@ const goalGauge = (value: number) => (
 describe("island registry", () => {
   it("resolves the distribution.heatmap renderer", () => {
     expect(resolveRenderer("distribution.heatmap")).toBe(DistributionHeatmap);
+  });
+
+  it("resolves the activity.calendar renderer", () => {
+    expect(resolveRenderer("activity.calendar")).toBe(ActivityCalendar);
   });
   it("resolves ported built-in renderers", () => {
     expect(resolveRenderer("note.card")).toBe(NoteCard);

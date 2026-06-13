@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { IslandType } from "@openislands/schema";
 import type { IslandRenderProps } from "../types.js";
 import { setDrilldownResolver } from "./drilldownRenderer.js";
+import { ActivityCalendar } from "./ActivityCalendar.js";
 import { BreakdownTreemap } from "./BreakdownTreemap.js";
 import { CategoryBar } from "./CategoryBar.js";
 import { CategoryPie } from "./CategoryPie.js";
@@ -34,6 +35,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "correlation.scatter": CorrelationScatter,
   "breakdown.treemap": BreakdownTreemap,
   "distribution.heatmap": DistributionHeatmap,
+  "activity.calendar": ActivityCalendar,
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,
   "gauge.meter": GaugeMeter,

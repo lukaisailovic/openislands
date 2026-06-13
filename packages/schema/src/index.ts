@@ -92,6 +92,19 @@ export const BreakdownTreemap = z.object({
     .describe("CSS colors cycled across top-level nodes, overriding the default palette"),
 }).describe("A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.");
 
+export const ActivityCalendar = z.object({
+  type: z.literal("activity.calendar"),
+  ...baseFields,
+  dataset: z.string(),
+  date: z.string().describe("date field — any parseable date or timestamp"),
+  value: z.string().describe("numeric field mapped to the day's color intensity"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("gradient color stops, overriding the default"),
+  format: ValueFormat.optional(),
+}).describe("A calendar heatmap — use to show a daily value over weeks and months, GitHub-contributions style; rows on the same day sum.");
+
 export const DistributionHeatmap = z.object({
   type: z.literal("distribution.heatmap"),
   ...baseFields,
@@ -322,6 +335,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   CategoryPie,
   CorrelationScatter,
   DistributionHeatmap,
+  ActivityCalendar,
   TableGridBase,
   TimelineFeedBase,
   GaugeRings,
@@ -353,6 +367,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "category.bar": CategoryBar,
   "breakdown.treemap": BreakdownTreemap,
   "distribution.heatmap": DistributionHeatmap,
+  "activity.calendar": ActivityCalendar,
   "correlation.scatter": CorrelationScatter,
   "category.pie": CategoryPie,
   "table.grid": TableGrid,
@@ -386,6 +401,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "timeline.feed": 4,
   "breakdown.treemap": 4,
   "distribution.heatmap": 4,
+  "activity.calendar": 6,
   "correlation.scatter": 4,
   "category.pie": 3,
   "table.grid": 5,
@@ -399,6 +415,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   CategoryPie,
   CorrelationScatter,
   DistributionHeatmap,
+  ActivityCalendar,
   TableGrid,
   TimelineFeed,
   GaugeRings,
