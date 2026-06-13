@@ -5,6 +5,7 @@ import { tableFromIPC } from "apache-arrow";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   compile,
+  inferFile,
   inferSchema,
   islandRequirements,
   query,
@@ -513,6 +514,25 @@ describe("inferSchema", () => {
       { name: "month", type: "string" },
       { name: "value", type: "number" },
     ]);
+  });
+});
+
+describe("inferFile", () => {
+  it("infers column names + types from a loose CSV with no project", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "oi-loose-"));
+    const csv = join(dir, "metrics.csv");
+    writeFileSync(csv, "day,visits,active\n2026-01-01,42,true\n");
+    const schema = await inferFile(csv);
+    expect(schema.dataset).toBe("metrics");
+    expect(schema.columns).toEqual([
+      { name: "day", type: "date" },
+      { name: "visits", type: "number" },
+      { name: "active", type: "boolean" },
+    ]);
+  });
+
+  it("rejects a sqlite path, pointing at the project-dataset table path", async () => {
+    await expect(inferFile("/tmp/library.sqlite")).rejects.toThrow(/table/);
   });
 });
 

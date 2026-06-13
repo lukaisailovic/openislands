@@ -485,6 +485,29 @@ export async function inferSchema(projectDir: string, datasetOrFile: string): Pr
   return { dataset: datasetOrFile, columns: columnsFromReader(reader) };
 }
 
+/**
+ * Infers a loose data file's columns + types with no project manifest — a
+ * transient in-memory DuckDB reads the file's schema via a zero-row query. The
+ * "infer fast, formalize immediately" path: a file you haven't declared as a
+ * dataset yet. SQLite needs a table, so it's rejected here with a pointer to
+ * the project-dataset path.
+ */
+export async function inferFile(absPath: string): Promise<SourceSchema> {
+  const ext = sourceExtension(absPath);
+  if (ext === ".sqlite" || ext === ".db") {
+    throw new Error(`sqlite file ${absPath} can't be inferred loosely — declare it as a project dataset with a 'table' instead`);
+  }
+  const instance = await DuckDBInstance.create(":memory:");
+  const conn = await instance.connect();
+  try {
+    const reader = await conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(absPath)} LIMIT 0`);
+    return { dataset: basename(absPath, extname(absPath)), columns: columnsFromReader(reader) };
+  } finally {
+    conn.closeSync();
+    instance.closeSync();
+  }
+}
+
 // --- Which fields does an island require from its dataset? -----------------------
 
 function fieldOrNull(v: unknown): string | null {

@@ -6,17 +6,19 @@
  *   openislands validate [dir]
  *   openislands serve [dir]    # the long-running local runtime (live)
  *   openislands add <island-type> [dir]
+ *   openislands infer <file> [dir]      # infer a data file's schema → dataset contract (--bind to write)
  *   openislands sync [dir] [connector]  # one-shot connector pull (cron-able)
  */
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync, mkdirSync, cpSync, readdirSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { compile, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
-import type { ConnectorStatus, SyncResult } from "@openislands/compiler";
+import { compile, inferFile, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
+import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
+import { datasetNameFromFile, islandSkeleton, suggestIslands } from "./scaffold.js";
 
 interface FetchServer {
   fetch: (request: Request) => Response | Promise<Response>;
@@ -63,7 +65,8 @@ program
     mkdirSync(target, { recursive: true });
     cpSync(src, target, { recursive: true });
     console.log(`${c.green("✓")} created ${c.bold(opts.template)} dashboard in ${target}`);
-    console.log(c.dim(`  next: cd ${dir ?? "."} && openislands serve`));
+    const next = dir === undefined ? "openislands serve" : `cd ${dir} && openislands serve`;
+    console.log(c.dim(`  next: ${next}`));
   });
 
 program
@@ -145,6 +148,14 @@ program
   });
 
 program
+  .command("infer <file> [dir]")
+  .description("infer a data file's schema, propose a dataset contract + islands; --bind adds it to the manifest")
+  .option("--bind", "add the inferred dataset to the project manifest")
+  .action(async (file: string, dir: string | undefined, opts: { bind?: boolean }) => {
+    process.exit(await runInfer(file, resolve(dir ?? "."), opts.bind ?? false));
+  });
+
+program
   .command("sync [dir] [connector]")
   .description(
     "pull configured connectors once and write their datasets (cron this for headless refresh)",
@@ -152,6 +163,86 @@ program
   .action(async (dir: string | undefined, connector: string | undefined) => {
     process.exit(await runSync(resolve(dir ?? "."), connector));
   });
+
+/** The file path a dataset should reference: project-relative POSIX if inside the project, else absolute. */
+function datasetSourcePath(absFile: string, projectDir: string): string {
+  const rel = relative(projectDir, absFile);
+  if (rel.startsWith("..") || isAbsolute(rel)) return absFile;
+  return rel.split(sep).join("/");
+}
+
+async function runInfer(file: string, projectDir: string, bind: boolean): Promise<number> {
+  const absFile = resolve(file);
+  if (!existsSync(absFile)) {
+    console.error(c.red(`no file at ${absFile}`));
+    return 1;
+  }
+
+  let schema: SourceSchema;
+  try {
+    schema = await inferFile(absFile);
+  } catch (err) {
+    console.error(c.red(err instanceof Error ? err.message : String(err)));
+    return 1;
+  }
+
+  const name = datasetNameFromFile(file);
+  const src = datasetSourcePath(absFile, projectDir);
+
+  if (!bind) {
+    printInferPreview(name, src, schema);
+    return 0;
+  }
+
+  return bindInferredDataset(absFile, projectDir, name, src);
+}
+
+function printInferPreview(name: string, src: string, schema: SourceSchema): void {
+  const width = Math.max(...schema.columns.map((col) => col.name.length));
+  console.log(c.bold(`\nInferred ${schema.columns.length} column(s):`));
+  for (const col of schema.columns) {
+    console.log(`  ${col.name.padEnd(width)}  ${c.dim(col.type)}`);
+  }
+
+  console.log(c.bold("\nProposed dataset:"));
+  console.log(JSON.stringify({ [name]: { source: src } }, null, 2));
+
+  console.log(c.bold("\nSuggested islands:"));
+  console.log(JSON.stringify(suggestIslands(name, schema.columns), null, 2));
+
+  console.log(c.dim(`\nhint: re-run with --bind to add '${name}' to the manifest.`));
+}
+
+function bindInferredDataset(absFile: string, projectDir: string, name: string, src: string): number {
+  const manifestPath = join(projectDir, "app", "manifest.json");
+  if (!existsSync(manifestPath)) {
+    console.error(c.red(`no manifest at ${manifestPath}`));
+    return 1;
+  }
+  if (isAbsolute(src)) {
+    console.error(c.red(`${absFile} is outside the project — move it under ${join(projectDir, "data")}/ first, then re-run --bind`));
+    return 1;
+  }
+
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.datasets ??= {};
+  if (manifest.datasets[name]) {
+    console.error(c.red(`dataset name '${name}' is taken — rename the file or edit the manifest`));
+    return 1;
+  }
+  manifest.datasets[name] = { source: src };
+
+  const v = validateManifest(manifest);
+  if (!v.ok) {
+    console.error(c.red("adding the dataset wouldn't validate — not written:"));
+    printErrors(v.errors.map((e) => `[${e.page}#${e.index} ${e.type}] ${e.message}`));
+    return 1;
+  }
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+  console.log(`${c.green("✓")} added dataset ${c.bold(name)} → ${src}`);
+  console.log(c.dim(`  next: openislands add <island-type> (then bind it to '${name}'), or openislands serve`));
+  return 0;
+}
 
 async function runSync(root: string, connector: string | undefined): Promise<number> {
   const statuses = await listConnectorStatuses(root);
@@ -215,32 +306,6 @@ function printSyncResult(result: SyncResult): void {
   for (const [dataset, { mode, rows }] of datasets) {
     console.log(`  ${c.green("→")} ${dataset}: ${rows} row(s) ${c.dim(mode)}`);
   }
-}
-
-function islandSkeleton(type: string): Record<string, unknown> {
-  const base: Record<string, Record<string, unknown>> = {
-    "metric.kpi": { type, title: "New metric", dataset: "TODO", value: "TODO" },
-    "timeseries.line": { type, title: "New chart", dataset: "TODO", x: "TODO", y: "TODO" },
-    "category.bar": { type, title: "New bars", dataset: "TODO", x: "TODO", y: "TODO" },
-    "breakdown.treemap": {
-      type,
-      title: "New breakdown",
-      dataset: "TODO",
-      label: "TODO",
-      value: "TODO",
-    },
-    "table.grid": { type, title: "New table", dataset: "TODO" },
-    "timeline.feed": {
-      type,
-      title: "New timeline",
-      dataset: "TODO",
-      ts: "TODO",
-      titleField: "TODO",
-    },
-    "note.card": { type, title: "Note", markdown: "## Note\n\nWrite something." },
-    "source.doc": { type, title: "Source", kind: "link", href: "https://" },
-  };
-  return base[type] ?? { type, title: "New island" };
 }
 
 async function runValidate(root: string): Promise<number> {
