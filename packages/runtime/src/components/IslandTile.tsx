@@ -7,11 +7,11 @@ import { useAppId } from "../client/useAppId.js";
 import { makeCustomIsland } from "../islands/CustomIsland.js";
 import { islandNeedsData, type IslandRenderer, resolveRenderer } from "../islands/registry.js";
 import type {
-  Column,
   CustomIslandMap,
   IslandConfig,
   IslandQueryError,
   IslandValidationError,
+  QueryPayload,
 } from "../types.js";
 import { IslandErrorCard } from "./IslandErrorCard.js";
 import { IslandCard, type SourceInfo } from "./primitives.js";
@@ -36,17 +36,21 @@ function useRenderer(type: string, customIslands: CustomIslandMap | undefined): 
 export function sourceInfo(
   config: IslandConfig,
   spec: DatasetSpec | undefined,
-  columns: Column[] | undefined,
+  data: QueryPayload | undefined,
 ): SourceInfo | null {
   const file = config.file as string | undefined;
   if (file) return { name: file, path: file, kind: "file" };
   if (!config.dataset) return null;
+  const columns = data?.columns;
+  const rows = data?.rows;
   return {
     name: config.dataset,
     path: spec?.source ?? spec?.sql,
+    table: spec?.table,
     kind: spec?.sql ? "sql" : "file",
     description: spec?.description,
     columns: columns && columns.length > 0 ? columns : undefined,
+    rows: rows && rows.length > 0 ? rows : undefined,
   };
 }
 
@@ -100,7 +104,7 @@ export function IslandTile({
       className="oi-tile"
       style={tileStyle}
       title={config.title as string | undefined}
-      source={sourceInfo(config, datasetSpec, queryResult.data?.columns)}
+      source={sourceInfo(config, datasetSpec, queryResult.data)}
     >
       {needsData && queryResult.isLoading ? (
         <div>
