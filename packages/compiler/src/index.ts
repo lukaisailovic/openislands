@@ -574,6 +574,11 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       else add(lines);
       break;
     }
+    case "rank.list":
+      add(island.label);
+      add(island.value);
+      add(island.secondary);
+      break;
     case "breakdown.treemap":
       add(island.label);
       add(island.value);

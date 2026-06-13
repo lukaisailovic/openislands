@@ -60,7 +60,9 @@
               { "field": "uptime_pct", "label": "Uptime", "format": "pct" },
               { "field": "owner", "label": "Owner" }
             ] },
-            { "type": "category.bar", "title": "p95 by service", "dataset": "services", "x": "service", "y": "p95_ms", "span": 12 }
+            { "type": "category.bar", "title": "p95 by service", "dataset": "services", "x": "service", "y": "p95_ms", "span": 12 },
+
+            { "type": "rank.list", "title": "Slowest services by p95", "dataset": "services", "label": "service", "value": "p95_ms", "secondary": "owner", "sort": "descending", "limit": 6, "format": "int", "span": 12 }
           ]
         },
         {

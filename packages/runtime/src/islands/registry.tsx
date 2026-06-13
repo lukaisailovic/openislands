@@ -19,6 +19,7 @@ import { MapChoropleth } from "./MapChoropleth.js";
 import { MetricKpi } from "./MetricKpi.js";
 import { MetricScorecard } from "./MetricScorecard.js";
 import { NoteCard } from "./NoteCard.js";
+import { RankList } from "./RankList.js";
 import { SearchBox } from "./SearchBox.js";
 import { SourceDoc } from "./SourceDoc.js";
 import { TableGrid } from "./TableGrid.js";
@@ -44,6 +45,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
   "funnel.steps": FunnelSteps,
+  "rank.list": RankList,
   "compare.radar": CompareRadar,
   "map.choropleth": MapChoropleth,
   "gauge.rings": GaugeRings,

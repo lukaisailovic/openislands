@@ -17,6 +17,7 @@ import { MapChoropleth } from "../src/islands/MapChoropleth.js";
 import { MetricKpi } from "../src/islands/MetricKpi.js";
 import { MetricScorecard } from "../src/islands/MetricScorecard.js";
 import { NoteCard } from "../src/islands/NoteCard.js";
+import { RankList } from "../src/islands/RankList.js";
 import { SearchBox } from "../src/islands/SearchBox.js";
 import { TableGrid } from "../src/islands/TableGrid.js";
 import { TimeseriesLine } from "../src/islands/TimeseriesLine.js";
@@ -40,6 +41,10 @@ describe("island registry", () => {
 
   it("resolves the funnel.steps renderer", () => {
     expect(resolveRenderer("funnel.steps")).toBe(FunnelSteps);
+  });
+
+  it("resolves the rank.list renderer", () => {
+    expect(resolveRenderer("rank.list")).toBe(RankList);
   });
 
   it("resolves the compare.radar renderer", () => {

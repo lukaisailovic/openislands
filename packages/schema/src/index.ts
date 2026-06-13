@@ -193,6 +193,19 @@ export const FunnelSteps = z.object({
   format: ValueFormat.optional(),
 }).describe("A funnel of sequential stages — use for conversion or drop-off; each stage's width is its share, ordered by the rows unless sort is set.");
 
+export const RankList = z.object({
+  type: z.literal("rank.list"),
+  ...baseFields,
+  dataset: z.string(),
+  label: z.string().describe("field naming each row"),
+  value: z.string().describe("numeric field the rows are ranked by"),
+  limit: z.number().int().positive().default(10).describe("max rows shown"),
+  sort: z.enum(["descending", "ascending"]).default("descending").describe("rank order by value"),
+  secondary: z.string().optional().describe("optional field shown beside each row's value"),
+  color: z.string().optional().describe("CSS color for the bars, overriding the default accent"),
+  format: ValueFormat.optional(),
+}).describe("A ranked Top-N list with proportional bars — use for leaderboards: top products, customers, errors, or movers.");
+
 export const ActivityCalendar = z.object({
   type: z.literal("activity.calendar"),
   ...baseFields,
@@ -440,6 +453,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   DistributionHeatmap,
   ActivityCalendar,
   FunnelSteps,
+  RankList,
   CompareRadar,
   MapChoropleth,
   TableGridBase,
@@ -477,6 +491,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
   "funnel.steps": FunnelSteps,
+  "rank.list": RankList,
   "compare.radar": CompareRadar,
   "map.choropleth": MapChoropleth,
   "correlation.scatter": CorrelationScatter,
@@ -516,6 +531,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "distribution.heatmap": 4,
   "activity.calendar": 6,
   "funnel.steps": 3,
+  "rank.list": 3,
   "compare.radar": 4,
   "map.choropleth": 5,
   "correlation.scatter": 4,
@@ -535,6 +551,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   DistributionHeatmap,
   ActivityCalendar,
   FunnelSteps,
+  RankList,
   CompareRadar,
   MapChoropleth,
   TableGrid,

@@ -176,6 +176,61 @@ accept a single field or an array.
 - `colors`: CSS colors per series (bars first, then lines), overriding the palette.
 - `format` / `lineFormat`: [value formats](/reference/value-formats) for the bar (primary) and line (secondary) axes.
 
+## rank.list
+
+A ranked Top-N list with proportional horizontal bars, the island for a leaderboard: top products,
+customers, errors, or movers. Rows are sorted by `value`, cut to `limit`, and each bar is sized
+against the largest in the visible set, so the list reads as a ranking at a glance.
+
+<LiveIsland
+  type="rank.list"
+  config={{
+    title: "Top products by revenue",
+    label: "product",
+    value: "revenue_eur",
+    secondary: "region",
+    sort: "descending",
+    limit: 5,
+    format: "eur",
+  }}
+  data={sampleData(
+    [
+      { name: "product", type: "varchar" },
+      { name: "revenue_eur", type: "double" },
+      { name: "region", type: "varchar" },
+    ],
+    [
+      { product: "Aurora Pro", revenue_eur: 184_200, region: "EU" },
+      { product: "Borealis Cloud", revenue_eur: 142_800, region: "US" },
+      { product: "Cirrus Edge", revenue_eur: 96_400, region: "APAC" },
+      { product: "Delta Sync", revenue_eur: 61_900, region: "EU" },
+      { product: "Echo Stream", revenue_eur: 38_500, region: "US" },
+    ],
+    "product_revenue",
+  )}
+/>
+
+```jsonc
+{
+  "type": "rank.list",
+  "title": "Top products by revenue",
+  "dataset": "product_revenue",
+  "label": "product",
+  "value": "revenue_eur",
+  "secondary": "region",
+  "sort": "descending",
+  "limit": 5,
+  "format": "eur"
+}
+```
+
+- `label`: the field naming each row (required); `value`: the numeric field rows are ranked by (required).
+- `sort`: `descending` (the default, largest first) or `ascending` to surface the smallest.
+- `limit`: the maximum number of rows shown (default `10`).
+- `secondary`: an optional field shown beside each row's value (e.g. a region or owner).
+- `color`: a CSS color for the bars, overriding the default accent; [`format`](/reference/value-formats)
+  styles each row's value.
+
 ## breakdown.treemap
 
 A treemap of part-to-whole composition, the island for how a total splits across parts,
