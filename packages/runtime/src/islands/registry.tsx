@@ -4,6 +4,7 @@ import type { IslandRenderProps } from "../types.js";
 import { setDrilldownResolver } from "./drilldownRenderer.js";
 import { BreakdownTreemap } from "./BreakdownTreemap.js";
 import { CategoryBar } from "./CategoryBar.js";
+import { CategoryPie } from "./CategoryPie.js";
 import { CustomPlaceholder } from "./CustomPlaceholder.js";
 import { GaugeGoal } from "./GaugeGoal.js";
 import { GaugeMeter } from "./GaugeMeter.js";
@@ -27,6 +28,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "metric.kpi": MetricKpi,
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
+  "category.pie": CategoryPie,
   "breakdown.treemap": BreakdownTreemap,
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,

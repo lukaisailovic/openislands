@@ -92,6 +92,20 @@ export const BreakdownTreemap = z.object({
     .describe("CSS colors cycled across top-level nodes, overriding the default palette"),
 }).describe("A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.");
 
+export const CategoryPie = z.object({
+  type: z.literal("category.pie"),
+  ...baseFields,
+  dataset: z.string(),
+  label: z.string().describe("category field naming each slice"),
+  value: z.string().describe("numeric field sizing each slice"),
+  donut: z.boolean().default(false).describe("render with an inner radius (a donut hole)"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("CSS colors per slice (in descending-value order), overriding the default palette"),
+  format: ValueFormat.optional(),
+}).describe("A pie or donut chart of part-to-whole composition — use for one series' share across a handful of categories; set donut for a hole.");
+
 export const DetailSpec = z.object({
   field: z.string(),
   label: z.string().optional(),
@@ -274,6 +288,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   TimeseriesLine,
   CategoryBar,
   BreakdownTreemap,
+  CategoryPie,
   TableGridBase,
   TimelineFeedBase,
   GaugeRings,
@@ -304,6 +319,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
   "breakdown.treemap": BreakdownTreemap,
+  "category.pie": CategoryPie,
   "table.grid": TableGrid,
   "timeline.feed": TimelineFeed,
   "gauge.rings": GaugeRings,
@@ -334,6 +350,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "category.bar": 4,
   "timeline.feed": 4,
   "breakdown.treemap": 4,
+  "category.pie": 3,
   "table.grid": 5,
 };
 
@@ -342,6 +359,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   TimeseriesLine,
   CategoryBar,
   BreakdownTreemap,
+  CategoryPie,
   TableGrid,
   TimelineFeed,
   GaugeRings,

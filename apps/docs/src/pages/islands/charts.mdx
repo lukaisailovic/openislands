@@ -4,9 +4,10 @@ import { sampleData } from "../../components/sampleData";
 
 # Charts
 
-Three islands for shape and comparison: a line over time, bars across categories, and a
-treemap of a whole. Each preview below is a real OpenIslands renderer running the same
-code a live dashboard uses. For the full registry, see [Islands](/islands/overview).
+A family of islands for shape, comparison, distribution, and geography: lines and bars,
+parts of a whole, scatter and radar, heatmaps and a calendar, funnels, and a world map.
+Each preview below is a real OpenIslands renderer running the same code a live dashboard
+uses. For the full registry, see [Islands](/islands/overview).
 
 ## timeseries.line
 
@@ -162,3 +163,48 @@ group leaves under a hierarchy.
 - `parent`: an optional field grouping leaves into a two-level hierarchy; omit it for a
   flat treemap.
 - `colors`: CSS colors cycled across the top-level nodes, overriding the palette.
+
+## category.pie
+
+A pie, or a donut with `donut: true`, of one series' share across a handful of categories.
+Slices sum by `label` and sort largest-first; each shows its percentage and the tooltip
+carries the formatted value. Reach for a treemap instead when the parts nest or there are
+many of them.
+
+<LiveIsland
+  type="category.pie"
+  config={{ title: "Revenue by product", label: "category", value: "revenue", donut: true, format: "eur" }}
+  data={sampleData(
+    [
+      { name: "category", type: "varchar" },
+      { name: "revenue", type: "double" },
+    ],
+    [
+      { category: "Enterprise", revenue: 482_000 },
+      { category: "Professional", revenue: 316_000 },
+      { category: "Starter", revenue: 158_000 },
+      { category: "Add-ons", revenue: 94_000 },
+      { category: "Support", revenue: 61_000 },
+      { category: "Training", revenue: 27_000 },
+    ],
+    "product_revenue",
+  )}
+/>
+
+```jsonc
+{
+  "type": "category.pie",
+  "title": "Revenue by product",
+  "dataset": "product_revenue",
+  "label": "category",
+  "value": "revenue",
+  "donut": true,
+  "format": "eur"
+}
+```
+
+- `label`: the field naming each slice (required); `value`: the numeric field sizing it
+  (required). Slices sum by label; only positive values render.
+- `donut`: `true` cuts an inner radius (a donut); omit for a full pie.
+- `colors`: CSS colors per slice (largest-first), overriding the palette; `format` styles
+  the tooltip values.

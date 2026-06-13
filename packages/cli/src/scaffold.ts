@@ -23,6 +23,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
       label: "TODO",
       value: "TODO",
     },
+    "category.pie": { type, title: "New pie", dataset: "TODO", label: "TODO", value: "TODO" },
     "table.grid": { type, title: "New table", dataset: "TODO" },
     "timeline.feed": {
       type,
