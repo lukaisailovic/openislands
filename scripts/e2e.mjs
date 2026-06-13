@@ -10,11 +10,18 @@
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(repoRoot, "packages", "cli", "src", "index.ts");
+
+/** Single-app `serve` derives the app id from the project dir basename — mirror
+ * `sanitizeAppId` in packages/runtime/src/server/workspace.ts. */
+function appIdFromDir(dir) {
+  const id = basename(dir).replace(/[^A-Za-z0-9._-]/g, "-").replace(/^[._-]+/, "");
+  return id || "app";
+}
 
 /** A representative tabular dataset per template (not a markdown/doc source). */
 const TEMPLATES = [
@@ -118,8 +125,9 @@ async function check({ template, dataset }) {
       throw new Error(`dashboard HTML did not contain title "${title}"`);
     }
 
+    const appId = appIdFromDir(dir);
     const query = await withTimeout(
-      fetch(`${base}/api/query?dataset=${dataset}`).then(async (r) => {
+      fetch(`${base}/api/query?app=${appId}&dataset=${dataset}`).then(async (r) => {
         const body = await r.json();
         if (r.status !== 200) throw new Error(`/api/query → ${r.status}: ${JSON.stringify(body)}`);
         return body;

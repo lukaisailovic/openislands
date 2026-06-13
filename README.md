@@ -71,10 +71,10 @@ breadth-prover). The same engine renders all three with no domain-specific hacks
 ## Status
 
 Early, and live-first (no static export in v1 — it's deferred with a future publish tier).
-The schema, compiler, MCP server, and three templates work today, and `pnpm test` is green;
-the current renderer is an interim static emitter proving the pipeline. The production
-`serve` runtime (**TanStack Start** SSR + React islands + TanStack Query + SSE live updates)
-is the next milestone, with an optional hosted sync/publish tier later.
+The schema, compiler, runtime, CLI, MCP server, and three templates work today, and
+`pnpm test` is green. `openislands serve` boots the production runtime (**TanStack Start**
+SSR + React islands + TanStack Query + SSE live updates) and queries your files live through
+the DuckDB core on every request. An optional hosted sync/publish tier comes later.
 
 ## Develop
 
