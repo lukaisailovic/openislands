@@ -12,6 +12,7 @@ import { FunnelSteps } from "../src/islands/FunnelSteps.js";
 import { GaugeGoal } from "../src/islands/GaugeGoal.js";
 import { GaugeMeter } from "../src/islands/GaugeMeter.js";
 import { GaugeRings } from "../src/islands/GaugeRings.js";
+import { MapChoropleth } from "../src/islands/MapChoropleth.js";
 import { MetricKpi } from "../src/islands/MetricKpi.js";
 import { MetricScorecard } from "../src/islands/MetricScorecard.js";
 import { NoteCard } from "../src/islands/NoteCard.js";
@@ -46,6 +47,10 @@ describe("island registry", () => {
 
   it("resolves the metric.scorecard renderer", () => {
     expect(resolveRenderer("metric.scorecard")).toBe(MetricScorecard);
+  });
+
+  it("resolves the map.choropleth renderer", () => {
+    expect(resolveRenderer("map.choropleth")).toBe(MapChoropleth);
   });
   it("resolves ported built-in renderers", () => {
     expect(resolveRenderer("note.card")).toBe(NoteCard);

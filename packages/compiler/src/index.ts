@@ -666,6 +666,10 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.series);
       break;
     }
+    case "map.choropleth":
+      add(island.region);
+      add(island.value);
+      break;
     case "metric.scorecard": {
       const stats = island.stats;
       if (Array.isArray(stats)) for (const stat of stats) add((stat as Record<string, unknown>).value);

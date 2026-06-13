@@ -14,6 +14,7 @@ import { FunnelSteps } from "./FunnelSteps.js";
 import { GaugeGoal } from "./GaugeGoal.js";
 import { GaugeMeter } from "./GaugeMeter.js";
 import { GaugeRings } from "./GaugeRings.js";
+import { MapChoropleth } from "./MapChoropleth.js";
 import { MetricKpi } from "./MetricKpi.js";
 import { MetricScorecard } from "./MetricScorecard.js";
 import { NoteCard } from "./NoteCard.js";
@@ -42,6 +43,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "activity.calendar": ActivityCalendar,
   "funnel.steps": FunnelSteps,
   "compare.radar": CompareRadar,
+  "map.choropleth": MapChoropleth,
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,
   "gauge.meter": GaugeMeter,

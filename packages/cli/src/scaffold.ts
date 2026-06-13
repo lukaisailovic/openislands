@@ -30,6 +30,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
     "activity.calendar": { type, title: "New calendar", dataset: "TODO", date: "TODO", value: "TODO" },
     "funnel.steps": { type, title: "New funnel", dataset: "TODO", label: "TODO", value: "TODO" },
     "compare.radar": { type, title: "New radar", dataset: "TODO", metrics: ["TODO"] },
+    "map.choropleth": { type, title: "New map", dataset: "TODO", region: "TODO", value: "TODO" },
     "table.grid": { type, title: "New table", dataset: "TODO" },
     "timeline.feed": {
       type,

@@ -112,6 +112,20 @@ export const BreakdownTreemap = z.object({
     .describe("CSS colors cycled across top-level nodes, overriding the default palette"),
 }).describe("A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.");
 
+export const MapChoropleth = z.object({
+  type: z.literal("map.choropleth"),
+  ...baseFields,
+  dataset: z.string(),
+  region: z.string().describe("field holding each row's region name, matching the map's region names (e.g. a country name like \"France\")"),
+  value: z.string().describe("numeric field mapped to each region's color"),
+  map: z.string().default("world").describe("the registered map name"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("gradient color stops, overriding the default"),
+  format: ValueFormat.optional(),
+}).describe("A geographic choropleth — use to shade regions (world countries) by a value; region names must match the map's names. Local-first: the map ships as vendored GeoJSON, no network.");
+
 export const CompareRadar = z.object({
   type: z.literal("compare.radar"),
   ...baseFields,
@@ -390,6 +404,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   ActivityCalendar,
   FunnelSteps,
   CompareRadar,
+  MapChoropleth,
   TableGridBase,
   TimelineFeedBase,
   GaugeRings,
@@ -425,6 +440,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "activity.calendar": ActivityCalendar,
   "funnel.steps": FunnelSteps,
   "compare.radar": CompareRadar,
+  "map.choropleth": MapChoropleth,
   "correlation.scatter": CorrelationScatter,
   "category.pie": CategoryPie,
   "table.grid": TableGrid,
@@ -462,6 +478,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "activity.calendar": 6,
   "funnel.steps": 3,
   "compare.radar": 4,
+  "map.choropleth": 5,
   "correlation.scatter": 4,
   "category.pie": 3,
   "table.grid": 5,
@@ -479,6 +496,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   ActivityCalendar,
   FunnelSteps,
   CompareRadar,
+  MapChoropleth,
   TableGrid,
   TimelineFeed,
   GaugeRings,

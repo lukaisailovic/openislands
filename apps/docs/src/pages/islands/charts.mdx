@@ -453,3 +453,55 @@ across every axis when the metrics are on a common scale (e.g. all 0-100 scores)
 - `series`: a field naming each row's polygon; omitted, polygons are numbered Series 1, 2, …
 - `max`: a fixed max shared by every axis; omitted, each axis maxes at its own metric's peak.
 - `colors`: per-polygon CSS colors overriding the palette; `format` styles the tooltip values.
+
+## map.choropleth
+
+A geographic choropleth: regions shaded by a value on a continuous scale. The map ships as
+vendored GeoJSON, so it renders fully offline, with no tiles and no network. Each row's
+`region` must match the map's region name; for the built-in `world` map that is the English
+country name.
+
+<LiveIsland
+  type="map.choropleth"
+  config={{ title: "Revenue by country", region: "country", value: "revenue_eur", format: "eur" }}
+  data={sampleData(
+    [
+      { name: "country", type: "varchar" },
+      { name: "revenue_eur", type: "double" },
+    ],
+    [
+      { country: "United States of America", revenue_eur: 482_000 },
+      { country: "Germany", revenue_eur: 213_000 },
+      { country: "France", revenue_eur: 168_000 },
+      { country: "United Kingdom", revenue_eur: 154_000 },
+      { country: "Japan", revenue_eur: 121_000 },
+      { country: "Brazil", revenue_eur: 73_000 },
+      { country: "India", revenue_eur: 61_000 },
+      { country: "Australia", revenue_eur: 44_000 },
+    ],
+    "revenue_by_country",
+  )}
+  height={320}
+/>
+
+```jsonc
+{
+  "type": "map.choropleth",
+  "title": "Revenue by country",
+  "dataset": "revenue_by_country",
+  "region": "country",
+  "value": "revenue_eur",
+  "format": "eur"
+}
+```
+
+- `region`: the field holding each row's region name, matching the map's names (required).
+- `value`: the numeric field shading each region (required); regions with no row stay neutral.
+- `map`: the registered map name (default `world`); `colors` overrides the gradient; `format`
+  styles the tooltip and legend.
+
+<Callout variant="tip">
+  Region names must match the map exactly. The `world` map uses full English country names:
+  `United States of America` (not "United States" or "USA"), `United Kingdom`, `Russia`, and
+  so on. Normalize your data's names in SQL to match.
+</Callout>

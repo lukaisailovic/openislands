@@ -661,6 +661,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
   "activity.calendar": { type: "activity.calendar", dataset: "d", date: "day", value: "count", format: "int" },
   "funnel.steps": { type: "funnel.steps", dataset: "d", label: "stage", value: "count", sort: "descending", format: "int" },
   "compare.radar": { type: "compare.radar", dataset: "d", metrics: ["perf", "price", "design"], series: "product", max: 100, format: "int" },
+  "map.choropleth": { type: "map.choropleth", dataset: "d", region: "country", value: "revenue", format: "eur" },
   "table.grid": {
     type: "table.grid",
     dataset: "d",
@@ -699,6 +700,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "activity.calendar": { type: "activity.calendar", dataset: "d", date: "day" },
   "funnel.steps": { type: "funnel.steps", dataset: "d", label: "stage" },
   "compare.radar": { type: "compare.radar", dataset: "d", metrics: [] },
+  "map.choropleth": { type: "map.choropleth", dataset: "d", region: "country" },
   "table.grid": { type: "table.grid", columns: [{ field: "f", format: "usd" }] },
   "timeline.feed": { type: "timeline.feed", dataset: "d", ts: "at", titleField: "t", stats: [{ label: "P" }] },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [] },
