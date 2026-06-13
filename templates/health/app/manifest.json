@@ -10,7 +10,7 @@
   "actions": {
     "log_meal": {
       "dataset": "meals",
-      "mode": "append",
+      "mode": "insert",
       "description": "Log a meal to the meals timeline",
       "fields": {
         "meal_type": { "enum": ["breakfast", "lunch", "dinner", "snack"] },

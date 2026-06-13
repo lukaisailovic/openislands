@@ -375,7 +375,7 @@ export type DatasetSpec = z.infer<typeof DatasetSpec>;
 
 export const SQLITE_SOURCE_EXTENSIONS = [".sqlite", ".db"];
 
-/** A SQLite database source — read through DuckDB's sqlite extension, never writable. */
+/** A SQLite database source — read through DuckDB's sqlite extension, and written (insert/replace) through it too. */
 export function isSqliteSource(source: string): boolean {
   return SQLITE_SOURCE_EXTENSIONS.includes(source.slice(source.lastIndexOf(".")).toLowerCase());
 }
@@ -497,22 +497,34 @@ export type FieldSpec = z.infer<typeof FieldSpec>;
 
 /**
  * A manifest-declared write into a `source` dataset (never `sql` — derived
- * datasets aren't writable). v1 is append-only over CSV / JSON(L) files. The
- * row schema is derived from the live data; `fields` only narrows it.
+ * datasets aren't writable). `mode: "insert"` adds rows — an append for a
+ * flat-file source (CSV / JSON(L)), an INSERT for a SQLite table — so the
+ * storage backing the dataset never changes the contract. The row schema is
+ * derived from the live data; `fields` only narrows it.
  */
 export const ActionSpec = z.object({
   dataset: z.string(),
-  mode: z.literal("append"),
+  mode: z.literal("insert"),
   description: z.string().optional(),
   fields: z.record(z.string(), FieldSpec).optional(),
 });
 export type ActionSpec = z.infer<typeof ActionSpec>;
 
-const WRITABLE_SOURCE_EXTENSIONS = [".csv", ".json", ".ndjson", ".jsonl"];
+/** Flat-file source formats a write can append rows to. */
+const WRITABLE_FILE_EXTENSIONS = [".csv", ".json", ".ndjson", ".jsonl"];
 
+/**
+ * Every source format a write (action or connector) can target: a flat file it
+ * appends to, or a SQLite table it inserts into. Derived `sql` views and
+ * read-only formats (parquet, markdown) are excluded — they have no row sink.
+ */
 function isWritableSource(source: string): boolean {
-  return WRITABLE_SOURCE_EXTENSIONS.includes(source.slice(source.lastIndexOf(".")).toLowerCase());
+  const ext = source.slice(source.lastIndexOf(".")).toLowerCase();
+  return WRITABLE_FILE_EXTENSIONS.includes(ext) || SQLITE_SOURCE_EXTENSIONS.includes(ext);
 }
+
+/** The writable formats, for "not writable" error messages. */
+const WRITABLE_SOURCE_EXTENSIONS = [...WRITABLE_FILE_EXTENSIONS, ...SQLITE_SOURCE_EXTENSIONS];
 
 // --- Connectors: vendored integrations that sync provider data into datasets -----
 
@@ -637,12 +649,8 @@ export function validateManifest(input: unknown): ValidationResult {
       continue;
     }
     const source = target.source ?? "";
-    if (isSqliteSource(source)) {
-      rootError(`actions.${name}: dataset '${r.data.dataset}' is a sqlite source — sqlite datasets are read-only`);
-      continue;
-    }
     if (!isWritableSource(source)) {
-      rootError(`actions.${name}: source '${source}' is not writable — append supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
+      rootError(`actions.${name}: source '${source}' is not writable — insert supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
     }
   }
 
@@ -665,10 +673,6 @@ export function validateManifest(input: unknown): ValidationResult {
         continue;
       }
       const source = target.source ?? "";
-      if (isSqliteSource(source)) {
-        rootError(`connectors.${name}: output '${output}' targets sqlite source '${source}' — sqlite datasets are read-only`);
-        continue;
-      }
       if (!isWritableSource(source)) {
         rootError(`connectors.${name}: output '${output}' targets source '${source}', not writable — supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
       }

@@ -6,7 +6,7 @@ import { z } from "zod";
  *
  * Recovery scores get revised after a draw, so recovery is `replace`d each sync
  * (the file is always the current truth). Sleep and workouts are immutable once
- * recorded, so they `append` and advance an `updated_at` cursor — only rows
+ * recorded, so they `insert` and advance an `updated_at` cursor — only rows
  * newer than the last sync are pulled.
  */
 const BASE = "https://api.prod.whoop.com/developer/v2";
@@ -100,8 +100,8 @@ export default defineConnector({
   },
   outputs: {
     recovery: { description: "daily recovery score, RHR, HRV — replaced each sync since scores get revised" },
-    sleep: { description: "per-sleep performance + stage durations — appended by updated_at cursor" },
-    workouts: { description: "per-workout strain + heart rate — appended by updated_at cursor" },
+    sleep: { description: "per-sleep performance + stage durations — inserted by updated_at cursor" },
+    workouts: { description: "per-workout strain + heart rate — inserted by updated_at cursor" },
   },
   async sync(ctx) {
     const token = ctx.tokens!.accessToken;
@@ -123,7 +123,7 @@ export default defineConnector({
     const sleep = await fetchAll<SleepRecord>(token, "/activity/sleep", { start: sleepSince });
     const freshSleep = sleep.filter((s) => s.updated_at > sleepSince);
     if (freshSleep.length > 0) {
-      await ctx.append(
+      await ctx.insert(
         "sleep",
         freshSleep.map((s) => ({
           sleep_id: s.id,
@@ -144,7 +144,7 @@ export default defineConnector({
     const workouts = await fetchAll<WorkoutRecord>(token, "/activity/workout", { start: workoutSince });
     const freshWorkouts = workouts.filter((w) => w.updated_at > workoutSince);
     if (freshWorkouts.length > 0) {
-      await ctx.append(
+      await ctx.insert(
         "workouts",
         freshWorkouts.map((w) => ({
           workout_id: w.id,

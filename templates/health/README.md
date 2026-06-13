@@ -27,7 +27,7 @@ Everything under `data/` is one consistent story:
 - `macros_daily.csv` — daily totals vs goals: kcal with a goal band, plus protein, carbs,
   and fat goals.
 - `meals.csv` — the meal log: typed, timed, per-meal macros and a note. The `log_meal`
-  action appends rows here.
+  action inserts rows here.
 - `weight.csv` — daily weight.
 - `biomarkers.csv` — blood-panel markers, one row per marker per draw, with reference
   *and* optimal ranges. Grouped by panel in the Trends table.
@@ -35,7 +35,7 @@ Everything under `data/` is one consistent story:
 The macro rings are the built-in `gauge.rings` island — concentric rings reading the latest
 row, each filling toward its goal column.
 
-The single **action** — `log_meal`, a typed, append-only write — lets an agent log a meal.
+The single **action** — `log_meal`, a typed insert write — lets an agent log a meal.
 An agent discovers it with `list_actions` and writes rows with `run_action`; the views
 update live.
 

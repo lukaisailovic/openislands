@@ -11,7 +11,7 @@
   "actions": {
     "log_transaction": {
       "dataset": "transactions",
-      "mode": "append",
+      "mode": "insert",
       "description": "Record a money movement in the transactions log"
     }
   },

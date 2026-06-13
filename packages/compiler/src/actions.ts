@@ -1,18 +1,21 @@
 /**
- * Actions — manifest-declared, typed, append-only writes into a `source`
- * dataset. The row schema is derived from the dataset's live DuckDB-inferred
- * columns and narrowed by the action's `fields` overrides; that one schema is
- * the single source of truth for both row validation here and the JSON Schema
- * grounding the MCP server hands an agent. Writes are guarded the same way as
- * manifest edits: validate every row, snapshot the target file to
- * `.openislands/history/`, then append. No git — rollback safety is the
- * snapshot, full stop.
+ * Actions — manifest-declared, typed writes into a `source` dataset. `insert`
+ * adds rows; the row schema is derived from the dataset's live DuckDB-inferred
+ * columns and narrowed by the action's `fields` overrides, and that one schema
+ * is the single source of truth for both row validation here and the JSON
+ * Schema grounding the MCP server hands an agent. The physical write is
+ * delegated to a storage-agnostic `DatasetWriter` (writers.ts), so a dataset
+ * backed by a CSV/JSON file and one backed by a SQLite table take the exact
+ * same path. Writes are guarded the same way as manifest edits: validate every
+ * row, snapshot the target file to `.openislands/history/`, then write. No git
+ * — rollback safety is the snapshot, full stop.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, unlinkSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import type { ActionSpec, FieldSpec, Manifest } from "@openislands/schema";
-import { inferSchema, readManifest, resolveSourcePath, type ColumnType } from "./index.js";
+import { inferSchema, readManifest, resolveSourcePath, resetEngine, type ColumnType } from "./index.js";
+import { resolveWriter, type WriteTarget } from "./writers.js";
 
 export const MAX_SNAPSHOTS_PER_FILE = 20;
 export const MAX_SNAPSHOT_BYTES_PER_FILE = 50 * 1024 * 1024;
@@ -37,9 +40,14 @@ export class ActionValidationError extends Error {
   }
 }
 
-export interface AppendResult {
-  appended: number;
+export interface InsertResult {
+  inserted: number;
   checkpoint_id: string;
+}
+
+export interface ReplaceResult {
+  replaced: number;
+  checkpoint_id?: string;
 }
 
 function lookupAction(manifest: Manifest, actionName: string): ActionSpec {
@@ -48,11 +56,12 @@ function lookupAction(manifest: Manifest, actionName: string): ActionSpec {
   return action;
 }
 
-function actionSourcePath(projectDir: string, manifest: Manifest, action: ActionSpec): string {
+/** Where an action's dataset physically writes: its source file, plus the table when that source is a SQLite database. Throws for a derived (`sql`) dataset, which has no row sink. */
+function actionWriteTarget(projectDir: string, manifest: Manifest, action: ActionSpec): WriteTarget {
   const spec = manifest.datasets[action.dataset];
   if (!spec) throw new Error(`action targets unknown dataset '${action.dataset}'`);
   if (!spec.source) throw new Error(`action dataset '${action.dataset}' has no source — derived datasets are not writable`);
-  return resolveSourcePath(projectDir, spec.source);
+  return { sourcePath: resolveSourcePath(projectDir, spec.source), table: spec.table };
 }
 
 function baseTypeSchema(type: ColumnType): z.ZodType {
@@ -202,199 +211,71 @@ export function snapshotIfExists(projectDir: string, sourcePath: string): string
   return snapshotFile(projectDir, sourcePath);
 }
 
-export { snapshotFile, pruneSnapshots, extensionOf };
-
-function csvQuote(value: string): string {
-  if (/[",\r\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
-}
-
-function cellToString(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  return String(value);
-}
-
-function parseCsvHeader(content: string): string[] {
-  const firstLine = content.split(/\r?\n/, 1)[0] ?? "";
-  return parseCsvLine(firstLine);
-}
-
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (line[i + 1] === '"') {
-          current += '"';
-          i += 1;
-          continue;
-        }
-        inQuotes = false;
-        continue;
-      }
-      current += ch;
-      continue;
-    }
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-    if (ch === ",") {
-      fields.push(current);
-      current = "";
-      continue;
-    }
-    current += ch;
-  }
-  fields.push(current);
-  return fields;
-}
-
-function appendLines(sourcePath: string, lines: string[]): void {
-  const existing = readFileSync(sourcePath, "utf8");
-  const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
-  writeFileSync(sourcePath, `${existing}${separator}${lines.join("\n")}\n`);
-}
-
-function appendCsv(sourcePath: string, header: string[], rows: Record<string, unknown>[]): void {
-  appendLines(sourcePath, rows.map((row) => header.map((col) => csvQuote(cellToString(row[col]))).join(",")));
-}
-
-function appendNdjson(sourcePath: string, rows: Record<string, unknown>[]): void {
-  appendLines(sourcePath, rows.map((row) => JSON.stringify(row)));
-}
-
-function appendJsonArray(sourcePath: string, rows: Record<string, unknown>[]): void {
-  const parsed = JSON.parse(readFileSync(sourcePath, "utf8"));
-  if (!Array.isArray(parsed)) throw new Error(`cannot append: ${sourcePath} is not a JSON array`);
-  parsed.push(...rows);
-  writeFileSync(sourcePath, `${JSON.stringify(parsed, null, 2)}\n`);
-}
-
-function extensionOf(path: string): string {
-  const dot = path.lastIndexOf(".");
-  return dot === -1 ? "" : path.slice(dot).toLowerCase();
-}
-
-const WRITABLE_EXTENSIONS = [".csv", ".json", ".ndjson", ".jsonl"];
-
-function assertWritable(ext: string): void {
-  if (!WRITABLE_EXTENSIONS.includes(ext)) {
-    throw new Error(`cannot write '${ext}' files — writable: ${WRITABLE_EXTENSIONS.join(", ")}`);
-  }
-}
+export { snapshotFile, pruneSnapshots };
 
 /**
- * Writes validated rows to a fresh source file in the format its extension
- * implies — CSV header from the first row's keys, .json as an array, .ndjson/
- * .jsonl as lines. The first sync of a connector hits this when the target
- * dataset file doesn't exist yet.
+ * Validate rows against a row schema, snapshot the target, then insert them via
+ * the dataset's writer — creating a flat file that doesn't exist yet. The shared
+ * core under both the action insert path and the connector insert path.
+ * All-or-nothing: any invalid row throws an `ActionValidationError` and nothing
+ * is written. Resets the engine afterwards so the next query re-reads the data.
  */
-function writeNewFile(sourcePath: string, ext: string, rows: Record<string, unknown>[]): void {
-  if (ext === ".json") {
-    writeFileSync(sourcePath, `${JSON.stringify(rows, null, 2)}\n`);
-    return;
-  }
-  if (ext === ".ndjson" || ext === ".jsonl") {
-    writeFileSync(sourcePath, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""));
-    return;
-  }
-  const header = Object.keys(rows[0] ?? {});
-  const lines = [header.map(csvQuote).join(",")];
-  for (const row of rows) lines.push(header.map((col) => csvQuote(cellToString(row[col]))).join(","));
-  writeFileSync(sourcePath, `${lines.join("\n")}\n`);
-}
-
-function appendToFile(sourcePath: string, ext: string, rows: Record<string, unknown>[]): void {
-  if (ext === ".csv") {
-    const header = parseCsvHeader(readFileSync(sourcePath, "utf8"));
-    appendCsv(sourcePath, header, rows);
-    return;
-  }
-  if (ext === ".ndjson" || ext === ".jsonl") {
-    appendNdjson(sourcePath, rows);
-    return;
-  }
-  appendJsonArray(sourcePath, rows);
-}
-
-export interface ReplaceResult {
-  replaced: number;
-  checkpoint_id?: string;
-}
-
-/**
- * Validate rows against a row schema, snapshot the target, then append —
- * creating the file if it doesn't exist yet. The shared core under both the
- * action append path and the connector append path. All-or-nothing: any invalid
- * row throws an `ActionValidationError` and nothing is written.
- */
-export async function appendValidatedRows(
+export async function insertValidatedRows(
   projectDir: string,
-  sourcePath: string,
+  target: WriteTarget,
   schema: z.ZodObject,
   rows: unknown[],
   opts: RetentionOpts = {},
-): Promise<AppendResult> {
-  const ext = extensionOf(sourcePath);
-  assertWritable(ext);
-
+): Promise<InsertResult> {
   const { rows: validated, errors } = validateRows(schema, rows);
   if (errors.length > 0) throw new ActionValidationError(errors);
 
-  if (!existsSync(sourcePath)) {
-    writeNewFile(sourcePath, ext, validated);
-    return { appended: rows.length, checkpoint_id: "" };
-  }
-
-  const checkpoint_id = snapshotFile(projectDir, sourcePath);
-  appendToFile(sourcePath, ext, validated);
-  pruneSnapshots(projectDir, sourcePath, opts);
-  return { appended: rows.length, checkpoint_id };
+  const writer = resolveWriter(target);
+  const checkpoint_id = writer.exists() ? snapshotFile(projectDir, writer.path) : "";
+  await writer.insert(validated);
+  if (checkpoint_id) pruneSnapshots(projectDir, writer.path, opts);
+  resetEngine(projectDir);
+  return { inserted: rows.length, checkpoint_id };
 }
 
 /**
- * Validate rows against a row schema, snapshot the existing file (if any), then
- * overwrite the whole file in the dataset's format. A fresh file is created and
- * no snapshot is taken (checkpoint_id undefined).
+ * Validate rows against a row schema, snapshot the existing target (if any),
+ * then overwrite every row through the dataset's writer. A fresh flat file is
+ * created with no snapshot (checkpoint_id undefined). Resets the engine so the
+ * next query re-reads.
  */
 export async function replaceValidatedRows(
   projectDir: string,
-  sourcePath: string,
+  target: WriteTarget,
   schema: z.ZodObject,
   rows: unknown[],
   opts: RetentionOpts = {},
 ): Promise<ReplaceResult> {
-  const ext = extensionOf(sourcePath);
-  assertWritable(ext);
-
   const { rows: validated, errors } = validateRows(schema, rows);
   if (errors.length > 0) throw new ActionValidationError(errors);
 
-  const checkpoint_id = snapshotIfExists(projectDir, sourcePath);
-  writeNewFile(sourcePath, ext, validated);
-  if (checkpoint_id) pruneSnapshots(projectDir, sourcePath, opts);
+  const writer = resolveWriter(target);
+  const checkpoint_id = snapshotIfExists(projectDir, writer.path);
+  await writer.replace(validated);
+  if (checkpoint_id) pruneSnapshots(projectDir, writer.path, opts);
+  resetEngine(projectDir);
   return { replaced: rows.length, checkpoint_id };
 }
 
 /**
- * Validates every row against the action's row schema, snapshots the target
- * file, then appends. All-or-nothing: any invalid row throws an
- * `ActionValidationError` (naming row index + field) and nothing is written.
+ * Validates every row against the action's row schema, snapshots the target,
+ * then inserts. All-or-nothing: any invalid row throws an `ActionValidationError`
+ * (naming row index + field) and nothing is written.
  */
-export async function appendRows(
+export async function insertRows(
   projectDir: string,
   actionName: string,
   rows: unknown[],
   opts: RetentionOpts = {},
-): Promise<AppendResult> {
+): Promise<InsertResult> {
   const manifest = readManifest(projectDir);
   const action = lookupAction(manifest, actionName);
-  const sourcePath = actionSourcePath(projectDir, manifest, action);
+  const target = actionWriteTarget(projectDir, manifest, action);
   const schema = await actionRowSchema(projectDir, actionName);
-  return appendValidatedRows(projectDir, sourcePath, schema, rows, opts);
+  return insertValidatedRows(projectDir, target, schema, rows, opts);
 }

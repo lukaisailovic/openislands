@@ -2,7 +2,7 @@ import { Banner, Sidebar, Text, useSidebar } from "@cloudflare/kumo";
 import { useParams } from "@tanstack/react-router";
 import { Island, WarningCircle } from "@phosphor-icons/react";
 import type { Manifest } from "@openislands/schema";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { IslandValidationError } from "../types.js";
 import type { WorkspaceAppInfo } from "../server/dashboard.js";
 import { useAppId } from "../client/useAppId.js";
@@ -125,7 +125,13 @@ export function AppShell({ manifest, manifestErrors, apps, children }: Props) {
   const hasConnectors = Object.keys(manifest.connectors ?? {}).length > 0;
 
   return (
-    <Sidebar.Provider defaultOpen collapsible="icon" contained className="h-svh flex-col">
+    <Sidebar.Provider
+      defaultOpen
+      collapsible="icon"
+      contained
+      className="h-svh flex-col"
+      style={{ "--sidebar-width": "13rem" } as CSSProperties}
+    >
       <TopBar showTrigger={hasSidebar} hasConnectors={hasConnectors} />
       <div className="flex min-h-0 flex-1">
         {multiApp ? <AppRail apps={apps} /> : null}
@@ -152,7 +158,6 @@ export function AppShell({ manifest, manifestErrors, apps, children }: Props) {
             <Sidebar.Footer>
               <Sidebar.Trigger />
             </Sidebar.Footer>
-            <Sidebar.Rail />
           </Sidebar>
         ) : null}
         <main className="min-w-0 flex-1 overflow-y-auto px-6 pt-6 pb-20">

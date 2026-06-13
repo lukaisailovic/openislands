@@ -7,7 +7,7 @@
  * + cursor state at `.openislands/connectors/<name>.json`.
  *
  * Auth is plain OAuth2 authorization-code, no provider special-casing. Writes
- * reuse the actions append/replace core, so `rollback` covers connector data
+ * reuse the actions insert/replace core, so `rollback` covers connector data
  * exactly like manifest edits and action writes.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
@@ -26,9 +26,9 @@ import type {
   OAuth2AuthData,
 } from "@openislands/connector-kit";
 import type { ConnectorSpec, Manifest } from "@openislands/schema";
-import { readManifest, resolveSourcePath, resetEngine } from "./index.js";
+import { readManifest, resolveSourcePath, type WriteTarget } from "./index.js";
 import {
-  appendValidatedRows,
+  insertValidatedRows,
   replaceValidatedRows,
   datasetRowSchema,
   type RetentionOpts,
@@ -384,7 +384,7 @@ async function refreshIfExpiring(
 
 export interface SyncResult {
   connector: string;
-  datasets: Record<string, { mode: "append" | "replace"; rows: number; checkpoint_id?: string }>;
+  datasets: Record<string, { mode: "insert" | "replace"; rows: number; checkpoint_id?: string }>;
   durationMs: number;
 }
 
@@ -428,11 +428,11 @@ async function doSync(projectDir: string, name: string, opts: RetentionOpts): Pr
   const datasets: SyncResult["datasets"] = {};
   const cursorState: Record<string, unknown> = { ...persisted.state };
 
-  const datasetFor = (output: string): { dataset: string; sourcePath: string } => {
+  const datasetFor = (output: string): { dataset: string; target: WriteTarget } => {
     const dataset = resolveOutputDataset(spec, def, output);
     const datasetSpec = manifest.datasets[dataset];
     if (!datasetSpec?.source) throw new Error(`dataset '${dataset}' has no writable source`);
-    return { dataset, sourcePath: resolveSourcePath(projectDir, datasetSpec.source) };
+    return { dataset, target: { sourcePath: resolveSourcePath(projectDir, datasetSpec.source), table: datasetSpec.table } };
   };
 
   const ctx: ConnectorContext = {
@@ -440,19 +440,17 @@ async function doSync(projectDir: string, name: string, opts: RetentionOpts): Pr
     secrets,
     tokens,
     state: cursorState,
-    async append(output, rows) {
-      const { dataset, sourcePath } = datasetFor(output);
+    async insert(output, rows) {
+      const { dataset, target } = datasetFor(output);
       const schema = await datasetRowSchema(projectDir, dataset);
-      const result = await appendValidatedRows(projectDir, sourcePath, schema, rows, opts);
-      resetEngine(projectDir);
-      datasets[output] = { mode: "append", rows: result.appended, checkpoint_id: result.checkpoint_id || undefined };
+      const result = await insertValidatedRows(projectDir, target, schema, rows, opts);
+      datasets[output] = { mode: "insert", rows: result.inserted, checkpoint_id: result.checkpoint_id || undefined };
       return result;
     },
     async replace(output, rows) {
-      const { dataset, sourcePath } = datasetFor(output);
+      const { dataset, target } = datasetFor(output);
       const schema = await datasetRowSchema(projectDir, dataset);
-      const result = await replaceValidatedRows(projectDir, sourcePath, schema, rows, opts);
-      resetEngine(projectDir);
+      const result = await replaceValidatedRows(projectDir, target, schema, rows, opts);
       datasets[output] = { mode: "replace", rows: result.replaced, checkpoint_id: result.checkpoint_id };
       return result;
     },

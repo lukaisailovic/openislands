@@ -45,7 +45,7 @@ describe("defineConnector", () => {
       async sync(ctx) {
         expectTypeOf(ctx.config.lookbackDays).toEqualTypeOf<number>();
         expectTypeOf(ctx.secrets).toEqualTypeOf<Record<"API_KEY", string>>();
-        expectTypeOf(ctx.append).parameter(0).toEqualTypeOf<"readings" | "summaries">();
+        expectTypeOf(ctx.insert).parameter(0).toEqualTypeOf<"readings" | "summaries">();
         expectTypeOf(ctx.replace).parameter(0).toEqualTypeOf<"readings" | "summaries">();
       },
     });

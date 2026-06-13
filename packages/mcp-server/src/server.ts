@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createTwoFilesPatch } from "diff";
 import { z } from "zod";
-import { ActionValidationError, actionRowSchema, appendRows, checkManifestContracts, inferSchema, listConnectorStatuses, query, queryRaw, readManifest as readProjectManifest, resetEngine, runConnectorSync } from "@openislands/compiler";
+import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, inferSchema, listConnectorStatuses, query, queryRaw, readManifest as readProjectManifest, resetEngine, runConnectorSync } from "@openislands/compiler";
 import { BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, LayoutRow, jsonSchemaFor, validateManifest, type IslandError, type IslandType } from "@openislands/schema";
 import { createCheckpointStore, isCheckpointId } from "./checkpoints.js";
 import { confineDatasetSource } from "./paths.js";
@@ -259,7 +259,7 @@ export function createServer(projectRoot: string): McpServer {
         const declared = Object.keys(manifest.actions ?? {});
         return json({ ok: false, error: `unknown action '${name}'. Declared: ${declared.length ? declared.join(", ") : "(none)"}` });
       }
-      if (rows.length === 0) return json({ ok: false, error: "no rows to append" });
+      if (rows.length === 0) return json({ ok: false, error: "no rows to insert" });
       if (rows.length > MAX_ROWS_PER_ACTION) return json({ ok: false, error: `too many rows: ${rows.length} > ${MAX_ROWS_PER_ACTION} per call` });
 
       const dataset = manifest.datasets[action.dataset];
@@ -271,9 +271,8 @@ export function createServer(projectRoot: string): McpServer {
       }
 
       try {
-        const result = await appendRows(projectRoot, name, rows);
-        resetEngine(projectRoot);
-        return json({ ok: true, appended: result.appended, checkpoint_id: result.checkpoint_id });
+        const result = await insertRows(projectRoot, name, rows);
+        return json({ ok: true, inserted: result.inserted, checkpoint_id: result.checkpoint_id });
       } catch (e) {
         if (e instanceof ActionValidationError) return json({ ok: false, errors: e.errors });
         return json({ ok: false, error: (e as Error).message });

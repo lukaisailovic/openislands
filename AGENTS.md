@@ -42,18 +42,19 @@ Use the MCP server (`@openislands/mcp`) — it is read-many / write-one:
   it restores manifest *and* data checkpoints; the id encodes the target file. There is no raw
   file-write tool and no git dependency by design — rollback safety is `.openislands/history/`
   snapshots (count + byte capped, oldest pruned first).
-- **The data write path — Actions:** a manifest-declared, typed append into a `source` dataset
-  (CSV / JSON(L) only; `sql` datasets are derived and sqlite sources are read-only — neither is
-  ever writable). Discover with `list_actions`
+- **The data write path — Actions:** a manifest-declared, typed `insert` into a `source` dataset
+  (CSV / JSON(L) and SQLite tables; only a derived `sql` dataset is never writable). Discover with `list_actions`
   (declared actions + their resolved row JSON Schema, derived from the live data merged with the
   action's `fields` overrides), then `run_action(name, rows)` — every row is validated first; a bad
-  row rejects the whole call with an error naming the row index + field and nothing is written.
-  The target file is snapshotted to `.openislands/history/` before the append, so `rollback`
-  covers data writes too. Declare an action in the manifest:
+  row rejects the whole call with an error naming the row index + field and nothing is written
+  (the result reports the rows `inserted`). The target file is snapshotted to
+  `.openislands/history/` before the insert, so `rollback` covers data writes too. A SQLite-backed
+  `source` insert is an `INSERT` into the table; the file and table must already exist. Declare an
+  action in the manifest:
 
   ```jsonc
   "actions": {
-    "log_meal": { "dataset": "meals", "mode": "append",
+    "log_meal": { "dataset": "meals", "mode": "insert",
       "fields": { "meal_type": { "enum": ["breakfast", "lunch", "dinner", "snack"] } } }
   }
   ```
@@ -115,14 +116,15 @@ checks the outputs — a bad config, unknown output, or invalid schedule is a na
 - `list_connectors` → each connector's status: `connected`, `missingSecrets`, `lastSync`,
   `lastError`, effective `schedule`, `loadError`. This is how you discover auth is missing.
 - `run_sync({ name })` → pulls from the provider and writes rows; returns rows-per-dataset,
-  mode (`append` / `replace`), and a `checkpoint_id` (so a sync is reversible with `rollback`).
+  mode (`insert` / `replace`), and a `checkpoint_id` (so a sync is reversible with `rollback`).
   If a connector isn't connected (OAuth not completed, or secrets missing), tell the user to
   open the dashboard and click **Connect** — do **not** attempt to authorize from the agent.
 
-A connector picks append vs replace per output by which context method it calls: `ctx.append`
+A connector picks insert vs replace per output by which context method it calls: `ctx.insert`
 (immutable records; advance a cursor in `ctx.state`) vs `ctx.replace` (records that get
-revised — e.g. Whoop recovery scores — rewrite the whole file each sync). Tokens + cursor
-state persist at `.openislands/connectors/<name>.json` (gitignored). See
+revised — e.g. Whoop recovery scores — rewrite the whole file each sync). A connector output
+may target a SQLite-backed `source` dataset (never a `sql` dataset), same as actions. Tokens +
+cursor state persist at `.openislands/connectors/<name>.json` (gitignored). See
 `apps/examples/health/connectors/whoop/` for a complete OAuth2 reference connector.
 
 A project's `package.json`/`tsconfig.json` (scaffolded by `init`) exist for **editor types
@@ -138,7 +140,7 @@ always bundles against its own copies.
   "title": "Finance Overview",
   "icon": "wallet",                                            // optional — the app's tile in the workspace app rail
   "datasets": { "nw": { "source": "data/net_worth.csv" } },   // or { "sql": "models/x.sql" },
-                                                               // or a read-only SQLite table:
+                                                               // or a SQLite table (writable via actions/connectors):
                                                                // { "source": "data/library.sqlite", "table": "tracks" }
                                                                // (a .sqlite/.db source requires "table"; "table" anywhere else is an error)
   "pages": [{

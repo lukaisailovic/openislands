@@ -31,14 +31,14 @@ function AppTile({ app, active }: { app: WorkspaceAppInfo; active: boolean }) {
             aria-label={tileLabel(app)}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative grid size-10 cursor-pointer place-items-center transition-[border-radius,color] duration-200 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-kumo-focus focus-visible:outline-none",
+              "relative grid size-9 cursor-pointer place-items-center transition-[border-radius,color] duration-200 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-kumo-focus focus-visible:outline-none",
               active
                 ? "rounded-lg bg-kumo-tint text-kumo-strong"
                 : "rounded-xl bg-kumo-tint text-kumo-subtle hover:rounded-lg hover:text-kumo-strong",
             )}
           >
             {Icon ? (
-              <Icon size={20} />
+              <Icon size={18} />
             ) : (
               <span className="text-sm font-medium">
                 {(app.title.trim()[0] ?? "?").toUpperCase()}
@@ -68,7 +68,7 @@ export function AppRail({ apps }: { apps: WorkspaceAppInfo[] }) {
   return (
     <nav
       aria-label="Apps"
-      className="hidden w-14 shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-kumo-hairline bg-kumo-recessed py-3 md:flex"
+      className="hidden w-12 shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-kumo-hairline bg-kumo-recessed py-3 md:flex"
     >
       {apps.map((app) => (
         <AppTile key={app.id} app={app} active={app.id === appId} />

@@ -29,8 +29,8 @@ export {
 } from "./customSchema.js";
 export {
   actionRowSchema,
-  appendRows,
-  appendValidatedRows,
+  insertRows,
+  insertValidatedRows,
   replaceValidatedRows,
   datasetRowSchema,
   validateRows,
@@ -39,10 +39,11 @@ export {
   MAX_SNAPSHOT_BYTES_PER_FILE,
   type RetentionOpts,
   type RowError,
-  type AppendResult,
+  type InsertResult,
   type ReplaceResult,
   type ValidatedRows,
 } from "./actions.js";
+export { resolveWriter, extensionOf, type DatasetWriter, type WriteTarget } from "./writers.js";
 export {
   listConnectorStatuses,
   runConnectorSync,

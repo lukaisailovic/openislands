@@ -9,7 +9,7 @@
   "actions": {
     "log_allocation": {
       "dataset": "allocation",
-      "mode": "append",
+      "mode": "insert",
       "description": "Record a new asset-class allocation.",
       "fields": {
         "class": { "type": "string", "enum": ["BTC", "ETH", "Cash", "Stocks"] },

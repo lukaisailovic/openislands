@@ -243,7 +243,7 @@ describe("data actions", () => {
     const action = actions[0]!;
     expect(action.name).toBe("log_allocation");
     expect(action.dataset).toBe("allocation");
-    expect(action.mode).toBe("append");
+    expect(action.mode).toBe("insert");
     expect(Object.keys(action.rowSchema.properties).toSorted()).toEqual(["class", "value_eur"]);
   });
 
@@ -257,14 +257,14 @@ describe("data actions", () => {
     expect(actions).toEqual([]);
   });
 
-  it("run_action appends a valid row that query_data then sees", async () => {
+  it("run_action inserts a valid row that query_data then sees", async () => {
     const root = freshProject();
     const client = await connect(root);
     const before = allocationCsv(root);
 
-    const out = (await call(client, "run_action", { name: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] })) as { ok: boolean; appended: number; checkpoint_id: string };
+    const out = (await call(client, "run_action", { name: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] })) as { ok: boolean; inserted: number; checkpoint_id: string };
     expect(out.ok).toBe(true);
-    expect(out.appended).toBe(1);
+    expect(out.inserted).toBe(1);
     expect(out.checkpoint_id).toMatch(/^ckpt-\d+!/);
     expect(allocationCsv(root).length).toBeGreaterThan(before.length);
 
@@ -337,7 +337,7 @@ describe("data actions", () => {
     expect(checkpoints.some((c) => /^ckpt-\d+!/.test(c))).toBe(true);
   });
 
-  it("a malicious row value is appended as a single cell without widening the write surface", async () => {
+  it("a malicious row value is inserted as a single cell without widening the write surface", async () => {
     const root = freshProject();
     const client = await connect(root);
     const otherBefore = readFileSync(join(root, "data", "net_worth_monthly.csv"), "utf8");
@@ -348,7 +348,7 @@ describe("data actions", () => {
 
     // A payload that escapes the enum is rejected; use an action without the enum to prove cell-confinement.
     const m = JSON.parse(validManifest(root));
-    m.actions.log_note = { dataset: "notes", mode: "append" };
+    m.actions.log_note = { dataset: "notes", mode: "insert" };
     writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
     const client2 = await connect(root);
 
@@ -366,7 +366,7 @@ describe("data actions", () => {
     const client = await connect(root);
     const m = JSON.parse(validManifest(root));
     m.datasets.derived = { sql: "models/derived.sql" };
-    m.actions.bad = { dataset: "derived", mode: "append" };
+    m.actions.bad = { dataset: "derived", mode: "insert" };
     const out = (await call(client, "validate_manifest", { manifest: JSON.stringify(m) })) as { ok: boolean; errors: unknown[] };
     expect(out.ok).toBe(false);
     expect(out.errors.length).toBeGreaterThan(0);
@@ -387,7 +387,7 @@ export default defineConnector({
     const seen = typeof ctx.state.seen === "number" ? ctx.state.seen : 0;
     const logs = [];
     for (let i = 0; i < ctx.config.count; i += 1) logs.push({ id: seen + i, label: "event-" + (seen + i) });
-    await ctx.append("logs", logs);
+    await ctx.insert("logs", logs);
     ctx.state.seen = seen + ctx.config.count;
   },
 });
@@ -431,7 +431,7 @@ describe("connectors", () => {
     const client = await connect(connectorProject());
     const result = (await call(client, "run_sync", { name: "demo" })) as { connector: string; datasets: Record<string, { mode: string; rows: number; checkpoint_id?: string }> };
     expect(result.connector).toBe("demo");
-    expect(result.datasets.logs!.mode).toBe("append");
+    expect(result.datasets.logs!.mode).toBe("insert");
     expect(result.datasets.logs!.rows).toBe(2);
 
     const rows = (await call(client, "query_data", { dataset: "logs" })) as unknown[];

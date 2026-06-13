@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   listConnectorStatuses,
@@ -40,7 +41,7 @@ export default defineConnector({
     const count = ctx.config.count;
     const logs = [];
     for (let i = 0; i < count; i += 1) logs.push({ id: seen + i, label: "event-" + (seen + i) });
-    await ctx.append("logs", logs);
+    await ctx.insert("logs", logs);
     await ctx.replace("snapshot", [{ total: seen + count }]);
     ctx.state.seen = seen + count;
   },
@@ -63,7 +64,7 @@ export default defineConnector({
   },
   outputs: { logs: {} },
   async sync(ctx) {
-    await ctx.append("logs", [{ token: ctx.tokens.accessToken }]);
+    await ctx.insert("logs", [{ token: ctx.tokens.accessToken }]);
   },
 });
 `;
@@ -157,12 +158,12 @@ describe("connector validation", () => {
 });
 
 describe("sync writes + cursor state", () => {
-  it("appends and replaces, creating missing files, and advances the cursor", async () => {
+  it("inserts and replaces, creating missing files, and advances the cursor", async () => {
     process.env.DEMO_TOKEN = "t";
     const dir = project(demoManifest(), { "connectors/demo/index.ts": DEMO_CONNECTOR });
 
     const first = await runConnectorSync(dir, "demo");
-    expect(first.datasets.logs!.mode).toBe("append");
+    expect(first.datasets.logs!.mode).toBe("insert");
     expect(first.datasets.logs!.rows).toBe(2);
     expect(first.datasets.snapshot!.mode).toBe("replace");
     expect(first.datasets.snapshot!.rows).toBe(1);
@@ -182,7 +183,7 @@ describe("sync writes + cursor state", () => {
     expect(snap2.rows[0]!.total).toBe(4);
   });
 
-  it("persists state and lastSync, and the append snapshot supports rollback", async () => {
+  it("persists state and lastSync, and the insert snapshot supports rollback", async () => {
     process.env.DEMO_TOKEN = "t";
     const dir = project(demoManifest(), { "connectors/demo/index.ts": DEMO_CONNECTOR });
     await runConnectorSync(dir, "demo");
@@ -352,5 +353,51 @@ describe("oauth2 flow", () => {
     } finally {
       oauth.server.close();
     }
+  });
+});
+
+// --- SQLite-backed connector outputs --------------------------------------------
+// Connector writes reuse the same storage-agnostic path as actions, so an output
+// mapped to a `{ source: "*.sqlite", table }` dataset works identically: ctx.insert
+// adds rows to the table, ctx.replace overwrites every row in it.
+
+function sqliteConnectorManifest() {
+  return {
+    version: 1,
+    title: "Demo",
+    datasets: {
+      logs: { source: "data/logs.sqlite", table: "logs" },
+      snapshot: { source: "data/snapshot.sqlite", table: "snap" },
+    },
+    pages: [{ id: "p", islands: [{ type: "note.card", markdown: "x" }] }],
+    connectors: {
+      demo: { module: "connectors/demo", datasets: { logs: "logs", snapshot: "snapshot" }, config: { count: 2 } },
+    },
+  };
+}
+
+describe("sync writes into sqlite-backed outputs", () => {
+  it("inserts into one sqlite table and replaces another, then queries them back", async () => {
+    process.env.DEMO_TOKEN = "t";
+    const dir = project(sqliteConnectorManifest(), { "connectors/demo/index.ts": DEMO_CONNECTOR });
+    for (const [file, table] of [["logs.sqlite", "logs"], ["snapshot.sqlite", "snap"]] as const) {
+      const db = new DatabaseSync(join(dir, "data", file));
+      if (table === "logs") db.exec("CREATE TABLE logs (id INTEGER, label TEXT)");
+      else db.exec("CREATE TABLE snap (total INTEGER)");
+      db.close();
+    }
+
+    const first = await runConnectorSync(dir, "demo");
+    expect(first.datasets.logs!.mode).toBe("insert");
+    expect(first.datasets.snapshot!.mode).toBe("replace");
+
+    expect((await query(dir, "logs")).rows.map((r) => r.id)).toEqual([0, 1]);
+    expect((await query(dir, "snapshot")).rows).toEqual([{ total: 2 }]);
+
+    await runConnectorSync(dir, "demo");
+    // insert appends to the table: four rows after two syncs of two events each.
+    expect((await query(dir, "logs")).rows.map((r) => r.id)).toEqual([0, 1, 2, 3]);
+    // replace overwrites the whole table: still one row, with the new total.
+    expect((await query(dir, "snapshot")).rows).toEqual([{ total: 4 }]);
   });
 });

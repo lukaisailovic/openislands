@@ -494,7 +494,7 @@ const actionManifest = {
   actions: {
     log_entry: {
       dataset: "net_worth",
-      mode: "append",
+      mode: "insert",
       description: "Append a monthly net worth row",
       fields: { net_worth_eur: { type: "number", min: 0 }, note: { type: "string" } },
     },
@@ -506,7 +506,7 @@ describe("validateManifest — actions", () => {
     const r = validateManifest(actionManifest);
     expect(r.ok, JSON.stringify(r.errors)).toBe(true);
     expect(r.manifest!.actions!.log_entry!.dataset).toBe("net_worth");
-    expect(r.manifest!.actions!.log_entry!.mode).toBe("append");
+    expect(r.manifest!.actions!.log_entry!.mode).toBe("insert");
     expect(r.manifest!.actions!.log_entry!.fields!.net_worth_eur!.type).toBe("number");
   });
 
@@ -541,13 +541,12 @@ describe("validateManifest — actions", () => {
     expect(r.errors.some((e) => e.page === "-" && /sql transform|derived/.test(e.message))).toBe(true);
   });
 
-  it("rejects an action bound to a sqlite dataset as read-only", () => {
+  it("accepts an action writing to a sqlite dataset", () => {
     const m = structuredClone(actionManifest) as Record<string, unknown> & typeof actionManifest;
     (m.datasets as Record<string, unknown>).library = { source: "data/library.sqlite", table: "tracks" };
     m.actions.log_entry.dataset = "library";
     const r = validateManifest(m);
-    expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => e.page === "-" && /sqlite datasets are read-only/.test(e.message))).toBe(true);
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
   });
 
   it("rejects an action whose source extension is not writable", () => {
@@ -623,13 +622,12 @@ describe("validateManifest — connectors", () => {
     expect(r.errors.some((e) => e.page === "-" && /sql transform|derived/.test(e.message))).toBe(true);
   });
 
-  it("rejects a connector output bound to a sqlite dataset as read-only", () => {
+  it("accepts a connector output bound to a sqlite dataset", () => {
     const m = structuredClone(connectorManifest) as Record<string, unknown> & typeof connectorManifest;
     (m.datasets as Record<string, unknown>).library = { source: "data/library.db", table: "tracks" };
     m.connectors.whoop.datasets.recovery = "library";
     const r = validateManifest(m);
-    expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => e.page === "-" && /sqlite datasets are read-only/.test(e.message))).toBe(true);
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
   });
 
   it("rejects a connector output whose source extension is not writable", () => {

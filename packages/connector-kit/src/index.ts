@@ -4,8 +4,9 @@
  * A connector lives in the user project at `connectors/<name>/index.ts` and
  * default-exports `defineConnector({ ... })`. The compiler loads it, hands its
  * `sync` a `ConnectorContext`, and the connector pulls from its provider and
- * writes rows back into the manifest's `source` datasets via `ctx.append` /
- * `ctx.replace`. Dependency-light by design — only zod.
+ * writes rows back into the manifest's `source` datasets via `ctx.insert` /
+ * `ctx.replace` — which land the same way whether the dataset is backed by a
+ * file or a SQLite table. Dependency-light by design — only zod.
  */
 import type { ZodType } from "zod";
 
@@ -35,7 +36,9 @@ export interface ConnectorContext<C = Record<string, unknown>, O extends string 
   tokens?: ConnectorTokens;
   /** Mutable cursor object, persisted after a successful sync. */
   state: Record<string, unknown>;
-  append(output: O, rows: Record<string, unknown>[]): Promise<{ appended: number; checkpoint_id: string }>;
+  /** Add rows to an output's dataset (immutable records; advance a cursor in `state`). */
+  insert(output: O, rows: Record<string, unknown>[]): Promise<{ inserted: number; checkpoint_id: string }>;
+  /** Overwrite an output's dataset (records that get revised — rewrite the whole set each sync). */
   replace(output: O, rows: Record<string, unknown>[]): Promise<{ replaced: number; checkpoint_id?: string }>;
   log(message: string): void;
 }

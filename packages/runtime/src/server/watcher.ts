@@ -142,9 +142,9 @@ export function ensureWatcher(appId: string): void {
     return;
   }
   watchHandles.set(appId, startWatcher(dir, { broadcaster: broadcasterFor(appId) }));
-  void import("./connectorScheduler.js").then((m) =>
-    m.startConnectorScheduler(dir, broadcasterFor(appId)),
-  );
+  void import("./connectorScheduler.js")
+    .then((m) => m.startConnectorScheduler(dir, broadcasterFor(appId)))
+    .catch((e) => console.error(`[openislands] connector scheduler failed for '${appId}': ${(e as Error).message}`));
 }
 
 /**

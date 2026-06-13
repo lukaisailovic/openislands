@@ -23,7 +23,7 @@
   "actions": {
     "log_meal": {
       "dataset": "meals",
-      "mode": "append",
+      "mode": "insert",
       "description": "Log a meal (totals row). Follow with log_meal_components using the same meal_id.",
       "fields": {
         "meal_type": { "enum": ["breakfast", "lunch", "dinner", "snack"] },
@@ -37,7 +37,7 @@
     },
     "log_meal_components": {
       "dataset": "meal_components",
-      "mode": "append",
+      "mode": "insert",
       "description": "Log the components of a meal; meal_id must match an existing meals row.",
       "fields": {
         "kind": { "enum": ["food", "recipe", "batch"] },
@@ -47,7 +47,7 @@
     },
     "log_weight": {
       "dataset": "weight",
-      "mode": "append",
+      "mode": "insert",
       "description": "Log a body-weight measurement",
       "fields": {
         "kg": { "min": 30, "max": 200 },
@@ -56,7 +56,7 @@
     },
     "log_workout": {
       "dataset": "workouts",
-      "mode": "append",
+      "mode": "insert",
       "description": "Log a workout",
       "fields": {
         "sport": { "enum": ["lift", "zone2", "run", "cycle", "walk", "other"] },
@@ -67,13 +67,13 @@
     },
     "log_panel": {
       "dataset": "panels",
-      "mode": "append",
+      "mode": "insert",
       "description": "Register a blood draw; follow with log_biomarkers using the same panel_id"
     },
     "log_biomarkers": {
       "dataset": "biomarkers",
-      "mode": "append",
-      "description": "Append biomarker results for a panel; panel_id / panel_name / draw_date must match the panels row",
+      "mode": "insert",
+      "description": "Insert biomarker results for a panel; panel_id / panel_name / draw_date must match the panels row",
       "fields": {
         "category": { "enum": ["lipids", "metabolic", "cbc", "liver", "kidney", "electrolytes", "other"] }
       }

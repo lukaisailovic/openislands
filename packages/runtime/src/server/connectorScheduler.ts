@@ -43,7 +43,15 @@ export async function startConnectorScheduler(
   if (started.has(projectDir)) return;
   started.add(projectDir);
 
-  const statuses = await listConnectorStatuses(projectDir);
+  let statuses: ConnectorStatus[];
+  try {
+    statuses = await listConnectorStatuses(projectDir);
+  } catch (e) {
+    // A broken manifest must never crash the dev server. The app already
+    // surfaces its validation errors in the UI; skip scheduling until it's fixed.
+    console.error(`[openislands] connector scheduler skipped for ${projectDir}: ${(e as Error).message}`);
+    return;
+  }
   for (const status of statuses) {
     if (!status.schedule) continue;
     let intervalMs: number;
