@@ -9,6 +9,7 @@ import { CategoryPie } from "./CategoryPie.js";
 import { CorrelationScatter } from "./CorrelationScatter.js";
 import { CustomPlaceholder } from "./CustomPlaceholder.js";
 import { DistributionHeatmap } from "./DistributionHeatmap.js";
+import { FunnelSteps } from "./FunnelSteps.js";
 import { GaugeGoal } from "./GaugeGoal.js";
 import { GaugeMeter } from "./GaugeMeter.js";
 import { GaugeRings } from "./GaugeRings.js";
@@ -36,6 +37,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "breakdown.treemap": BreakdownTreemap,
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
+  "funnel.steps": FunnelSteps,
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,
   "gauge.meter": GaugeMeter,

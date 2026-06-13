@@ -368,3 +368,44 @@ and rows landing on the same day sum. Give it a half-width or wider tile.
 - `date`: the day field; any parseable date or timestamp, bucketed to a UTC day (required).
 - `value`: a numeric field mapped to each day's color; same-day rows sum (required).
 - `colors`: gradient stops overriding the default blues; `format` styles the tooltip value.
+
+## funnel.steps
+
+A funnel of sequential stages, for conversion or drop-off. Each stage's width is its share
+of the largest, so the narrowing reads as the fall-off between steps. By default the stages
+follow the row order; set `sort` to reorder them.
+
+<LiveIsland
+  type="funnel.steps"
+  config={{ title: "Signup conversion", label: "stage", value: "users", sort: "descending", format: "int" }}
+  data={sampleData(
+    [
+      { name: "stage", type: "varchar" },
+      { name: "users", type: "bigint" },
+    ],
+    [
+      { stage: "Visitors", users: 48_200 },
+      { stage: "Signups", users: 9_400 },
+      { stage: "Activated", users: 5_100 },
+      { stage: "Trials", users: 2_300 },
+      { stage: "Paid", users: 870 },
+    ],
+    "signup_funnel",
+  )}
+/>
+
+```jsonc
+{
+  "type": "funnel.steps",
+  "title": "Signup conversion",
+  "dataset": "signup_funnel",
+  "label": "stage",
+  "value": "users",
+  "sort": "descending",
+  "format": "int"
+}
+```
+
+- `label`: the stage-name field (required); `value`: the numeric count at each stage (required).
+- `sort`: `none` (the default, keeping row order), `descending`, or `ascending`.
+- `colors`: per-stage CSS colors overriding the palette; `format` styles the labels and tooltip.

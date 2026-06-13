@@ -7,6 +7,7 @@ import { CategoryPie } from "../src/islands/CategoryPie.js";
 import { CorrelationScatter } from "../src/islands/CorrelationScatter.js";
 import { CustomPlaceholder } from "../src/islands/CustomPlaceholder.js";
 import { DistributionHeatmap } from "../src/islands/DistributionHeatmap.js";
+import { FunnelSteps } from "../src/islands/FunnelSteps.js";
 import { GaugeGoal } from "../src/islands/GaugeGoal.js";
 import { GaugeMeter } from "../src/islands/GaugeMeter.js";
 import { GaugeRings } from "../src/islands/GaugeRings.js";
@@ -31,6 +32,10 @@ describe("island registry", () => {
 
   it("resolves the activity.calendar renderer", () => {
     expect(resolveRenderer("activity.calendar")).toBe(ActivityCalendar);
+  });
+
+  it("resolves the funnel.steps renderer", () => {
+    expect(resolveRenderer("funnel.steps")).toBe(FunnelSteps);
   });
   it("resolves ported built-in renderers", () => {
     expect(resolveRenderer("note.card")).toBe(NoteCard);

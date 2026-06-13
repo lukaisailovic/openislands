@@ -656,6 +656,10 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.date);
       add(island.value);
       break;
+    case "funnel.steps":
+      add(island.label);
+      add(island.value);
+      break;
     // note.card, source.doc, and custom islands bind to no dataset
   }
   return { dataset, fields: [...fields] };

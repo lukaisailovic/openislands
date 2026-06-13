@@ -92,6 +92,23 @@ export const BreakdownTreemap = z.object({
     .describe("CSS colors cycled across top-level nodes, overriding the default palette"),
 }).describe("A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.");
 
+export const FunnelSteps = z.object({
+  type: z.literal("funnel.steps"),
+  ...baseFields,
+  dataset: z.string(),
+  label: z.string().describe("stage-name field"),
+  value: z.string().describe("numeric field — the count at each stage"),
+  sort: z
+    .enum(["none", "ascending", "descending"])
+    .default("none")
+    .describe("funnel ordering; 'none' keeps the declared row order"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("CSS colors per stage, overriding the default palette"),
+  format: ValueFormat.optional(),
+}).describe("A funnel of sequential stages — use for conversion or drop-off; each stage's width is its share, ordered by the rows unless sort is set.");
+
 export const ActivityCalendar = z.object({
   type: z.literal("activity.calendar"),
   ...baseFields,
@@ -336,6 +353,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   CorrelationScatter,
   DistributionHeatmap,
   ActivityCalendar,
+  FunnelSteps,
   TableGridBase,
   TimelineFeedBase,
   GaugeRings,
@@ -368,6 +386,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "breakdown.treemap": BreakdownTreemap,
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
+  "funnel.steps": FunnelSteps,
   "correlation.scatter": CorrelationScatter,
   "category.pie": CategoryPie,
   "table.grid": TableGrid,
@@ -402,6 +421,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "breakdown.treemap": 4,
   "distribution.heatmap": 4,
   "activity.calendar": 6,
+  "funnel.steps": 3,
   "correlation.scatter": 4,
   "category.pie": 3,
   "table.grid": 5,
@@ -416,6 +436,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   CorrelationScatter,
   DistributionHeatmap,
   ActivityCalendar,
+  FunnelSteps,
   TableGrid,
   TimelineFeed,
   GaugeRings,

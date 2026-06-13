@@ -27,6 +27,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
     "correlation.scatter": { type, title: "New scatter", dataset: "TODO", x: "TODO", y: "TODO" },
     "distribution.heatmap": { type, title: "New heatmap", dataset: "TODO", x: "TODO", y: "TODO", value: "TODO" },
     "activity.calendar": { type, title: "New calendar", dataset: "TODO", date: "TODO", value: "TODO" },
+    "funnel.steps": { type, title: "New funnel", dataset: "TODO", label: "TODO", value: "TODO" },
     "table.grid": { type, title: "New table", dataset: "TODO" },
     "timeline.feed": {
       type,
