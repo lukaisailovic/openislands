@@ -564,6 +564,16 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.y);
       add(island.group);
       break;
+    case "category.combo": {
+      add(island.x);
+      const bars = island.bars;
+      if (Array.isArray(bars)) bars.forEach(add);
+      else add(bars);
+      const lines = island.lines;
+      if (Array.isArray(lines)) lines.forEach(add);
+      else add(lines);
+      break;
+    }
     case "breakdown.treemap":
       add(island.label);
       add(island.value);

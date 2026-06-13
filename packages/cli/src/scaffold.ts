@@ -17,6 +17,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
     "metric.scorecard": { type, title: "New scorecard", dataset: "TODO", stats: [{ value: "TODO" }] },
     "timeseries.line": { type, title: "New chart", dataset: "TODO", x: "TODO", y: "TODO" },
     "category.bar": { type, title: "New bars", dataset: "TODO", x: "TODO", y: "TODO" },
+    "category.combo": { type, title: "New combo", dataset: "TODO", x: "TODO", bars: "TODO", lines: "TODO" },
     "breakdown.treemap": {
       type,
       title: "New breakdown",

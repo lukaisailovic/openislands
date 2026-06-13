@@ -119,6 +119,22 @@ export const CategoryBar = z.object({
     .describe("CSS colors per series (group value or y field), overriding the default palette"),
 }).describe("A bar chart across categories — use to compare discrete groups; supports grouped or stacked bars.");
 
+export const CategoryCombo = z.object({
+  type: z.literal("category.combo"),
+  ...baseFields,
+  dataset: z.string(),
+  x: z.string().describe("category or date field (x axis)"),
+  bars: z.union([z.string(), z.array(z.string())]).describe("numeric field(s) drawn as bars on the primary y-axis"),
+  lines: z.union([z.string(), z.array(z.string())]).describe("numeric field(s) drawn as lines on the secondary y-axis"),
+  stacked: z.boolean().default(false).describe("stack the bar series into one bar per category"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("CSS colors per series (bars first, then lines), overriding the default palette"),
+  format: ValueFormat.optional().describe("format for the primary (bar) y-axis"),
+  lineFormat: ValueFormat.optional().describe("format for the secondary (line) y-axis"),
+}).describe("A dual-axis chart: bars on the primary axis, lines on a secondary axis — use to compare a level against a rate (revenue vs margin, volume vs price).");
+
 export const BreakdownTreemap = z.object({
   type: z.literal("breakdown.treemap"),
   ...baseFields,
@@ -417,6 +433,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   MetricScorecard,
   TimeseriesLine,
   CategoryBar,
+  CategoryCombo,
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,
@@ -455,6 +472,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "metric.scorecard": MetricScorecard,
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
+  "category.combo": CategoryCombo,
   "breakdown.treemap": BreakdownTreemap,
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
@@ -492,6 +510,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "search.box": 3,
   "timeseries.line": 4,
   "category.bar": 4,
+  "category.combo": 4,
   "timeline.feed": 4,
   "breakdown.treemap": 4,
   "distribution.heatmap": 4,
@@ -509,6 +528,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   MetricScorecard,
   TimeseriesLine,
   CategoryBar,
+  CategoryCombo,
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ActivityCalendar } from "../src/islands/ActivityCalendar.js";
 import { BreakdownTreemap } from "../src/islands/BreakdownTreemap.js";
 import { CategoryBar } from "../src/islands/CategoryBar.js";
+import { CategoryCombo } from "../src/islands/CategoryCombo.js";
 import { CategoryPie } from "../src/islands/CategoryPie.js";
 import { CompareRadar } from "../src/islands/CompareRadar.js";
 import { CorrelationScatter } from "../src/islands/CorrelationScatter.js";
@@ -65,6 +66,10 @@ describe("island registry", () => {
 
   it("resolves the category.bar renderer", () => {
     expect(resolveRenderer("category.bar")).toBe(CategoryBar);
+  });
+
+  it("resolves the category.combo renderer", () => {
+    expect(resolveRenderer("category.combo")).toBe(CategoryCombo);
   });
 
   it("resolves the category.pie renderer", () => {

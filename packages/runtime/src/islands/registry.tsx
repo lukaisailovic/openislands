@@ -5,6 +5,7 @@ import { setDrilldownResolver } from "./drilldownRenderer.js";
 import { ActivityCalendar } from "./ActivityCalendar.js";
 import { BreakdownTreemap } from "./BreakdownTreemap.js";
 import { CategoryBar } from "./CategoryBar.js";
+import { CategoryCombo } from "./CategoryCombo.js";
 import { CategoryPie } from "./CategoryPie.js";
 import { CompareRadar } from "./CompareRadar.js";
 import { CorrelationScatter } from "./CorrelationScatter.js";
@@ -36,6 +37,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "metric.scorecard": MetricScorecard,
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
+  "category.combo": CategoryCombo,
   "category.pie": CategoryPie,
   "correlation.scatter": CorrelationScatter,
   "breakdown.treemap": BreakdownTreemap,

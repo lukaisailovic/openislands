@@ -120,6 +120,62 @@ a bar per subgroup, and `stacked: true` to stack those subgroups into one bar pe
 - `stacked`: `true` stacks the grouped bars into one bar per category (default `false`).
 - `colors`: CSS colors per series (group value or `y` field), overriding the palette.
 
+## category.combo
+
+A dual-axis chart: `bars` on the primary y-axis and `lines` on a secondary one, the island
+for reading a level against a rate. Plot revenue against margin, volume against price, or any
+two measures whose scales would flatten each other on a shared axis. Both `bars` and `lines`
+accept a single field or an array.
+
+<LiveIsland
+  type="category.combo"
+  config={{
+    title: "Revenue vs. margin",
+    x: "month",
+    bars: "revenue_eur",
+    lines: "margin_pct",
+    format: "eur",
+    lineFormat: "pct",
+  }}
+  data={sampleData(
+    [
+      { name: "month", type: "date" },
+      { name: "revenue_eur", type: "double" },
+      { name: "margin_pct", type: "double" },
+    ],
+    [
+      { month: "2026-01-01", revenue_eur: 42_300, margin_pct: 0.18 },
+      { month: "2026-02-01", revenue_eur: 45_100, margin_pct: 0.21 },
+      { month: "2026-03-01", revenue_eur: 44_200, margin_pct: 0.19 },
+      { month: "2026-04-01", revenue_eur: 49_800, margin_pct: 0.24 },
+      { month: "2026-05-01", revenue_eur: 52_600, margin_pct: 0.26 },
+      { month: "2026-06-01", revenue_eur: 56_400, margin_pct: 0.29 },
+    ],
+    "monthly",
+  )}
+/>
+
+```jsonc
+{
+  "type": "category.combo",
+  "title": "Revenue vs. margin",
+  "dataset": "monthly",
+  "x": "month",
+  "bars": "revenue_eur",
+  "lines": "margin_pct",
+  "format": "eur",
+  "lineFormat": "pct"
+}
+```
+
+- `x`: the category or date field (required); accepts a category label or any date the bar
+  chart understands.
+- `bars`: a numeric field, or an array of fields, drawn as bars on the primary y-axis (required).
+- `lines`: a numeric field, or an array of fields, drawn as lines on the secondary y-axis (required).
+- `stacked`: `true` stacks the bar series into one bar per category (default `false`).
+- `colors`: CSS colors per series (bars first, then lines), overriding the palette.
+- `format` / `lineFormat`: [value formats](/reference/value-formats) for the bar (primary) and line (secondary) axes.
+
 ## breakdown.treemap
 
 A treemap of part-to-whole composition, the island for how a total splits across parts,
