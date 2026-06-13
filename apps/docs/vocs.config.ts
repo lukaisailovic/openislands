@@ -24,6 +24,15 @@ export default defineConfig({
       items: [
         { text: "The Manifest", link: "/concepts/manifest" },
         { text: "Data Contracts", link: "/concepts/data-contracts" },
+        { text: "SQL Transforms", link: "/concepts/sql-transforms" },
+      ],
+    },
+    {
+      text: "Writing Data",
+      collapsed: false,
+      items: [
+        { text: "Actions", link: "/data/actions" },
+        { text: "Connectors", link: "/data/connectors" },
       ],
     },
     {
