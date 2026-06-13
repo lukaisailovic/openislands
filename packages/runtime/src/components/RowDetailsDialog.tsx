@@ -103,7 +103,7 @@ function DrilldownSection({ drilldown, row }: { drilldown: DrilldownSpec; row: R
   return (
     <div className="mt-5 border-t border-kumo-hairline pt-5">
       {heading ? (
-        <Text size="sm" as="p" className="mb-3 font-medium text-kumo-strong">
+        <Text size="sm" as="p" DANGEROUS_className="mb-3 font-medium text-kumo-strong">
           {heading}
         </Text>
       ) : null}
@@ -166,8 +166,8 @@ export function RowDetailsDialog({
                   <div key={f.field}>
                     <dt className="text-kumo-subtle">{f.label ?? f.field}</dt>
                     <dd className="mt-0.5">
-                      <Text size="sm" className="break-words whitespace-pre-wrap">
-                        {fieldText(f, row[f.field])}
+                      <Text size="sm" DANGEROUS_className="break-words whitespace-pre-wrap">
+                        {fieldText(f, row[f.field] ?? null)}
                       </Text>
                     </dd>
                   </div>

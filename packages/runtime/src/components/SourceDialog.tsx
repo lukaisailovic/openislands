@@ -121,7 +121,7 @@ function TransformDisclosure({ dataset }: { dataset: string }) {
       </Collapsible.Trigger>
       <Collapsible.Panel className="mt-1">
         {state.error ? (
-          <Text variant="secondary" size="xs" className="text-kumo-danger">
+          <Text variant="secondary" size="xs" DANGEROUS_className="text-kumo-danger">
             {state.error}
           </Text>
         ) : state.sql === undefined ? (
@@ -151,13 +151,12 @@ function SchemaList({ columns }: { columns: Column[] }) {
             <Glyph size={15} className="flex-none text-kumo-subtle" />
             <Text
               as="code"
-              variant="mono"
               size="sm"
-              className="min-w-0 flex-1 truncate text-kumo-strong"
+              DANGEROUS_className="min-w-0 flex-1 truncate font-mono text-kumo-strong"
             >
               {column.name}
             </Text>
-            <Text variant="secondary" size="xs" className="flex-none">
+            <Text variant="secondary" size="xs" DANGEROUS_className="flex-none">
               {label}
             </Text>
           </div>
@@ -199,7 +198,7 @@ function PreviewTable({ columns, rows }: { columns: Column[]; rows: Row[] }) {
                         empty && "text-kumo-subtle",
                       )}
                     >
-                      {previewText(value, column.type)}
+                      {previewText(value ?? null, column.type)}
                     </Table.Cell>
                   );
                 })}
@@ -262,7 +261,7 @@ export function SourceButton({ source }: { source: SourceInfo }) {
               </Dialog.Description>
             ) : null}
             {hasSchema ? (
-              <Text variant="secondary" size="xs" className="mt-1 block">
+              <Text variant="secondary" size="xs" DANGEROUS_className="mt-1 block">
                 {columns.length} {columns.length === 1 ? "column" : "columns"}
               </Text>
             ) : null}
@@ -290,7 +289,7 @@ export function SourceButton({ source }: { source: SourceInfo }) {
             {source.table ? (
               <Text variant="secondary" size="xs">
                 table{" "}
-                <Text as="code" variant="mono" size="xs" className="text-kumo-strong">
+                <Text as="code" size="xs" DANGEROUS_className="font-mono text-kumo-strong">
                   {source.table}
                 </Text>
               </Text>

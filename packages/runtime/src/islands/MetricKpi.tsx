@@ -127,10 +127,10 @@ export function MetricKpi({ config, data }: IslandRenderProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2">
-        <Text variant="heading3" as="span" className="font-medium tabular-nums tracking-tight">
+        <Text variant="heading3" as="span" DANGEROUS_className="font-medium tabular-nums tracking-tight">
           {display}
           {config.unit ? (
-            <Text variant="secondary" size="sm" as="span" className="ml-1">
+            <Text variant="secondary" size="sm" as="span" DANGEROUS_className="ml-1">
               {config.unit as string}
             </Text>
           ) : null}

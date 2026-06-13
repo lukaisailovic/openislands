@@ -45,7 +45,7 @@ export function SearchBox({ config, data }: IslandRenderProps) {
         <Autocomplete.InputGroup placeholder={(config.placeholder as string | undefined) ?? "Search…"} />
         <Autocomplete.Content>
           <Autocomplete.Empty>
-            <Text size="sm" color="secondary" className="px-2 py-1.5">
+            <Text size="sm" color="secondary" DANGEROUS_className="px-2 py-1.5">
               No matches
             </Text>
           </Autocomplete.Empty>
@@ -57,7 +57,7 @@ export function SearchBox({ config, data }: IslandRenderProps) {
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate">{String(row[titleField] ?? "")}</span>
                     {detail ? (
-                      <Text size="xs" color="secondary" className="truncate">
+                      <Text size="xs" color="secondary" DANGEROUS_className="truncate">
                         {String(row[detail] ?? "")}
                       </Text>
                     ) : null}

@@ -1,6 +1,6 @@
 import { Table, cn } from "@cloudflare/kumo";
 import type { ValueFormat } from "@openislands/schema";
-import type { Column, Row } from "@openislands/compiler";
+import type { Column, Row, Scalar } from "@openislands/compiler";
 import { NoData } from "../components/EmptyState.js";
 import { Paged } from "../components/Paged.js";
 import { SeeAllDialog } from "../components/SeeAllDialog.js";
@@ -69,8 +69,8 @@ function cellClass(col: ColumnSpec, columns: Column[], row: Row): string | undef
   );
 }
 
-function cellText(col: ColumnSpec, value: unknown): string {
-  if (col.format) return formatValue(value ?? null, col.format);
+function cellText(col: ColumnSpec, value: Scalar): string {
+  if (col.format) return formatValue(value, col.format);
   return String(value ?? "");
 }
 
@@ -108,7 +108,7 @@ function DataTable({
           >
             {cols.map((col) => (
               <Table.Cell key={col.field} className={cellClass(col, columns, row)}>
-                {cellText(col, row[col.field])}
+                {cellText(col, row[col.field] ?? null)}
               </Table.Cell>
             ))}
           </Table.Row>

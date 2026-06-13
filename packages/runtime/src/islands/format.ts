@@ -40,7 +40,7 @@ interface DateParts {
  * clock the data carries. `hasTime` is false for a date-only value, letting
  * the feed pick `date` over `datetime`.
  */
-function parseDateParts(value: Scalar): DateParts | null {
+function parseDateParts(value: Scalar | Date): DateParts | null {
   if (value instanceof Date) {
     return {
       year: value.getUTCFullYear(),
@@ -142,7 +142,7 @@ export function formatTimestamp(value: Scalar): string {
 }
 
 /** Render a scalar in one of the manifest's value formats; falls back to a plain string. */
-export function formatValue(value: Scalar, format?: ValueFormat): string {
+export function formatValue(value: Scalar | Date, format?: ValueFormat): string {
   if (format === "date" || format === "datetime" || format === "time" || format === "month") {
     const parts = parseDateParts(value);
     return parts === null ? String(value ?? "") : formatDateParts(parts, format);

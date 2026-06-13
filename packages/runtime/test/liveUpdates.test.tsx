@@ -27,7 +27,7 @@ describe("handleRuntimeEvent", () => {
   it("invalidates bound queries and clears errors on datasets-changed", () => {
     const client = { invalidateQueries: vi.fn() } as unknown as QueryClient;
     const setErrors = vi.fn();
-    handleRuntimeEvent({ type: "datasets-changed", datasets: ["nw"] }, client, setErrors);
+    handleRuntimeEvent({ type: "datasets-changed", datasets: ["nw"] }, client, setErrors, "finance");
     expect(client.invalidateQueries).toHaveBeenCalledOnce();
     expect(setErrors).toHaveBeenCalledWith(new Map());
   });
@@ -42,6 +42,7 @@ describe("handleRuntimeEvent", () => {
       },
       client,
       setErrors,
+      "finance",
     );
     expect(client.invalidateQueries).not.toHaveBeenCalled();
     const map = setErrors.mock.calls[0]![0] as Map<string, unknown>;

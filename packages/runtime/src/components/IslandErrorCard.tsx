@@ -27,14 +27,14 @@ export function IslandErrorCard({ config, error }: Props) {
       description={
         <div className="flex flex-col gap-1">
           <span>
-            <Text as="strong" bold className="text-inherit">
+            <Text as="strong" bold DANGEROUS_className="text-inherit">
               {config.type}
             </Text>
             {dataset ? (
               <>
                 {" "}
                 needs dataset{" "}
-                <Text as="code" variant="mono" className="text-inherit">
+                <Text as="code" variant="mono" DANGEROUS_className="text-inherit">
                   {dataset}
                 </Text>
               </>
@@ -46,7 +46,7 @@ export function IslandErrorCard({ config, error }: Props) {
               {missing.map((f, i) => (
                 <span key={f}>
                   {i > 0 ? ", " : null}
-                  <Text as="code" variant="mono" className="text-inherit">
+                  <Text as="code" variant="mono" DANGEROUS_className="text-inherit">
                     {f}
                   </Text>
                 </span>
@@ -54,7 +54,7 @@ export function IslandErrorCard({ config, error }: Props) {
             </span>
           ) : null}
           <span>{error.message}</span>
-          <Text variant="secondary" size="xs" className="mt-1">
+          <Text variant="secondary" size="xs" DANGEROUS_className="mt-1">
             Ask your agent to fix the manifest or the data.
           </Text>
         </div>

@@ -75,7 +75,7 @@ function Section({
             open && "rotate-90",
           )}
         />
-        <Text size="sm" as="span" className="font-medium">
+        <Text size="sm" as="span" DANGEROUS_className="font-medium">
           {group.title}
         </Text>
         {group.subtitle ? (

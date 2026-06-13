@@ -1,7 +1,7 @@
 import { Badge, Button, Dialog, LinkButton, Loader, Text } from "@cloudflare/kumo";
 import { ArrowClockwise, Plug, X } from "@phosphor-icons/react";
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 import { type ConnectorStatus, syncConnector, useConnectorStatuses } from "../client/useConnectors.js";
 import { useAppId } from "../client/useAppId.js";
 
@@ -58,7 +58,7 @@ function ConnectorRow({ status, onSynced }: { status: ConnectorStatus; onSynced:
     <div className="flex flex-col gap-1.5 border-b border-kumo-hairline py-4 last:border-b-0">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Text size="sm" className="truncate font-medium text-kumo-strong">
+          <Text size="sm" DANGEROUS_className="truncate font-medium text-kumo-strong">
             {status.name}
           </Text>
           <Badge variant={badge.variant} appearance="dot">
@@ -93,22 +93,22 @@ function ConnectorRow({ status, onSynced }: { status: ConnectorStatus; onSynced:
           </Text>
         ) : null}
         {status.loadError ? (
-          <Text size="sm" className="text-kumo-danger">
+          <Text size="sm" DANGEROUS_className="text-kumo-danger">
             {status.loadError}
           </Text>
         ) : null}
         {status.lastError ? (
-          <Text size="sm" className="text-kumo-danger">
+          <Text size="sm" DANGEROUS_className="text-kumo-danger">
             {status.lastError}
           </Text>
         ) : null}
         {status.missingSecrets.length > 0 ? (
-          <Text size="sm" className="text-kumo-warning">
+          <Text size="sm" DANGEROUS_className="text-kumo-warning">
             Missing secrets: {status.missingSecrets.join(", ")}
           </Text>
         ) : null}
         {syncError ? (
-          <Text size="sm" className="text-kumo-danger">
+          <Text size="sm" DANGEROUS_className="text-kumo-danger">
             {syncError}
           </Text>
         ) : null}
@@ -117,7 +117,7 @@ function ConnectorRow({ status, onSynced }: { status: ConnectorStatus; onSynced:
   );
 }
 
-export function ConnectionsDialog({ trigger }: { trigger: ReactNode }) {
+export function ConnectionsDialog({ trigger }: { trigger: ReactElement }) {
   const { statuses, loading, error, refresh } = useConnectorStatuses();
 
   return (
@@ -141,7 +141,7 @@ export function ConnectionsDialog({ trigger }: { trigger: ReactNode }) {
               <Loader />
             </div>
           ) : error ? (
-            <Text size="sm" className="text-kumo-danger">
+            <Text size="sm" DANGEROUS_className="text-kumo-danger">
               {error}
             </Text>
           ) : statuses.length === 0 ? (

@@ -45,7 +45,7 @@ export function GaugeRings({ config, data }: IslandRenderProps) {
     const label = ring.label ?? ring.value;
     const isBudget = ring.direction === "atMost";
     const overBudget = isBudget && max > 0 && value > max;
-    const baseColor = ring.color ?? PALETTE[i % PALETTE.length];
+    const baseColor = ring.color ?? PALETTE[i % PALETTE.length]!;
     const limitLabel = isBudget ? " limit" : "";
     return {
       key: ring.value,

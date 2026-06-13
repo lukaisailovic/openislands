@@ -30,7 +30,7 @@ function AppNotFound() {
       <Text variant="heading3" as="h1">
         App not found
       </Text>
-      <Text variant="secondary" size="sm" className="mt-2">
+      <Text variant="secondary" size="sm" DANGEROUS_className="mt-2">
         Available apps: {apps.map((a) => a.id).join(", ") || "none"}
       </Text>
     </div>

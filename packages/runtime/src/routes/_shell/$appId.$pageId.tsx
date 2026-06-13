@@ -4,7 +4,7 @@ import type { Page } from "@openislands/schema";
 import { Dashboard } from "../../components/Dashboard.js";
 import { getDashboard } from "../../server/dashboard.js";
 
-interface PageSearch {
+export interface PageSearch {
   group?: string;
   from?: string;
   to?: string;
@@ -68,7 +68,7 @@ function PageNotFound() {
       <Text variant="heading3" as="h1">
         Page not found
       </Text>
-      <Text variant="secondary" size="sm" className="mt-2">
+      <Text variant="secondary" size="sm" DANGEROUS_className="mt-2">
         Available pages: {manifest.pages.map((p) => p.id).join(", ") || "none"}
       </Text>
     </div>

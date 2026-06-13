@@ -94,7 +94,7 @@ function TopBar({ showTrigger, hasConnectors }: { showTrigger: boolean; hasConne
       <div className="grid size-7 place-items-center rounded-md bg-[#0c1314] text-white ring-1 ring-white/10">
         <Brandmark className="size-[18px]" />
       </div>
-      <Text variant="heading3" as="span" className="tracking-tight">
+      <Text variant="heading3" as="span" DANGEROUS_className="tracking-tight">
         OpenIslands
       </Text>
       {hasConnectors ? (
@@ -139,7 +139,7 @@ export function AppShell({ manifest, manifestErrors, apps, children }: Props) {
         {hasSidebar ? (
           <Sidebar className={multiPage ? undefined : "md:hidden"}>
             <Sidebar.Header>
-              <Text variant="heading3" as="span" className="truncate tracking-tight">
+              <Text variant="heading3" as="span" DANGEROUS_className="truncate tracking-tight">
                 {manifest.title}
               </Text>
             </Sidebar.Header>

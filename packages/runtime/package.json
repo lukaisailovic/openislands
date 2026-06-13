@@ -19,7 +19,10 @@
       "types": "./src/islands/index.ts",
       "default": "./src/islands/index.ts"
     },
-    "./server": "./dist/server/server.js"
+    "./server": {
+      "types": "./src/server-entry.d.ts",
+      "default": "./dist/server/server.js"
+    }
   },
   "publishConfig": {
     "exports": {

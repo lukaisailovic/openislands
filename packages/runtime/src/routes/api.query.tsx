@@ -16,7 +16,7 @@ async function handle(request: Request): Promise<Response> {
   const result = await runQuery(app.dir, parseQueryParams(params, request.headers.get("accept")));
 
   if (result.status === 200 && result.format === "arrow" && result.arrow) {
-    return new Response(result.arrow, {
+    return new Response(result.arrow as BodyInit, {
       status: 200,
       headers: { "content-type": ARROW_CONTENT_TYPE },
     });

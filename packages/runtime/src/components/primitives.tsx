@@ -22,7 +22,7 @@ export function IslandCard({
     <LayerCard style={style} className={cn("flex h-full min-w-0 flex-col", className)}>
       {hasHeader ? (
         <LayerCard.Secondary className="flex items-center justify-between gap-2">
-          <Text variant="secondary" size="sm" className="min-w-0 truncate">
+          <Text variant="secondary" size="sm" DANGEROUS_className="min-w-0 truncate">
             {title}
           </Text>
           {source ? <SourceButton source={source} /> : null}

@@ -81,10 +81,10 @@ export function Dashboard({ manifest, page, activeGroup, range, customIslands }:
       ) : (
         <div className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div>
-            <Text variant="heading2" as="h1" className="tracking-tight">
+            <Text variant="heading2" as="h1" DANGEROUS_className="tracking-tight">
               {manifest.title}
             </Text>
-            <Text variant="secondary" size="sm" className="mt-1">
+            <Text variant="secondary" size="sm" DANGEROUS_className="mt-1">
               Built by OpenIslands · your data, your files, your dashboard
             </Text>
           </div>

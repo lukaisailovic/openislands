@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { notFound } from "@tanstack/react-router";
-import type { PageIcon } from "@openislands/schema";
+import type { Manifest, PageIcon } from "@openislands/schema";
 import { scanCustomIslands } from "./custom.js";
 import { loadManifest } from "./project.js";
 import { appDir, listApps } from "./workspace.js";
@@ -11,6 +11,21 @@ export interface WorkspaceAppInfo {
   icon?: PageIcon;
   errorCount: number;
 }
+
+type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
+type ConnectorEntry = NonNullable<Manifest["connectors"]>[string];
+
+/**
+ * The manifest as it crosses the SSR boundary. TanStack Start type-checks
+ * server-fn returns for serializability; the manifest's free-form connector
+ * `config` is typed `unknown` (it is validated against each connector's own
+ * schema at load, not in the manifest schema), which trips that check even
+ * though the value is always JSON at runtime. Presenting `config` as JSON here
+ * satisfies the boundary without loosening the published manifest schema.
+ */
+export type DashboardManifest = Omit<Manifest, "connectors"> & {
+  connectors?: Record<string, Omit<ConnectorEntry, "config"> & { config?: Record<string, JsonValue> }>;
+};
 
 export const getWorkspace = createServerFn({ method: "GET" }).handler(
   (): WorkspaceAppInfo[] =>
@@ -28,5 +43,5 @@ export const getDashboard = createServerFn({ method: "GET" })
     }
     const { manifest, errors } = loadManifest(dir);
     const customIslands = await scanCustomIslands(dir);
-    return { manifest, manifestErrors: errors, customIslands };
+    return { manifest: manifest as DashboardManifest, manifestErrors: errors, customIslands };
   });

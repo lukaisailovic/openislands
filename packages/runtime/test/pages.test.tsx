@@ -26,8 +26,8 @@ function renderAtPage(manifest: Manifest, pageId: string, group?: string) {
     validateSearch: (s: Record<string, unknown>) =>
       typeof s.group === "string" ? { group: s.group } : {},
     component: () => {
-      const params = pageRoute.useParams();
-      const search = pageRoute.useSearch();
+      const params = pageRoute.useParams() as { appId: string; pageId: string };
+      const search = pageRoute.useSearch() as { group?: string };
       const page = manifest.pages.find((p) => p.id === params.pageId)!;
       const active = page.groups
         ? (page.groups.find((g) => g.id === search.group) ?? page.groups[0]!).id
@@ -49,7 +49,6 @@ function renderAtPage(manifest: Manifest, pageId: string, group?: string) {
   });
   render(
     <QueryClientProvider client={client}>
-      {/* @ts-expect-error test router shape differs from the app's registered router */}
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );

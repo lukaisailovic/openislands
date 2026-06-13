@@ -21,7 +21,7 @@ export function SeriesLegend({ items }: { items: SeriesLegendItem[] }) {
             className="size-2.5 shrink-0 rounded-[3px]"
             style={{ backgroundColor: item.color }}
           />
-          <Text variant="secondary" size="sm" className="truncate" title={item.name}>
+          <Text variant="secondary" size="sm" DANGEROUS_className="truncate" title={item.name}>
             {item.name}
           </Text>
         </li>

@@ -58,16 +58,16 @@ function RichHeader({ row, spec }: { row: Row; spec: FeedSpec }) {
   const value = spec.highlight ? row[spec.highlight.field] : undefined;
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <Text size="sm" as="span" className="font-medium text-kumo-strong">
+      <Text size="sm" as="span" DANGEROUS_className="font-medium text-kumo-strong">
         {String(row[spec.titleField] ?? "")}
       </Text>
       {spec.highlight && isPresent(value) ? (
         <span className="whitespace-nowrap">
-          <Text size="sm" as="span" className="font-semibold tabular-nums">
+          <Text size="sm" as="span" DANGEROUS_className="font-semibold tabular-nums">
             {formatValue(value ?? null, spec.highlight.format)}
           </Text>
           {spec.highlight.unit ? (
-            <Text variant="secondary" size="xs" as="span" className="ml-1 uppercase">
+            <Text variant="secondary" size="xs" as="span" DANGEROUS_className="ml-1 uppercase">
               {spec.highlight.unit}
             </Text>
           ) : null}
@@ -85,7 +85,7 @@ function RichStats({ row, stats, dark }: { row: Row; stats: StatSpec[]; dark: bo
       {visible.map((stat, i) => (
         <span key={stat.field} className="whitespace-nowrap">
           {i > 0 ? (
-            <Text variant="secondary" size="xs" as="span" className="mr-2">
+            <Text variant="secondary" size="xs" as="span" DANGEROUS_className="mr-2">
               ·
             </Text>
           ) : null}
@@ -93,17 +93,17 @@ function RichStats({ row, stats, dark }: { row: Row; stats: StatSpec[]; dark: bo
             <Text
               size="xs"
               as="span"
-              className="font-medium"
-              style={{ color: stat.color ?? ChartPalette.categorical(i, dark) }}
+              DANGEROUS_className="font-medium"
+              DANGEROUS_style={{ color: stat.color ?? ChartPalette.categorical(i, dark) }}
             >
               {stat.label}{" "}
             </Text>
           ) : null}
-          <Text size="xs" as="span" className="tabular-nums">
+          <Text size="xs" as="span" DANGEROUS_className="tabular-nums">
             {formatValue(row[stat.field] ?? null, stat.format)}
           </Text>
           {stat.unit ? (
-            <Text variant="secondary" size="xs" as="span" className="ml-0.5">
+            <Text variant="secondary" size="xs" as="span" DANGEROUS_className="ml-0.5">
               {stat.unit}
             </Text>
           ) : null}
@@ -177,7 +177,7 @@ function FeedRow({
       )}
       {...(onClick ? rowActivationProps(() => onClick(row)) : {})}
     >
-      <Text variant="secondary" size="xs" as="span" className="whitespace-nowrap">
+      <Text variant="secondary" size="xs" as="span" DANGEROUS_className="whitespace-nowrap">
         {formatTimestamp(row[spec.ts] ?? null)}
       </Text>
       <Text size="sm" as="span">

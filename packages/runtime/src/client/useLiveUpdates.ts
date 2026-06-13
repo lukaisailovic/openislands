@@ -52,11 +52,11 @@ export function handleRuntimeEvent(
     setErrors(new Map());
     return;
   }
-  if (event.type === "components-changed") {
-    setErrors(new Map());
+  if (event.type === "validation") {
+    setErrors(applyValidation(event.islandErrors));
     return;
   }
-  setErrors(applyValidation(event.islandErrors));
+  setErrors(new Map());
 }
 
 /**
