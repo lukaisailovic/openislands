@@ -660,6 +660,12 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.label);
       add(island.value);
       break;
+    case "compare.radar": {
+      const metrics = island.metrics;
+      if (Array.isArray(metrics)) metrics.forEach(add);
+      add(island.series);
+      break;
+    }
     // note.card, source.doc, and custom islands bind to no dataset
   }
   return { dataset, fields: [...fields] };

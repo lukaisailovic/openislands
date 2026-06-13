@@ -92,6 +92,20 @@ export const BreakdownTreemap = z.object({
     .describe("CSS colors cycled across top-level nodes, overriding the default palette"),
 }).describe("A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.");
 
+export const CompareRadar = z.object({
+  type: z.literal("compare.radar"),
+  ...baseFields,
+  dataset: z.string(),
+  metrics: z.array(z.string()).min(1).describe("numeric fields, one radar axis each"),
+  series: z.string().optional().describe("field naming each polygon (one per row); omitted numbers them Series 1, 2, …"),
+  max: z.number().optional().describe("fixed max for every axis; omitted maxes each axis at its metric's peak"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("CSS colors per polygon, overriding the default palette"),
+  format: ValueFormat.optional(),
+}).describe("A radar (spider) chart — use to compare entities across several metrics at once; each metric is an axis, each row a polygon.");
+
 export const FunnelSteps = z.object({
   type: z.literal("funnel.steps"),
   ...baseFields,
@@ -354,6 +368,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   DistributionHeatmap,
   ActivityCalendar,
   FunnelSteps,
+  CompareRadar,
   TableGridBase,
   TimelineFeedBase,
   GaugeRings,
@@ -387,6 +402,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
   "funnel.steps": FunnelSteps,
+  "compare.radar": CompareRadar,
   "correlation.scatter": CorrelationScatter,
   "category.pie": CategoryPie,
   "table.grid": TableGrid,
@@ -422,6 +438,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "distribution.heatmap": 4,
   "activity.calendar": 6,
   "funnel.steps": 3,
+  "compare.radar": 4,
   "correlation.scatter": 4,
   "category.pie": 3,
   "table.grid": 5,
@@ -437,6 +454,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   DistributionHeatmap,
   ActivityCalendar,
   FunnelSteps,
+  CompareRadar,
   TableGrid,
   TimelineFeed,
   GaugeRings,

@@ -409,3 +409,47 @@ follow the row order; set `sort` to reorder them.
 - `label`: the stage-name field (required); `value`: the numeric count at each stage (required).
 - `sort`: `none` (the default, keeping row order), `descending`, or `ascending`.
 - `colors`: per-stage CSS colors overriding the palette; `format` styles the labels and tooltip.
+
+## compare.radar
+
+A radar (spider) chart for comparing entities across several metrics at once. Each field in
+`metrics` becomes an axis, and each row becomes a polygon named by `series`. Share one `max`
+across every axis when the metrics are on a common scale (e.g. all 0-100 scores).
+
+<LiveIsland
+  type="compare.radar"
+  config={{ title: "Product comparison", metrics: ["performance", "price", "design", "support", "ecosystem"], series: "product", max: 100 }}
+  data={sampleData(
+    [
+      { name: "product", type: "varchar" },
+      { name: "performance", type: "double" },
+      { name: "price", type: "double" },
+      { name: "design", type: "double" },
+      { name: "support", type: "double" },
+      { name: "ecosystem", type: "double" },
+    ],
+    [
+      { product: "Aurora", performance: 88, price: 62, design: 90, support: 75, ecosystem: 70 },
+      { product: "Borealis", performance: 74, price: 85, design: 68, support: 82, ecosystem: 88 },
+      { product: "Cirrus", performance: 80, price: 78, design: 84, support: 70, ecosystem: 76 },
+    ],
+    "product_scores",
+  )}
+  height={300}
+/>
+
+```jsonc
+{
+  "type": "compare.radar",
+  "title": "Product comparison",
+  "dataset": "product_scores",
+  "metrics": ["performance", "price", "design", "support", "ecosystem"],
+  "series": "product",
+  "max": 100
+}
+```
+
+- `metrics`: the numeric fields that become the axes (at least one, required).
+- `series`: a field naming each row's polygon; omitted, polygons are numbered Series 1, 2, …
+- `max`: a fixed max shared by every axis; omitted, each axis maxes at its own metric's peak.
+- `colors`: per-polygon CSS colors overriding the palette; `format` styles the tooltip values.

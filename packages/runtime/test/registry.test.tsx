@@ -4,6 +4,7 @@ import { ActivityCalendar } from "../src/islands/ActivityCalendar.js";
 import { BreakdownTreemap } from "../src/islands/BreakdownTreemap.js";
 import { CategoryBar } from "../src/islands/CategoryBar.js";
 import { CategoryPie } from "../src/islands/CategoryPie.js";
+import { CompareRadar } from "../src/islands/CompareRadar.js";
 import { CorrelationScatter } from "../src/islands/CorrelationScatter.js";
 import { CustomPlaceholder } from "../src/islands/CustomPlaceholder.js";
 import { DistributionHeatmap } from "../src/islands/DistributionHeatmap.js";
@@ -36,6 +37,10 @@ describe("island registry", () => {
 
   it("resolves the funnel.steps renderer", () => {
     expect(resolveRenderer("funnel.steps")).toBe(FunnelSteps);
+  });
+
+  it("resolves the compare.radar renderer", () => {
+    expect(resolveRenderer("compare.radar")).toBe(CompareRadar);
   });
   it("resolves ported built-in renderers", () => {
     expect(resolveRenderer("note.card")).toBe(NoteCard);

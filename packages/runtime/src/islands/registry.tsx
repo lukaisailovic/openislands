@@ -6,6 +6,7 @@ import { ActivityCalendar } from "./ActivityCalendar.js";
 import { BreakdownTreemap } from "./BreakdownTreemap.js";
 import { CategoryBar } from "./CategoryBar.js";
 import { CategoryPie } from "./CategoryPie.js";
+import { CompareRadar } from "./CompareRadar.js";
 import { CorrelationScatter } from "./CorrelationScatter.js";
 import { CustomPlaceholder } from "./CustomPlaceholder.js";
 import { DistributionHeatmap } from "./DistributionHeatmap.js";
@@ -38,6 +39,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
   "funnel.steps": FunnelSteps,
+  "compare.radar": CompareRadar,
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,
   "gauge.meter": GaugeMeter,
