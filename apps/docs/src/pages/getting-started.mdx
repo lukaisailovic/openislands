@@ -7,14 +7,14 @@ project from a template, serve it locally, then learn the loop that turns a raw 
 typed island: **infer fast, formalize immediately.**
 
 <Callout variant="tip">
-  No global install needed — `npx openislands` runs the latest CLI. Install it (`npm i -g
+  No global install needed: `npx openislands` runs the latest CLI. Install it (`npm i -g
   openislands`) once you're using it daily.
 </Callout>
 
 ### Scaffold a project
 
-Pick a template — `finance`, `health`, or `operations` — and `init` drops a complete,
-working project in the target directory.
+Pick a template (`finance`, `health`, or `operations`) and `init` drops a complete, working
+project in the target directory.
 
 ```bash
 npx openislands init my-dashboard --template finance
@@ -32,7 +32,7 @@ npx openislands serve
 ```
 
 `serve` validates the manifest, then boots the live runtime at
-[127.0.0.1:4321](http://127.0.0.1:4321) — a real local dashboard, server-rendered, querying
+[127.0.0.1:4321](http://127.0.0.1:4321): a real local dashboard, server-rendered, querying
 your files on every request. It binds to loopback by default (this is your data) and refuses
 to boot if the manifest can't render, naming what's wrong. Leave it running: edit a file and
 the page live-updates over SSE.
@@ -48,7 +48,7 @@ npx openislands infer data/spending.csv
 `infer` reads the file through the same DuckDB core the runtime uses and prints a preview:
 the **inferred columns and types**, a **proposed dataset contract** (`{ "spending": {
 "source": "data/spending.csv" } }`), and **suggested islands** to render it. Nothing is
-written yet — it's a read-only look.
+written yet; it's a read-only look.
 
 ### Formalize it
 
@@ -58,7 +58,7 @@ When the preview looks right, re-run with `--bind` to write the dataset into you
 npx openislands infer data/spending.csv --bind
 ```
 
-This adds `spending` to `app/manifest.json` and re-validates before saving — a bad write is
+This adds `spending` to `app/manifest.json` and re-validates before saving, so a bad write is
 refused, not persisted. Then scaffold an island and point it at the new dataset:
 
 ```bash
@@ -76,26 +76,26 @@ npx openislands validate
 ```
 
 `validate` checks the manifest and every island's binding against the live data. A binding to
-a field that doesn't exist fails here and **names the island** — that's the safety net. Green
+a field that doesn't exist fails here and **names the island**. That's the safety net. Green
 means the dashboard renders; your running `serve` already reflects the change.
 
 ## The loop
 
 That's the whole rhythm: **infer fast** to see a file's shape without commitment, then
-**formalize immediately** — `--bind` the dataset, `add` an island, `validate`. You edit the
-manifest, never rendering code. From here:
+**formalize immediately** by binding the dataset, adding an island, and running `validate`.
+You edit the manifest, never rendering code. From here:
 
-- [The Manifest](/concepts/manifest) — the mental model behind that JSON file.
-- [Data Contracts](/concepts/data-contracts) — how datasets are typed and how SQL transforms
+- [The Manifest](/concepts/manifest): the mental model behind that JSON file.
+- [Data Contracts](/concepts/data-contracts): how datasets are typed, and how SQL transforms
   shape data before it reaches an island.
-- [Islands](/islands/overview) — the visual building blocks, with live previews.
+- [Islands](/islands/overview): the visual building blocks, with live previews.
 
 ## Letting an agent maintain it
 
 The CLI loop is for you at the keyboard. The point of OpenIslands is that an **agent** can
-keep a dashboard healthy for months — adding islands, wiring new files, fixing bindings —
-without it rotting. It does that through the same typed, validated path, exposed as an MCP
-server: read the manifest and data, propose a full-manifest edit, review the diff, apply it,
-roll back if needed.
+keep a dashboard healthy for months, adding islands, wiring in new files, and fixing bindings
+without the app rotting. It does that through the same typed, validated path, exposed as an
+MCP server: read the manifest and data, propose a full-manifest edit, review the diff, apply
+it, roll back if needed.
 
 See [MCP Server](/mcp) to wire `@openislands/mcp` into your agent.

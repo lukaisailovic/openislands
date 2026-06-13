@@ -3,9 +3,9 @@ import { netWorthByMonth } from "../../components/sampleData";
 
 # Islands
 
-An **island** is a reusable, typed visual block. You don't write rendering code — you
-declare an island in the manifest, bind it to fields that exist in your data, and the
-runtime renders it. The same renderers the runtime ships power the live previews below:
+An **island** is a reusable, typed visual block. You don't write rendering code. You declare
+an island in the manifest, bind it to fields that exist in your data, and the runtime renders
+it. The same renderers the runtime ships power the live previews below:
 each tile is a real OpenIslands island, not a screenshot.
 
 ## A metric, live
@@ -32,8 +32,8 @@ delta, and draws a sparkline over the time axis it finds.
 
 ## A note, live
 
-A `note.card` renders Markdown and binds to no data — handy for context, captions, and
-links right inside a dashboard.
+A `note.card` renders Markdown and binds to no data, handy for context, captions, and links
+right inside a dashboard.
 
 <LiveIsland
   type="note.card"
@@ -59,7 +59,7 @@ reaching for a custom renderer.
 | `gauge.meter` | `dataset`, `meters` | Horizontal usage bars off the last row. |
 | `search.box` | `dataset`, `fields`, `titleField` | A client-side search over a dataset. |
 | `note.card` | `markdown` | Markdown content; no data. |
-| `source.doc` | — | An embedded document or link (`file` or `href`). |
+| `source.doc` | (none) | An embedded document or link (`file` or `href`). |
 | `layout.row` | `islands` | A full-width structural row holding other islands. |
 
 See the per-category pages for configuration details: [Metrics & Gauges](/islands/metrics-and-gauges),

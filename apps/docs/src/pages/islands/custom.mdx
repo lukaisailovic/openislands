@@ -4,7 +4,7 @@ import { Callout } from "vocs";
 
 When no [built-in island](/islands/overview) fits, you register your own. A custom island is a
 React renderer that lives in *your* project, gets a typed config like a built-in, and is checked
-by the same validator — it isn't a second-class escape hatch. Several built-ins started here:
+by the same validator. It isn't a second-class escape hatch. Several built-ins started here:
 `gauge.rings` shipped as a custom island before it was promoted into the core registry.
 
 ## The shape
@@ -18,7 +18,7 @@ components/custom/heatmap.calendar/
   schema.ts    # default-exports a Zod object for the config
 ```
 
-Reference the type from the manifest exactly like a built-in — `validate` and the runtime resolve
+Reference the type from the manifest exactly like a built-in; `validate` and the runtime resolve
 it to your component:
 
 ```jsonc
@@ -34,7 +34,7 @@ it to your component:
 ## `index.tsx`
 
 Default-export a React component. It receives the **same** props the built-ins get: `config` (the
-manifest island, including your custom fields) and `data` (the query result — `{ dataset, columns,
+manifest island, including your custom fields) and `data` (the query result: `{ dataset, columns,
 rows }`, absent until the client query resolves).
 
 ```tsx
@@ -85,7 +85,7 @@ export default function HeatmapCalendar({
 
 ## `schema.ts`
 
-Default-export a Zod object describing the config. Import from `"zod"` — the runtime bundles
+Default-export a Zod object describing the config. Import from `"zod"`; the runtime bundles
 against its own copy, so you don't add a dependency. This is what makes a bad custom config a
 *named* error instead of a silent placeholder:
 
@@ -100,22 +100,23 @@ export default z.object({
 
 ## How the runtime treats it
 
-- **Bundled on demand.** `serve` compiles `index.tsx` to ESM when the island is first requested —
-  no build step, and no `node_modules` in your project. React resolves to the runtime's own copy.
+- **Bundled on demand.** `serve` compiles `index.tsx` to ESM the first time the island is
+  requested, with no build step and no `node_modules` in your project. React resolves to the
+  runtime's own copy.
 - **Validated like a built-in.** `validate` (and `propose_edit`) check the manifest config against
   `schema.ts` with the *same* machinery that guards the built-ins. A config that violates the
-  schema is a named compile error — it names the page, island index, and type, just like a missing
+  schema is a named compile error: it names the page, island index, and type, just like a missing
   built-in binding.
 - **Hot reload.** Editing anything under `components/` remounts the island on the next live-reload
   event; you don't restart `serve`.
 
 <Callout variant="tip">
-A custom type **without** `index.tsx` still validates and renders the built-in placeholder — handy
+A custom type **without** `index.tsx` still validates and renders the built-in placeholder, handy
 for sketching a manifest before the renderer exists. A type **without** `schema.ts` is accepted but
 *unchecked*, so its config isn't validated. Ship both to get the full safety net.
 </Callout>
 
 <Callout variant="note">
 The directory name is the island type verbatim, so a dotted name like `heatmap.calendar` maps to a
-`heatmap.calendar` directory. The type must be a safe path segment — no slashes or `..`.
+`heatmap.calendar` directory. The type must be a safe path segment, with no slashes or `..`.
 </Callout>

@@ -10,8 +10,8 @@ or link, and a **layout row** to control how a page wraps. See the
 ## `note.card`
 
 **What it is.** A static Markdown card with no data binding. **When to use it:** commentary, a
-caption, instructions, or a link, dropped right between data islands. It takes only `markdown` —
-headings, lists, inline code, bold/italic, and links all render.
+caption, instructions, or a link, dropped right between data islands. It takes only
+`markdown`: headings, lists, inline code, bold/italic, and links all render.
 
 <LiveIsland
   type="note.card"
@@ -32,18 +32,18 @@ headings, lists, inline code, bold/italic, and links all render.
 
 **Key options.**
 
-- `markdown` — the only required field; no `dataset`. Use `\n\n` between blocks and `\n` for a
+- `markdown`: the only required field; no `dataset`. Use `\n\n` between blocks and `\n` for a
   soft break inside one.
 
 <Callout variant="tip">
-`note.card` is the lightest island — perfect for explaining a dashboard to whoever opens it next.
+`note.card` is the lightest island, perfect for explaining a dashboard to whoever opens it next.
 Its minimum span is `3`, so it sits comfortably beside a metric or a small chart.
 </Callout>
 
 ## `source.doc`
 
 **What it is.** An embedded document or external link. **When to use it:** to surface a source
-right next to the data it backs — a PDF statement, a Markdown brief, an image, or a plain link
+right next to the data it backs: a PDF statement, a Markdown brief, an image, or a plain link
 out. Set `kind` to choose how it renders, and give it either a `file` (a path inside the
 project) or an `href` (an external URL).
 
@@ -67,11 +67,11 @@ project) or an `href` (an external URL).
 
 **Key options.**
 
-- `kind: "pdf" | "markdown" | "image" | "link"` (default `link`) — how the source renders. `pdf`
+- `kind: "pdf" | "markdown" | "image" | "link"` (default `link`): how the source renders. `pdf`
   embeds the file in a viewer, `markdown` renders it inline, `image` shows it, `link` is an
   external link out.
-- `file` — a path relative to the project root; it resolves through the runtime's confined file
-  route. `href` — an external URL used as-is.
+- `file`: a path relative to the project root; it resolves through the runtime's confined file
+  route. `href` is an external URL used as-is.
 
 <Callout variant="note">
 A `file`-based doc needs a real file in the project (resolved through the runtime's `/api/file`
@@ -83,7 +83,7 @@ with an `href`, which renders the same everywhere.
 
 **What it is.** A structural full-width row that holds other islands. **When to use it:** when
 you want a group of islands to sit on their *own* grid row rather than flowing into the page's
-column packing. It carries no `span`, no `title`, no `dataset`, and can't be nested — it exists
+column packing. It carries no `span`, no `title`, no `dataset`, and can't be nested; it exists
 purely to arrange its children.
 
 Its children render on their own fresh 12-column grid row, each sized by its own `span`. The row
@@ -116,13 +116,13 @@ row.
 
 **Key points.**
 
-- `islands` — the only field; one or more child islands, each a normal built-in island with its
+- `islands`: the only field; one or more child islands, each a normal built-in island with its
   own `span`.
 - No `span`, `title`, or data binding on the row itself.
-- No nesting — a `layout.row` can't contain another `layout.row`.
+- No nesting: a `layout.row` can't contain another `layout.row`.
 
 <Callout variant="tip">
-There's no live preview for `layout.row` because it's a layout primitive, not a visual — it only
+There's no live preview for `layout.row` because it's a layout primitive, not a visual; it only
 means something in the context of a full page grid. Reach for it when two or three tiles should
 always share a row regardless of what comes before them.
 </Callout>

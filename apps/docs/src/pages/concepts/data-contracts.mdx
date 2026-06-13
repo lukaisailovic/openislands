@@ -2,7 +2,7 @@ import { Callout } from "vocs";
 
 # Data Contracts
 
-An island never reaches for a file directly. It binds to a **dataset** — a named, typed
+An island never reaches for a file directly. It binds to a **dataset**: a named, typed
 contract declared in the manifest. The runtime resolves each dataset through a DuckDB query
 core, infers its columns and types from the live data, and checks every island binding
 against that shape. Your files are the source of truth; there are no snapshots to drift out
@@ -20,20 +20,20 @@ of date.
 }
 ```
 
-- **A file source** — `source` points at a CSV, JSON, JSONL, or Parquet file, relative to the
+- **A file source.** `source` points at a CSV, JSON, JSONL, or Parquet file, relative to the
   project root. DuckDB reads it directly and infers the column types.
-- **A SQL transform** — `sql` points at a `.sql` file under `models/` (typically
+- **A SQL transform.** `sql` points at a `.sql` file under `models/` (typically
   `models/transforms/`). This is a derived, read-only view (see below).
-- **A SQLite table** — a `.sqlite` / `.db` source plus a `table` name. A SQLite source
+- **A SQLite table.** A `.sqlite` / `.db` source plus a `table` name. A SQLite source
   *requires* `table`; supplying `table` on any other source is a named validation error.
 
-A file or SQLite-backed dataset is a **`source`** dataset — it can be written to (by actions
+A file or SQLite-backed dataset is a **`source`** dataset: it can be written to (by actions
 and connectors). A `sql` dataset is **derived** and never writable.
 
 ## Shaping lives in SQL, never in island configs
 
 A golden rule: islands stay declarative. You never put a sum, a filter, or a join inside an
-island's config. Data shaping happens in the data layer — a `sql` transform — so the
+island's config. Data shaping happens in the data layer, in a `sql` transform, so the
 manifest only ever names fields that already exist.
 
 Drop a `.sql` file in `models/transforms/` and register it as a dataset. It's a plain DuckDB
@@ -58,7 +58,7 @@ ORDER BY value_eur DESC;
 ```
 
 Now a `breakdown.treemap` can bind cleanly to `allocation` with `label: "class"` and `value:
-"value_eur"` — every value it reads is a real column, computed once in SQL.
+"value_eur"`. Every value it reads is a real column, computed once in SQL.
 
 ## The contract check
 
@@ -70,19 +70,19 @@ island binding against that live schema:
 - Bind to a column that **doesn't** → the build fails and names the page, the island index,
   the island type, and the missing field.
 
-Because the check runs against the *live* data — not a cached schema — renaming a CSV column
+Because the check runs against the *live* data, not a cached schema, renaming a CSV column
 or changing a transform surfaces immediately as a named error, never as a silently-empty
 chart. The same machinery guards custom-island configs and page filter bindings.
 
 <Callout variant="note">
   The check is type-aware where it matters. A page date-range filter, for instance, compares
-  correctly whether the bound column is a real `DATE`/`TIMESTAMP` or a `YYYY-MM` string — a
+  correctly whether the bound column is a real `DATE`/`TIMESTAMP` or a `YYYY-MM` string: a
   `YYYY-MM` month is matched against the prefix of the range bound.
 </Callout>
 
 ## Markdown datasets
 
-A Markdown file can be a dataset too — useful for `source.doc` islands that embed notes or
+A Markdown file can be a dataset too, useful for `source.doc` islands that embed notes or
 strategy docs alongside your charts. Point a dataset's `source` at a `.md` file and reference
 it from a `source.doc` island, keeping prose under the same typed, file-owned contract as
 your numbers.
@@ -92,9 +92,9 @@ your numbers.
 Contracts aren't read-only. Two typed write paths feed `source` datasets through a
 checkpointed pipeline, so writes are reversible:
 
-- **Actions** — a manifest-declared, typed `insert` into a `source` dataset. Every row is
+- **Actions.** A manifest-declared, typed `insert` into a `source` dataset. Every row is
   validated against the dataset's inferred schema before anything is written.
-- **Connectors** — vendored integrations that sync an external provider's data into `source`
+- **Connectors.** Vendored integrations that sync an external provider's data into `source`
   datasets on a schedule.
 
 Both run through the same snapshot-before-write machinery the agent edit loop uses. See

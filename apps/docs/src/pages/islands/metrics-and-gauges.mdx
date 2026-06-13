@@ -5,20 +5,20 @@ import { sampleData } from "../../components/sampleData";
 # Metrics & Gauges
 
 Four islands for at-a-glance numbers: one headline KPI and three gauges. Each previewed
-below is a real OpenIslands renderer — the same code a live dashboard runs, not a
+below is a real OpenIslands renderer: the same code a live dashboard runs, not a
 screenshot. For the full registry, see [Islands](/islands/overview).
 
 <Callout variant="tip">
   Every gauge reads the **last row** of its dataset, so feed it data already aggregated to
-  the value you want shown — the most recent day, the current month-to-date, the running
+  the value you want shown: the most recent day, the current month-to-date, the running
   total. The KPI reads the last row too, plus the row before it for the delta.
 </Callout>
 
 ## metric.kpi
 
 A single headline number off the last row, with an optional delta versus the previous row
-and a sparkline drawn over the time axis it finds. Reach for it when one number — net
-worth, MRR, today's steps — deserves the top of a page.
+and a sparkline drawn over the time axis it finds. Reach for it when one number (net worth,
+MRR, today's steps) deserves the top of a page.
 
 <LiveIsland
   type="metric.kpi"
@@ -51,17 +51,17 @@ worth, MRR, today's steps — deserves the top of a page.
 }
 ```
 
-- `value` — the field holding the headline number (required).
-- `compareTo` — `"prev"` draws a delta against the previous row; a field name compares to
+- `value`: the field holding the headline number (required).
+- `compareTo`: `"prev"` draws a delta against the previous row; a field name compares to
   that column instead; `"none"` (the default) shows no delta.
-- `target` — a field holding a target to measure the value against.
-- `format` — `eur`, `kg`, `int`, `pct`, `date`, `datetime`, or `time`; `unit` appends a
+- `target`: a field holding a target to measure the value against.
+- `format`: `eur`, `kg`, `int`, `pct`, `date`, `datetime`, or `time`; `unit` appends a
   free-form suffix.
-- `color` — a 6-digit hex (e.g. `"#22C55E"`) for the sparkline, overriding the palette.
+- `color`: a 6-digit hex (e.g. `"#22C55E"`) for the sparkline, overriding the palette.
 
 ## gauge.rings
 
-Up to four concentric progress rings read off the last row — the dashboard view when
+Up to four concentric progress rings read off the last row: the dashboard view when
 several goals or budgets share one tile. Each ring fills toward its `max` (a column or a
 fixed number); the center shows the outermost ring's percentage.
 
@@ -113,17 +113,17 @@ fixed number); the center shows the outermost ring's percentage.
 }
 ```
 
-- `rings` — one to four rings, outermost first (required). Each is
+- `rings`: one to four rings, outermost first (required). Each is
   `{ value, max, label?, color?, direction? }`.
-- `max` — a column name or a fixed number; the goal the ring fills toward.
-- `direction` — `atLeast` (default, fills toward a goal) or `atMost` (a budget: crossing
+- `max`: a column name or a fixed number; the goal the ring fills toward.
+- `direction`: `atLeast` (default, fills toward a goal) or `atMost` (a budget: crossing
   the limit turns the ring danger-red).
-- `color` — a CSS color per ring; defaults to a built-in palette.
+- `color`: a CSS color per ring; defaults to a built-in palette.
 
 ## gauge.goal
 
 A single ring comparing the last row's value to a goal or a target band. Use it for one
-number with a defined good range — within the band reads success-green, under it amber,
+number with a defined good range: within the band reads success-green, under it amber,
 over it danger-red.
 
 <LiveIsland
@@ -161,20 +161,20 @@ over it danger-red.
 }
 ```
 
-- `value` — the field holding the current number (required).
-- `goal` — at least one of `min` / `max`, each a column or a number; supplying both makes
+- `value`: the field holding the current number (required).
+- `goal`: at least one of `min` / `max`, each a column or a number; supplying both makes
   a target band.
-- `format` — same set as `metric.kpi`; `unit`/`label` annotate the ring.
+- `format`: same set as `metric.kpi`; `unit`/`label` annotate the ring.
 
 <Callout variant="note">
-  `gauge.goal` needs at least one bound — declaring `goal` with neither `min` nor `max` is
+  `gauge.goal` needs at least one bound: declaring `goal` with neither `min` nor `max` is
   a named validation error, so a misconfigured goal fails the build rather than rendering
   blank.
 </Callout>
 
 ## gauge.meter
 
-One or more horizontal usage bars read off the last row — the quota- or capacity-style
+One or more horizontal usage bars read off the last row: the quota- or capacity-style
 view. Each meter shows `value / max` and fills proportionally in its own color.
 
 <LiveIsland
@@ -225,7 +225,7 @@ view. Each meter shows `value / max` and fills proportionally in its own color.
 }
 ```
 
-- `meters` — one or more bars, top to bottom (required). Each is
+- `meters`: one or more bars, top to bottom (required). Each is
   `{ value, max, label?, color? }`.
-- `max` — a column name or a fixed number; the capacity the bar fills against.
-- `color` — a CSS color per meter; defaults to a built-in palette.
+- `max`: a column name or a fixed number; the capacity the bar fills against.
+- `color`: a CSS color per meter; defaults to a built-in palette.

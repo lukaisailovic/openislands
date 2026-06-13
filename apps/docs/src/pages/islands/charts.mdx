@@ -10,7 +10,7 @@ code a live dashboard uses. For the full registry, see [Islands](/islands/overvi
 
 ## timeseries.line
 
-A line chart over time — the island for trends. `y` may be a single field or an array of
+A line chart over time, the island for trends. `y` may be a single field or an array of
 fields, so one tile can track several measures at once; add a goal line with
 `options.goalField`. When two or more series render, a legend with each series' latest
 value appears beneath the chart.
@@ -55,24 +55,24 @@ value appears beneath the chart.
 }
 ```
 
-- `x` — the date/time field; accepts `YYYY-MM`, `YYYY-Www`, `YYYY-MM-DD`, or a real
+- `x`: the date/time field; accepts `YYYY-MM`, `YYYY-Www`, `YYYY-MM-DD`, or a real
   timestamp (required).
-- `y` — a numeric field, or an array of fields for a multi-line chart (required).
-- `series` — split one `y` field into a line per distinct value; many values
+- `y`: a numeric field, or an array of fields for a multi-line chart (required).
+- `series`: split one `y` field into a line per distinct value; many values
   auto-show a searchable picker (`options.seriesPicker` forces or disables it).
-- `options.goalField` — a column drawn as a neutral goal line; `options.area` fills under
+- `options.goalField`: a column drawn as a neutral goal line; `options.area` fills under
   the lines.
-- `colors` — CSS colors per `y` field (or per series value), overriding the palette;
+- `colors`: CSS colors per `y` field (or per series value), overriding the palette;
   `format` styles the axis and tooltips.
 
 <Callout variant="tip">
-  With many series values, pass `series` and let the picker keep the chart legible — it
+  With many series values, pass `series` and let the picker keep the chart legible: it
   draws one series at a time instead of crowding every line onto the canvas.
 </Callout>
 
 ## category.bar
 
-A bar chart across discrete categories — the island for comparing groups. Add `group` for
+A bar chart across discrete categories, the island for comparing groups. Add `group` for
 a bar per subgroup, and `stacked: true` to stack those subgroups into one bar per category.
 
 <LiveIsland
@@ -114,14 +114,14 @@ a bar per subgroup, and `stacked: true` to stack those subgroups into one bar pe
 }
 ```
 
-- `x` — the category field (required); `y` — the numeric field (required).
-- `group` — a field that splits each category into a bar per distinct value.
-- `stacked` — `true` stacks the grouped bars into one bar per category (default `false`).
-- `colors` — CSS colors per series (group value or `y` field), overriding the palette.
+- `x`: the category field (required); `y`: the numeric field (required).
+- `group`: a field that splits each category into a bar per distinct value.
+- `stacked`: `true` stacks the grouped bars into one bar per category (default `false`).
+- `colors`: CSS colors per series (group value or `y` field), overriding the palette.
 
 ## breakdown.treemap
 
-A treemap of part-to-whole composition — the island for how a total splits across parts,
+A treemap of part-to-whole composition, the island for how a total splits across parts,
 optionally nested. Each leaf's area is proportional to its `value`; supply `parent` to
 group leaves under a hierarchy.
 
@@ -157,8 +157,8 @@ group leaves under a hierarchy.
 }
 ```
 
-- `label` — the field naming each leaf (required); `value` — the numeric field sizing it
+- `label`: the field naming each leaf (required); `value`: the numeric field sizing it
   (required). Only positive values render.
-- `parent` — an optional field grouping leaves into a two-level hierarchy; omit it for a
+- `parent`: an optional field grouping leaves into a two-level hierarchy; omit it for a
   flat treemap.
-- `colors` — CSS colors cycled across the top-level nodes, overriding the palette.
+- `colors`: CSS colors cycled across the top-level nodes, overriding the palette.

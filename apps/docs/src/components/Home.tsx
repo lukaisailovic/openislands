@@ -14,7 +14,7 @@ const kpiManifest = `{
   "format": "eur"
 }`;
 
-/** Revenue against a target — the line-chart proof beneath the headline pairing. */
+/** Revenue against a target: the line-chart proof beneath the headline pairing. */
 const revenueByMonth = sampleData(
   [
     { name: "month", type: "date" },
@@ -36,19 +36,19 @@ const revenueByMonth = sampleData(
 const features = [
   {
     name: "Declarative",
-    body: "A dashboard is a JSON manifest of islands bound to datasets. There is no rendering code to maintain — you describe what you want, the runtime draws it.",
+    body: "A dashboard is a JSON manifest of islands bound to datasets. There's no rendering code to maintain: you describe what you want, the runtime draws it.",
   },
   {
     name: "Typed and safe",
-    body: "Every binding is checked against your live data. Point an island at a field that doesn't exist and the build fails, naming the island — never a silently wrong chart.",
+    body: "Every binding is checked against your live data. Point an island at a field that doesn't exist and the build fails and names the island. You never get a silently wrong chart.",
   },
   {
     name: "Local-first",
-    body: "Your files are the source of truth. The runtime queries them live on every request, so there are no snapshots to drift out of date.",
+    body: "Your files are the source of truth. The runtime queries them on every request, so there are no snapshots to drift out of date.",
   },
   {
     name: "Agent-native",
-    body: "A CLI and an MCP server give an agent a typed, diffed, reversible way to edit the app — so it can keep your dashboard healthy for months.",
+    body: "A CLI and an MCP server give an agent a diffed, reversible way to edit the app, so it can keep your dashboard healthy for months.",
   },
 ];
 
@@ -56,7 +56,7 @@ const loopSteps = [
   { name: "read", body: "Pull the manifest, the island schemas, and a slice of the live data." },
   { name: "propose", body: "Submit a full-manifest edit; it's validated against the data before a byte is written." },
   { name: "diff", body: "See exactly what changes. Nothing is written yet." },
-  { name: "apply", body: "Write it, snapshotting the prior version as a checkpoint." },
+  { name: "apply", body: "Write it, and snapshot the prior version as a checkpoint." },
   { name: "rollback", body: "Restore any checkpoint, byte for byte, if something looks off." },
 ];
 
@@ -64,9 +64,9 @@ const loopSteps = [
  * The documentation landing page. The hero uses Vocs' own HomePage primitives
  * so it inherits the site theme; the sections below are themed with the Vocs
  * color variables (which resolve against the docs' forced dark scheme) and carry
- * the one idea worth proving on a marketing page: a manifest on the left renders,
- * live, into a real island on the right — drawn by the same runtime renderer the
- * docs and a production dashboard share.
+ * the one idea worth proving on a marketing page: a manifest on the left renders
+ * into a real island on the right, drawn by the same runtime renderer the docs
+ * and a production dashboard share.
  */
 export function Home() {
   return (
@@ -74,7 +74,7 @@ export function Home() {
       <HomePage.Root className="oi-hero">
         <HomePage.Logo />
         <HomePage.Tagline>
-          Dashboards an agent can maintain for months — without them rotting.
+          Dashboards an agent can maintain for months, without them rotting.
         </HomePage.Tagline>
         <HomePage.Description>
           OpenIslands is a local-first runtime for agent-maintained data apps. You bind typed
@@ -110,7 +110,6 @@ export function Home() {
           <figure className="oi-panel oi-panel-live">
             <figcaption className="oi-panel-head">
               <span translate="no">metric.kpi</span>
-              <span className="oi-live-badge">live</span>
             </figcaption>
             <LiveIsland
               type="metric.kpi"
@@ -121,13 +120,12 @@ export function Home() {
           </figure>
         </div>
         <p className="oi-caption">
-          That tile is live — the same renderer that ships in the runtime, drawn right here from
-          the data the manifest points at. Not a screenshot.
+          That tile is the runtime's own renderer, drawn right here from the data the manifest
+          points at. Not a screenshot.
         </p>
         <figure className="oi-panel oi-panel-live oi-panel-wide">
           <figcaption className="oi-panel-head">
             <span translate="no">timeseries.line</span>
-            <span className="oi-live-badge">live</span>
           </figcaption>
           <LiveIsland
             type="timeseries.line"
@@ -163,7 +161,7 @@ export function Home() {
         <h2 className="oi-section-title">An agent edits the manifest, not your rendering code.</h2>
         <p className="oi-lede">
           The MCP server is read-many, write-one. Every change runs the same path, and every
-          write is reversible — so an agent can maintain the app without ever leaving it broken.
+          write is reversible, so an agent can maintain the app without ever leaving it broken.
         </p>
         <ol className="oi-loop">
           {loopSteps.map((step) => (

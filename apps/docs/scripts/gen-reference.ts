@@ -8,7 +8,7 @@
  *
  * MDX safety: MDX parses bare `{` as a JS expression and bare `<` as JSX, so
  * every schema shape with braces/angle-brackets goes inside a fenced code block
- * and table cells stay free of unescaped `{ } < >` — types are rendered as
+ * and table cells stay free of unescaped `{ } < >`. Types are rendered as
  * prose (`string`, `array of …`, `"a" | "b"`) or backtick code-spans.
  */
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -44,7 +44,7 @@ function literal(value: unknown): string {
 }
 
 /**
- * Render a JSON Schema node as a short, MDX-safe type phrase — no braces or
+ * Render a JSON Schema node as a short, MDX-safe type phrase with no braces or
  * angle brackets, suitable for a backtick code-span in a table cell. Unions
  * become `a | b`, arrays become `array of <item>`, and a nested object is
  * summarized as `object` (its own shape is documented where it's defined).
@@ -82,7 +82,7 @@ interface FieldRow {
 /**
  * Flatten an island's JSON Schema into table rows. The `type` discriminant is
  * dropped (it's always the island's literal type). A property is user-required
- * only when it's in `required` AND has no `default` — Zod lists default-bearing
+ * only when it's in `required` AND has no `default`. Zod lists default-bearing
  * fields as required because they're present after parse, but the author may
  * omit them.
  */
@@ -134,9 +134,9 @@ function fieldTable(rows: FieldRow[]): string {
  */
 const DESCRIPTION_FALLBACKS: Partial<Record<IslandType, string>> = {
   "table.grid":
-    "A paginated table of raw rows — use when exact values matter; supports column formats, click-to-open details, and collapsible groups.",
+    "A paginated table of raw rows: use when exact values matter; supports column formats, click-to-open details, and collapsible groups.",
   "timeline.feed":
-    "A reverse-chronological feed of events — use for logs and activity; supports detail dialogs and collapsible groups, and a rich row layout (header value, inline stats, meta footer) when highlight/stats/footer are set.",
+    "A reverse-chronological feed of events: use for logs and activity; supports detail dialogs and collapsible groups, and a rich row layout (header value, inline stats, meta footer) when highlight/stats/footer are set.",
 };
 
 function islandSection(type: IslandType): string {
@@ -163,15 +163,15 @@ function buildDoc(): string {
 
   return `# Manifest Reference
 
-{/* Generated from @openislands/schema by scripts/gen-reference.ts — do not edit by hand. */}
+{/* Generated from @openislands/schema by scripts/gen-reference.ts. Do not edit by hand. */}
 
-> Generated from \`@openislands/schema\` by \`scripts/gen-reference.ts\` — do not edit by hand.
+> Generated from \`@openislands/schema\` by \`scripts/gen-reference.ts\`. Do not edit by hand.
 > Run \`pnpm gen:reference\` to refresh it after a schema change.
 
 A manifest is the typed declaration of a data app: the datasets it reads, the pages
 and islands that render them, and the optional actions and connectors that write to
 them. This page documents every field the schema accepts. The schema is the single
-source of truth — the CLI, runtime, and MCP server all validate against it, so an
+source of truth: the CLI, runtime, and MCP server all validate against it, so an
 island bound to a field that doesn't exist fails the build and names the island.
 
 ## Top level
@@ -180,13 +180,13 @@ A manifest is a JSON object with the following top-level shape:
 
 \`\`\`jsonc
 {
-  "version": 1,                  // required — the manifest format version, always 1
-  "title": "Finance Overview",   // required — the app title
-  "icon": "wallet",              // optional — the app's tile icon in the workspace app rail
-  "datasets": { /* ... */ },     // required — named data sources (see Datasets)
-  "pages": [ /* ... */ ],        // required — the app's pages (see Pages)
-  "actions": { /* ... */ },      // optional — typed data writes (see Actions)
-  "connectors": { /* ... */ }    // optional — vendored sync integrations (see Connectors)
+  "version": 1,                  // required: the manifest format version, always 1
+  "title": "Finance Overview",   // required: the app title
+  "icon": "wallet",              // optional: the app's tile icon in the workspace app rail
+  "datasets": { /* ... */ },     // required: named data sources (see Datasets)
+  "pages": [ /* ... */ ],        // required: the app's pages (see Pages)
+  "actions": { /* ... */ },      // optional: typed data writes (see Actions)
+  "connectors": { /* ... */ }    // optional: vendored sync integrations (see Connectors)
 }
 \`\`\`
 
@@ -202,8 +202,8 @@ A manifest is a JSON object with the following top-level shape:
 
 ## Datasets
 
-\`datasets\` maps each dataset name to a source. A dataset is one of three shapes — a
-file source, a SQL transform, or a SQLite table:
+\`datasets\` maps each dataset name to a source. A dataset is one of three shapes: a
+file source, a SQL transform, or a SQLite table.
 
 \`\`\`jsonc
 "datasets": {
@@ -221,20 +221,20 @@ file source, a SQL transform, or a SQLite table:
 | \`description\` | \`string\` | no | Free-form note describing the dataset. |
 
 A \`.sqlite\` / \`.db\` source requires \`table\`; supplying \`table\` for any other source is
-a validation error. A \`sql\` dataset is derived and read-only — it can never be the
+a validation error. A \`sql\` dataset is derived and read-only; it can never be the
 target of an action or a connector.
 
 ## Pages
 
-Each entry in \`pages\` is a page — one sidebar entry. A page holds **either** a flat
+Each entry in \`pages\` is a page: one sidebar entry. A page holds **either** a flat
 \`islands\` list **or** tabbed \`groups\`, never both:
 
 \`\`\`jsonc
 {
-  "id": "overview",       // required — unique page id, used in the URL
-  "title": "Overview",    // optional — sidebar label
-  "icon": "house",        // optional — one of the curated page icons
-  "filters": [ /* ... */ ],  // optional — page-level shared filters (see Page filters)
+  "id": "overview",       // required: unique page id, used in the URL
+  "title": "Overview",    // optional: sidebar label
+  "icon": "house",        // optional: one of the curated page icons
+  "filters": [ /* ... */ ],  // optional: page-level shared filters (see Page filters)
   "islands": [ /* ... */ ]   // a page has EITHER islands ...
   // "groups": [ { "id": "...", "title": "...", "islands": [ /* ... */ ] } ] // ... OR groups
 }
@@ -277,7 +277,7 @@ ignore it.
 ## Actions
 
 An **action** is a manifest-declared, typed write into a \`source\` dataset (a \`sql\`
-dataset is never writable). \`mode: "insert"\` appends rows — an append for a flat file
+dataset is never writable). \`mode: "insert"\` appends rows: an append for a flat file
 (CSV / JSON(L)), an \`INSERT\` for a SQLite table. The row schema is derived from the
 live data; \`fields\` only narrows or annotates it.
 
@@ -322,8 +322,8 @@ lives in the user's project at \`<module>/index.ts\`; the manifest declares an i
   "whoop": {
     "module": "connectors/whoop",                  // connector directory, relative to project root
     "datasets": { "recovery": "whoop_recovery" },  // connector output name → manifest dataset name
-    "schedule": "6h",                              // optional — sync interval, overrides the connector default
-    "config": { "lookbackDays": 30 }               // optional — validated against the connector's own schema
+    "schedule": "6h",                              // optional: sync interval, overrides the connector default
+    "config": { "lookbackDays": 30 }               // optional: validated against the connector's own schema
   }
 }
 \`\`\`
@@ -345,7 +345,7 @@ Each island in a page's \`islands\` (or a group's \`islands\`) is an object disc
 by its \`type\`. Below is every built-in type with its minimum grid span and the fields
 its config accepts. \`id\`, \`title\`, and \`span\` are common optional fields on every
 data-bound island; \`span\` is a 1–12 grid column count and must not fall below the
-island's minimum span. Bind an island only to fields that exist in its dataset — a
+island's minimum span. Bind an island only to fields that exist in its dataset; a
 missing field fails validation and names the island.
 
 A \`layout.row\` is a structural wrapper: it holds other islands and forces them onto
@@ -357,7 +357,7 @@ ${islandSections}
 ## Custom islands
 
 When no built-in fits, register a renderer in the user's project under
-\`components/custom/<type>/\` — the directory name is the island type. An unknown island
+\`components/custom/<type>/\`; the directory name is the island type. An unknown island
 \`type\` is accepted as a custom island: with a \`schema.ts\` its manifest config is
 validated by the same machinery that guards the built-ins; without one it renders a
 placeholder. See the [Custom Islands](/islands/custom) guide for the full shape.

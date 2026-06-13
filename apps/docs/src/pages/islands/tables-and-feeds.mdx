@@ -6,13 +6,13 @@ import { sampleData } from "../../components/sampleData";
 
 Three islands for rows you read one at a time: a **table** when exact values matter, a
 **feed** for things that happened in order, and a **search box** to find one row in many.
-Each is a real island below — bind it to fields in your data and the runtime renders it. See
+Each is a real island below: bind it to fields in your data and the runtime renders it. See
 the [islands overview](/islands/overview) for the full registry.
 
 ## `table.grid`
 
 **What it is.** A paginated table of raw rows. **When to use it:** when the exact numbers
-matter and a chart would hide them — positions, transactions, line items. It needs only a
+matter and a chart would hide them: positions, transactions, line items. It needs only a
 `dataset`; with no `columns` it shows every column in the data.
 
 <LiveIsland
@@ -58,16 +58,16 @@ matter and a chart would hide them — positions, transactions, line items. It n
 
 **Key options.**
 
-- `columns: [{ field, label?, format? }]` — pick and order the columns and set their display
+- `columns: [{ field, label?, format? }]`: pick and order the columns and set their display
   format (`eur`, `kg`, `int`, `pct`, `date`, `datetime`, `time`). Omit it to show every column.
-- `details: [{ field, label?, format? }]` — fields *hidden* from the row and revealed in a
+- `details: [{ field, label?, format? }]`: fields *hidden* from the row and revealed in a
   click-to-open dialog. Declaring `details` makes each row clickable.
-- `groupBy: { field, titleField?, subtitleField? }` — render rows as collapsible sections by
+- `groupBy: { field, titleField?, subtitleField? }`: render rows as collapsible sections by
   `field`; the section title and subtitle read from each group's first row.
-- `drilldown: { island, match }` — embed another island in the row-details dialog, its rows
+- `drilldown: { island, match }`: embed another island in the row-details dialog, its rows
   filtered by `match` (a map of *drilldown-dataset column* → *clicked-row field*). One level
-  deep — a drilldown island has no drilldown of its own.
-- `expand: false` — drop the see-all dialog and render every row inline (default `true`).
+  deep: a drilldown island has no drilldown of its own.
+- `expand: false`: drop the see-all dialog and render every row inline (default `true`).
 
 <Callout variant="tip">
 `details` and `drilldown` only do something once a row is clickable. A row becomes clickable
@@ -78,7 +78,7 @@ neither.
 ## `timeline.feed`
 
 **What it is.** A reverse-chronological feed of rows. **When to use it:** logs, activity
-streams, a journal — anything that reads as "what happened, newest first." It needs a `ts`
+streams, a journal, anything that reads as "what happened, newest first." It needs a `ts`
 (the timestamp) and a `titleField`; the runtime sorts so the newest row is on top and renders
 each timestamp smartly (a date-only value as `Jun 11, 2026`, a real timestamp as
 `Jun 11, 21:30`).
@@ -122,17 +122,17 @@ each timestamp smartly (a date-only value as `Jun 11, 2026`, a real timestamp as
 
 **Key options.**
 
-- `detail` — a secondary string shown next to the title. `kind` — a category string.
-- `details` / `drilldown` / `expand` — exactly as on `table.grid` (click-to-open dialog,
+- `detail`: a secondary string shown next to the title. `kind`: a category string.
+- `details` / `drilldown` / `expand`: exactly as on `table.grid` (click-to-open dialog,
   embedded filtered island, render-all toggle).
-- `groupBy: { field, titleField?, subtitleField? }` — collapsible sections, same shape as on
+- `groupBy: { field, titleField?, subtitleField? }`: collapsible sections, same shape as on
   the table.
 - **Rich rows.** Setting any of `highlight`, `stats`, or `footer` switches a row from a single
   line to a header/stats/footer layout:
-  - `highlight: { field, format?, unit? }` — an emphasized value pinned to the right of the title.
-  - `stats: [{ field, label?, format?, unit?, color? }]` — labeled inline stats under the title;
+  - `highlight: { field, format?, unit? }`: an emphasized value pinned to the right of the title.
+  - `stats: [{ field, label?, format?, unit?, color? }]`: labeled inline stats under the title;
     labels default to a palette, `color` pins one.
-  - `footer: [{ field, label?, format?, unit?, pill? }]` — a meta line led by the timestamp;
+  - `footer: [{ field, label?, format?, unit?, pill? }]`: a meta line led by the timestamp;
     `pill: true` renders the value as a badge.
 
 ```jsonc
@@ -198,13 +198,13 @@ opens that row's full details.
 
 **Key options.**
 
-- `fields: [...]` — the columns a query matches against (substring, case-insensitive).
-- `titleField` — what each result row shows; `detail` — an optional secondary line under it.
-- `placeholder?` — the input's placeholder text.
-- `limit?` — the maximum number of visible results (default `10`).
+- `fields: [...]`: the columns a query matches against (substring, case-insensitive).
+- `titleField`: what each result row shows; `detail`: an optional secondary line under it.
+- `placeholder?`: the input's placeholder text.
+- `limit?`: the maximum number of visible results (default `10`).
 
 <Callout variant="note">
-`search.box` matches with a plain client-side substring over the rows already loaded — it isn't
+`search.box` matches with a plain client-side substring over the rows already loaded; it isn't
 a SQL `LIKE` and doesn't page through the whole dataset. For a huge table, shape a narrower
 `sql` dataset for it to search.
 </Callout>
