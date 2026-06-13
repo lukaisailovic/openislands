@@ -1,0 +1,9 @@
+incident_id,ts,service,title,severity,status,detected_by,duration_min,summary
+INC-1042,2026-05-26 03:12,payments,Elevated decline rate on card charges,Sev-2,resolved,alert,142,Upstream processor timeouts spiked declines
+INC-1043,2026-05-29 18:40,gateway,Edge latency regression after rollout,Sev-2,resolved,canary,76,Bad cache config shipped in gw build
+INC-1044,2026-06-02 11:55,search,Stale results after index rebuild,Sev-3,resolved,customer,58,Index swap left replicas serving old shards
+INC-1045,2026-06-04 12:30,payments,Failed deploy left charges queued,Sev-1,resolved,oncall,63,Migration lock blocked the charge worker
+INC-1046,2026-06-08 09:25,gateway,Connection pool exhaustion at peak,Sev-1,resolved,alert,118,Rollout halved pool size under load
+INC-1047,2026-06-10 21:05,notifications,Push delivery backlog,Sev-3,resolved,alert,34,Provider rate limit throttled the sender
+INC-1048,2026-06-11 15:22,search,Query errors after schema change,Sev-2,resolved,canary,41,Renamed field broke the ranking query
+INC-1049,2026-06-12 14:48,gateway,Intermittent 5xx on auth callbacks,Sev-2,monitoring,oncall,95,Retries masking a slow downstream auth path

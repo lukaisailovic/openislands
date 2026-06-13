@@ -1,0 +1,11 @@
+{
+  "name": "operations-example",
+  "private": true,
+  "type": "module",
+  "description": "Editor types only — OpenIslands runs this project without node_modules.",
+  "devDependencies": {
+    "@openislands/connector-kit": "workspace:*",
+    "@types/react": "^19.2.0",
+    "zod": "^4.4.3"
+  }
+}

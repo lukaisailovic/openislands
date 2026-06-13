@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "title": "Operations",
+  "icon": "pulse",
+  "datasets": {
+    "summary": { "source": "data/summary.csv", "description": "weekly ops KPI rollup: open issues, p95 latency, uptime, error budget, deploys, change-fail rate, MTTR" },
+    "throughput": { "source": "data/throughput.csv", "description": "weekly shipped vs committed, with carry-over" },
+    "burndown": { "source": "data/burndown.csv", "description": "current sprint: remaining vs ideal by day" },
+    "services": { "source": "data/services.csv", "description": "service health snapshot: status, p95, error rate, RPS, uptime, owning team" },
+    "services_health": { "sql": "models/transforms/services_health.sql", "description": "services with a derived status signal, problems first" },
+    "slo": { "source": "data/slo.csv", "description": "per-service SLOs: objective, target, current, error budget remaining" },
+    "slo_status": { "sql": "models/transforms/slo_status.sql", "description": "SLOs with a breach signal, worst first" },
+    "deploys": { "source": "data/deploys.csv", "description": "deploy log (written via log_deploy)" },
+    "deploys_daily": { "sql": "models/transforms/deploys_daily.sql", "description": "deploys per day with success rate" },
+    "incidents": { "source": "data/incidents.csv", "description": "incidents (written via log_incident)" },
+    "incident_updates": { "source": "data/incident_updates.csv", "description": "timeline updates per incident (written via log_incident_update)" },
+    "oncall": { "source": "data/oncall.csv", "description": "on-call rotation by week and team" }
+  },
+  "actions": {
+    "log_incident": {
+      "dataset": "incidents", "mode": "insert",
+      "description": "Open or record an incident; follow with log_incident_update using the same incident_id",
+      "fields": {
+        "severity": { "enum": ["Sev-1", "Sev-2", "Sev-3"] },
+        "status": { "enum": ["investigating", "monitoring", "resolved"] },
+        "detected_by": { "enum": ["alert", "customer", "oncall", "canary"] }
+      }
+    },
+    "log_incident_update": {
+      "dataset": "incident_updates", "mode": "insert",
+      "description": "Append a status update to an incident; incident_id must match an existing incidents row",
+      "fields": {
+        "status": { "enum": ["investigating", "monitoring", "resolved"] }
+      }
+    },
+    "log_deploy": {
+      "dataset": "deploys", "mode": "insert",
+      "description": "Record a deploy",
+      "fields": {
+        "status": { "enum": ["success", "rolled_back", "failed"] },
+        "env": { "enum": ["production", "staging"] }
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "icon": "chart-line",
+      "filters": [
+        { "id": "period", "type": "daterange", "label": "Period", "bind": { "burndown": "day" } }
+      ],
+      "islands": [
+        { "type": "layout.row", "id": "kpis", "islands": [
+          { "type": "metric.kpi", "title": "Shipped this week", "dataset": "throughput", "value": "shipped", "compareTo": "prev", "format": "int", "span": 3 },
+          { "type": "metric.kpi", "title": "Open issues", "dataset": "summary", "value": "open_issues", "compareTo": "prev", "format": "int", "span": 3 },
+          { "type": "metric.kpi", "title": "p95 latency", "dataset": "summary", "value": "p95_latency_ms", "compareTo": "prev", "format": "int", "unit": "ms", "span": 3 },
+          { "type": "metric.kpi", "title": "Uptime", "dataset": "summary", "value": "uptime_pct", "compareTo": "prev", "format": "pct", "span": 3 }
+        ] },
+        { "type": "layout.row", "id": "delivery", "islands": [
+          { "type": "timeseries.line", "title": "Throughput vs commitment", "dataset": "throughput", "x": "week", "y": "shipped", "options": { "goalField": "committed" }, "span": 7 },
+          { "type": "gauge.goal", "title": "Error budget remaining", "dataset": "summary", "value": "error_budget_pct", "goal": { "min": 0.2 }, "format": "pct", "label": "remaining", "span": 5 }
+        ] },
+        { "type": "layout.row", "id": "sprint", "islands": [
+          { "type": "timeseries.line", "title": "Sprint burndown", "dataset": "burndown", "x": "day", "y": "remaining", "options": { "goalField": "ideal" }, "span": 6 },
+          { "type": "category.bar", "title": "Deploys per day", "dataset": "deploys_daily", "x": "day", "y": "total", "span": 6 }
+        ] },
+        { "type": "timeline.feed", "title": "Recent incidents", "dataset": "incidents", "ts": "ts", "titleField": "title", "span": 12,
+          "stats": [ { "field": "duration_min", "label": "Duration", "unit": "min" } ],
+          "footer": [ { "field": "severity", "pill": true }, { "field": "status" }, { "field": "detected_by", "label": "detected by" } ],
+          "details": [ { "field": "service", "label": "Service" }, { "field": "summary", "label": "Summary" } ],
+          "drilldown": {
+            "island": { "type": "table.grid", "title": "Updates", "dataset": "incident_updates", "columns": [
+              { "field": "ts", "label": "Time" },
+              { "field": "status", "label": "Status" },
+              { "field": "author", "label": "Author" },
+              { "field": "update", "label": "Update" }
+            ] },
+            "match": { "incident_id": "incident_id" }
+          } }
+      ]
+    },
+    {
+      "id": "services",
+      "title": "Services",
+      "icon": "pulse",
+      "groups": [
+        {
+          "id": "health",
+          "title": "Health",
+          "islands": [
+            { "type": "search.box", "title": "Find a service", "dataset": "services", "fields": ["service", "team", "owner"], "titleField": "service", "detail": "team", "placeholder": "Search services…", "span": 4 },
+            { "type": "table.grid", "title": "Service health", "dataset": "services_health", "span": 12, "columns": [
+              { "field": "service", "label": "Service" },
+              { "field": "team", "label": "Team" },
+              { "field": "status", "label": "Status", "status": { "signal": "status_signal" } },
+              { "field": "p95_ms", "label": "p95 (ms)", "format": "int" },
+              { "field": "error_rate", "label": "Error rate", "format": "pct" },
+              { "field": "rps", "label": "RPS", "format": "int" },
+              { "field": "uptime_pct", "label": "Uptime", "format": "pct" },
+              { "field": "owner", "label": "Owner" }
+            ] },
+            { "type": "layout.row", "id": "svc-charts", "islands": [
+              { "type": "category.bar", "title": "p95 by service", "dataset": "services", "x": "service", "y": "p95_ms", "span": 6 },
+              { "type": "breakdown.treemap", "title": "Traffic share (RPS)", "dataset": "services", "label": "service", "value": "rps", "span": 6 }
+            ] }
+          ]
+        },
+        {
+          "id": "slos",
+          "title": "SLOs",
+          "islands": [
+            { "type": "table.grid", "title": "Service objectives", "dataset": "slo_status", "span": 7, "columns": [
+              { "field": "service", "label": "Service" },
+              { "field": "objective", "label": "Objective" },
+              { "field": "target_pct", "label": "Target", "format": "pct" },
+              { "field": "current_pct", "label": "Current", "format": "pct", "status": { "signal": "signal" } },
+              { "field": "budget_remaining_pct", "label": "Budget left", "format": "pct" }
+            ] },
+            { "type": "note.card", "title": "Error budget policy", "span": 5, "markdown": "## Error budget policy\n\n- Each service targets its SLO over a rolling 28-day window.\n- **Budget left** is how much of the allowed unreliability remains.\n- At **0%**, the service freezes feature deploys — reliability work only — until it recovers.\n- A red **Current** cell means the service is below target right now." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "delivery",
+      "title": "Delivery",
+      "icon": "chart-bar",
+      "filters": [
+        { "id": "period", "type": "daterange", "label": "Period", "bind": { "deploys": "ts" } }
+      ],
+      "islands": [
+        { "type": "layout.row", "id": "delivery-kpis", "islands": [
+          { "type": "metric.kpi", "title": "Deploys this week", "dataset": "summary", "value": "deploys", "compareTo": "prev", "format": "int", "span": 3 },
+          { "type": "metric.kpi", "title": "Change failure rate", "dataset": "summary", "value": "change_fail_pct", "compareTo": "prev", "format": "pct", "span": 3 },
+          { "type": "metric.kpi", "title": "MTTR", "dataset": "summary", "value": "mttr_min", "compareTo": "prev", "format": "int", "unit": "min", "span": 3 },
+          { "type": "metric.kpi", "title": "Carried over", "dataset": "throughput", "value": "carried_over", "compareTo": "prev", "format": "int", "span": 3 }
+        ] },
+        { "type": "layout.row", "id": "delivery-trends", "islands": [
+          { "type": "timeseries.line", "title": "Throughput vs commitment", "dataset": "throughput", "x": "week", "y": ["shipped", "committed"], "span": 6 },
+          { "type": "timeseries.line", "title": "Deploy success rate", "dataset": "deploys_daily", "x": "day", "y": "success_rate", "span": 6 }
+        ] },
+        { "type": "timeline.feed", "title": "Deploys", "dataset": "deploys", "ts": "ts", "titleField": "service", "span": 12,
+          "stats": [ { "field": "duration_min", "label": "Duration", "unit": "min" } ],
+          "footer": [ { "field": "version" }, { "field": "status", "pill": true }, { "field": "env" }, { "field": "author" } ],
+          "details": [ { "field": "deploy_id", "label": "Deploy" } ] }
+      ]
+    },
+    {
+      "id": "oncall",
+      "title": "On-call & docs",
+      "icon": "files",
+      "islands": [
+        { "type": "table.grid", "title": "On-call rotation", "dataset": "oncall", "span": 12, "columns": [
+          { "field": "week", "label": "Week" },
+          { "field": "team", "label": "Team" },
+          { "field": "primary", "label": "Primary" },
+          { "field": "secondary", "label": "Secondary" },
+          { "field": "handoff", "label": "Handoff" }
+        ] },
+        { "type": "layout.row", "id": "docs", "islands": [
+          { "type": "note.card", "title": "Runbook highlights", "span": 6, "markdown": "## When the pager fires\n\n1. **Ack within 5 min** — owning it means driving it.\n2. **Mitigate before diagnosing** — roll back the last deploy, fail over, or scale out.\n3. **Communicate** — post in #incidents; for Sev-1 open a bridge and page the owner.\n4. **Postmortem** within 48h for any Sev-1/2.\n\nFull detail in the runbook →" },
+          { "type": "source.doc", "title": "Runbook", "kind": "markdown", "file": "docs/runbook.md", "span": 6 }
+        ] },
+        { "type": "layout.row", "id": "links", "islands": [
+          { "type": "source.doc", "title": "Status page", "kind": "link", "href": "https://status.example.com", "span": 4 },
+          { "type": "source.doc", "title": "Dashboards", "kind": "link", "href": "https://grafana.example.com", "span": 4 },
+          { "type": "source.doc", "title": "Postmortems", "kind": "link", "href": "https://wiki.example.com/postmortems", "span": 4 }
+        ] }
+      ]
+    }
+  ]
+}

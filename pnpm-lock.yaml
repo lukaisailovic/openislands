@@ -57,6 +57,18 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
+  apps/examples/operations:
+    devDependencies:
+      '@openislands/connector-kit':
+        specifier: workspace:*
+        version: link:../../../packages/connector-kit
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.17
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   packages/cli:
     dependencies:
       '@openislands/compiler':

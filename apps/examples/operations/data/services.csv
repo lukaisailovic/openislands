@@ -1,0 +1,7 @@
+service,team,status,p95_ms,error_rate,rps,uptime_pct,owner
+gateway,platform,degraded,340,0.012,5200,0.9962,Mara Ito
+auth,identity,healthy,120,0.002,3100,0.9994,Sven Holt
+payments,payments,healthy,180,0.004,1400,0.9991,Dana Reyes
+search,discovery,healthy,210,0.003,2600,0.9989,Omar Singh
+notifications,growth,healthy,95,0.001,900,0.9998,Lena Vogt
+ingest,data,healthy,160,0.005,420,0.9985,Priya Nair

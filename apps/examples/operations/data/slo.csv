@@ -1,0 +1,7 @@
+service,objective,target_pct,current_pct,budget_remaining_pct
+gateway,99.9% availability,0.999,0.9962,0.0
+auth,99.9% availability,0.999,0.9994,0.41
+payments,p95 under 200ms,0.99,0.9985,0.62
+search,99.5% availability,0.995,0.9942,0.0
+notifications,99.9% availability,0.999,0.9998,0.83
+ingest,99.5% availability,0.995,0.9985,0.71

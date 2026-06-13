@@ -34,6 +34,15 @@ apps/examples/*/data/**
 !apps/examples/*/data/whoop_recovery.csv
 !apps/examples/*/data/whoop_sleep.csv
 !apps/examples/*/data/whoop_workouts.csv
+!apps/examples/*/data/summary.csv
+!apps/examples/*/data/throughput.csv
+!apps/examples/*/data/burndown.csv
+!apps/examples/*/data/services.csv
+!apps/examples/*/data/slo.csv
+!apps/examples/*/data/deploys.csv
+!apps/examples/*/data/incidents.csv
+!apps/examples/*/data/incident_updates.csv
+!apps/examples/*/data/oncall.csv
 .openislands/
 
 # Connector secrets — never commit; .env.example documents the keys.
