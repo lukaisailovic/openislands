@@ -97,7 +97,7 @@ function buildOptions(spec: HeatmapSpec, heatmap: HeatmapData, dark: boolean): K
 
   return {
     backgroundColor: "transparent",
-    grid: { left: 8, right: 8, top: 16, bottom: 8, containLabel: true },
+    grid: { left: 8, right: 8, top: 16, bottom: 48, containLabel: true },
     tooltip: {
       ...tooltip({ trigger: "item", dark, format: spec.format }),
       dangerousHtmlFormatter: (params) => {
@@ -128,6 +128,7 @@ function buildOptions(spec: HeatmapSpec, heatmap: HeatmapData, dark: boolean): K
       orient: "horizontal",
       left: "center",
       bottom: 0,
+      itemWidth: 12,
       inRange: { color: gradient },
       textStyle: { color: axisLabelColor },
       formatter: (value) => labelFor(Number(value)),
