@@ -1,6 +1,18 @@
-import { Badge, Button, ClipboardText, Dialog, Table, Tabs, Text, Tooltip, cn } from "@cloudflare/kumo";
+import {
+  Badge,
+  Button,
+  ClipboardText,
+  Collapsible,
+  Dialog,
+  Table,
+  Tabs,
+  Text,
+  Tooltip,
+  cn,
+} from "@cloudflare/kumo";
 import {
   CalendarBlank,
+  CaretRight,
   Database,
   FileCsv,
   FileSql,
@@ -11,8 +23,9 @@ import {
   ToggleLeft,
   X,
 } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Column, ColumnType, Row, Scalar } from "@openislands/compiler";
+import { useAppId } from "../client/useAppId.js";
 import { formatTimestamp, toNumber } from "../islands/format.js";
 
 const PREVIEW_ROWS = 8;
@@ -52,9 +65,16 @@ function extensionOf(path: string): string {
 
 /** Picks the header glyph + format badge from the source kind and file extension. */
 function sourceFormat(source: SourceInfo): { Glyph: Icon; label: string } {
-  if (source.kind === "sql") return { Glyph: FileSql, label: "SQL transform" };
+  if (source.kind === "sql") return { Glyph: FileSql, label: "Transform" };
   const ext = extensionOf(source.path ?? source.name);
   return FILE_FORMATS[ext] ?? { Glyph: FileText, label: ext ? ext.toUpperCase() : "File" };
+}
+
+/** A plain-language line explaining how this island gets its data. */
+function sourceSummary(source: SourceInfo): string {
+  if (source.kind === "sql") return "This data is calculated from your files by a transform.";
+  if (source.table) return "This data is read from a table inside a database file.";
+  return "This data is read directly from a file.";
 }
 
 function previewText(value: Scalar, type: ColumnType): string {
@@ -65,6 +85,57 @@ function previewText(value: Scalar, type: ColumnType): string {
     if (n !== null) return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(n);
   }
   return String(value);
+}
+
+/** Lazily fetches and reveals a transform's query — only when the reader opens it. */
+function TransformDisclosure({ dataset }: { dataset: string }) {
+  const appId = useAppId();
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<{ sql?: string; error?: string }>({});
+  const loaded = state.sql !== undefined || state.error !== undefined;
+
+  useEffect(() => {
+    if (!open || loaded) return;
+    let cancelled = false;
+    const url = `/api/source?app=${encodeURIComponent(appId)}&dataset=${encodeURIComponent(dataset)}`;
+    fetch(url, { headers: { accept: "application/json" } })
+      .then(async (res) => {
+        const body = (await res.json()) as { sql?: string; error?: string };
+        if (cancelled) return;
+        if (!res.ok || body.error) setState({ error: body.error ?? `HTTP ${res.status}` });
+        else setState({ sql: body.sql ?? "" });
+      })
+      .catch((err: Error) => !cancelled && setState({ error: err.message }));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, loaded, appId, dataset]);
+
+  return (
+    <Collapsible.Root open={open} onOpenChange={setOpen}>
+      <Collapsible.Trigger
+        render={<Button variant="ghost" size="sm" className="-ml-2 self-start text-kumo-subtle" />}
+      >
+        <CaretRight size={13} className={cn("transition-transform", open && "rotate-90")} />
+        {open ? "Hide how it's calculated" : "Show how it's calculated"}
+      </Collapsible.Trigger>
+      <Collapsible.Panel className="mt-1">
+        {state.error ? (
+          <Text variant="secondary" size="xs" className="text-kumo-danger">
+            {state.error}
+          </Text>
+        ) : state.sql === undefined ? (
+          <Text variant="secondary" size="xs">
+            loading…
+          </Text>
+        ) : (
+          <pre className="max-h-64 overflow-auto whitespace-pre rounded-md border border-kumo-hairline bg-kumo-recessed p-3 font-mono text-xs leading-relaxed text-kumo-default">
+            {state.sql}
+          </pre>
+        )}
+      </Collapsible.Panel>
+    </Collapsible.Root>
+  );
 }
 
 function SchemaList({ columns }: { columns: Column[] }) {
@@ -207,16 +278,24 @@ export function SourceButton({ source }: { source: SourceInfo }) {
         </div>
 
         {source.path ? (
-          <div className="flex flex-col gap-1.5 border-b border-kumo-hairline px-5 py-3">
-            <Text variant="secondary" size="xs" className="uppercase tracking-wide">
-              {source.kind === "sql" ? "Transform" : "File"}
-              {source.table ? ` · table ${source.table}` : ""}
+          <div className="flex flex-col gap-2 border-b border-kumo-hairline px-5 py-3">
+            <Text variant="secondary" size="xs">
+              {sourceSummary(source)}
             </Text>
             <ClipboardText
               text={source.path}
               size="sm"
               tooltip={{ text: "Copy path", copiedText: "Copied" }}
             />
+            {source.table ? (
+              <Text variant="secondary" size="xs">
+                table{" "}
+                <Text as="code" variant="mono" size="xs" className="text-kumo-strong">
+                  {source.table}
+                </Text>
+              </Text>
+            ) : null}
+            {source.kind === "sql" ? <TransformDisclosure dataset={source.name} /> : null}
           </div>
         ) : null}
 
