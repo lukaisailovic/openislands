@@ -1,6 +1,7 @@
-service,status,p95_ms,error_rate,owner
-gateway,degraded,340,0.012,platform
-auth,healthy,90,0.001,identity
-payments,healthy,150,0.002,payments
-search,healthy,210,0.004,discovery
-notifications,healthy,120,0.003,growth
+service,status,p95_ms,error_rate,owner,uptime_pct
+gateway,degraded,340,0.012,platform,0.9962
+auth,healthy,90,0.001,identity,0.9998
+payments,healthy,150,0.002,payments,0.9995
+search,healthy,210,0.004,discovery,0.9990
+notifications,healthy,120,0.003,growth,0.9993
+ingest,healthy,180,0.005,data,0.9989

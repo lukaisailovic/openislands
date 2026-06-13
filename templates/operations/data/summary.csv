@@ -1,2 +1,7 @@
-open_issues,throughput_week,p95_latency_ms,uptime_pct
-37,18,212,0.9993
+week,open_issues,p95_latency_ms,uptime_pct,error_budget_pct,deploys_week
+2026-W18,44,238,0.9981,0.81,36
+2026-W19,41,225,0.9988,0.74,39
+2026-W20,39,219,0.9990,0.70,41
+2026-W21,40,228,0.9985,0.66,38
+2026-W22,38,216,0.9991,0.64,44
+2026-W23,37,212,0.9993,0.62,42

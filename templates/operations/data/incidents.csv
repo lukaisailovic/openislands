@@ -1,4 +1,7 @@
-ts,title,severity
-2026-06-02,Gateway latency spike,Sev-2
-2026-05-28,Auth token refresh errors,Sev-3
-2026-05-21,Search index lag,Sev-3
+ts,service,title,severity,status,summary
+2026-06-11,gateway,Gateway latency spike,Sev-2,monitoring,p95 climbed past 300ms after the 14:00 deploy; rolled back and watching.
+2026-06-08,auth,Token refresh errors,Sev-3,resolved,Clock skew on one auth node caused intermittent 401s; node recycled.
+2026-06-04,search,Search index lag,Sev-3,resolved,Reindex job backed up; scaled the worker pool and drained the queue.
+2026-06-02,payments,Elevated decline rate,Sev-2,resolved,Upstream processor timeouts; failed over to the secondary processor.
+2026-05-28,ingest,Pipeline backpressure,Sev-3,resolved,Consumer lag spiked during a traffic burst; added partitions.
+2026-05-22,gateway,Brief 5xx burst,Sev-1,resolved,A bad config push returned 500s for 4 minutes; auto-rollback caught it.
