@@ -270,3 +270,51 @@ field. The `x`/`y` fields (and their `xFormat`/`format`) drive the axes and the 
 - `size`: a numeric field scaling each point into a bubble; omit for fixed-size dots.
 - `label`: names each point in the tooltip; `colors` overrides the per-series palette;
   `xFormat`/`format` style the x/y values.
+
+## distribution.heatmap
+
+A matrix heatmap: one value across two categorical dimensions, each cell shaded on a
+continuous color scale. Reach for it to show day-by-hour activity, a cohort grid, or a
+correlation matrix. Pre-aggregate to one value per `x`/`y` cell in SQL; the renderer keeps
+the last value seen for a repeated cell.
+
+<LiveIsland
+  type="distribution.heatmap"
+  config={{ title: "Orders by weekday and hour", x: "hour", y: "weekday", value: "orders", format: "int" }}
+  data={sampleData(
+    [
+      { name: "hour", type: "varchar" },
+      { name: "weekday", type: "varchar" },
+      { name: "orders", type: "double" },
+    ],
+    [
+      { hour: "9am", weekday: "Mon", orders: 12 },
+      { hour: "12pm", weekday: "Mon", orders: 34 },
+      { hour: "3pm", weekday: "Mon", orders: 21 },
+      { hour: "6pm", weekday: "Mon", orders: 47 },
+      { hour: "9am", weekday: "Tue", orders: 9 },
+      { hour: "12pm", weekday: "Tue", orders: 41 },
+      { hour: "3pm", weekday: "Tue", orders: 28 },
+      { hour: "6pm", weekday: "Tue", orders: 53 },
+    ],
+    "orders_by_hour",
+  )}
+/>
+
+```jsonc
+{
+  "type": "distribution.heatmap",
+  "title": "Orders by weekday and hour",
+  "dataset": "orders_by_hour",
+  "x": "hour",
+  "y": "weekday",
+  "value": "orders",
+  "format": "int"
+}
+```
+
+- `x`, `y`: the column and row category fields (both required); a cell sits at each `x`/`y` pair.
+- `value`: the numeric field shading each cell (required); the scale spans its range, and
+  cell labels show for small grids.
+- `colors`: gradient stops overriding the default blues; `format` styles cells, tooltip,
+  and the legend.

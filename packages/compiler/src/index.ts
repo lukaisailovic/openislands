@@ -647,6 +647,11 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.size);
       add(island.label);
       break;
+    case "distribution.heatmap":
+      add(island.x);
+      add(island.y);
+      add(island.value);
+      break;
     // note.card, source.doc, and custom islands bind to no dataset
   }
   return { dataset, fields: [...fields] };

@@ -25,6 +25,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
     },
     "category.pie": { type, title: "New pie", dataset: "TODO", label: "TODO", value: "TODO" },
     "correlation.scatter": { type, title: "New scatter", dataset: "TODO", x: "TODO", y: "TODO" },
+    "distribution.heatmap": { type, title: "New heatmap", dataset: "TODO", x: "TODO", y: "TODO", value: "TODO" },
     "table.grid": { type, title: "New table", dataset: "TODO" },
     "timeline.feed": {
       type,

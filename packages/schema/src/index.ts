@@ -92,6 +92,20 @@ export const BreakdownTreemap = z.object({
     .describe("CSS colors cycled across top-level nodes, overriding the default palette"),
 }).describe("A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.");
 
+export const DistributionHeatmap = z.object({
+  type: z.literal("distribution.heatmap"),
+  ...baseFields,
+  dataset: z.string(),
+  x: z.string().describe("column-category field (x axis)"),
+  y: z.string().describe("row-category field (y axis)"),
+  value: z.string().describe("numeric field mapped to each cell's color"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("gradient color stops for the scale, overriding the default"),
+  format: ValueFormat.optional(),
+}).describe("A matrix heatmap — use to show one value across two categorical dimensions (x × y), shaded by a continuous color scale.");
+
 export const CorrelationScatter = z.object({
   type: z.literal("correlation.scatter"),
   ...baseFields,
@@ -307,6 +321,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,
+  DistributionHeatmap,
   TableGridBase,
   TimelineFeedBase,
   GaugeRings,
@@ -337,6 +352,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
   "breakdown.treemap": BreakdownTreemap,
+  "distribution.heatmap": DistributionHeatmap,
   "correlation.scatter": CorrelationScatter,
   "category.pie": CategoryPie,
   "table.grid": TableGrid,
@@ -369,6 +385,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "category.bar": 4,
   "timeline.feed": 4,
   "breakdown.treemap": 4,
+  "distribution.heatmap": 4,
   "correlation.scatter": 4,
   "category.pie": 3,
   "table.grid": 5,
@@ -381,6 +398,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,
+  DistributionHeatmap,
   TableGrid,
   TimelineFeed,
   GaugeRings,

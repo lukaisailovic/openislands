@@ -5,6 +5,7 @@ import { CategoryBar } from "../src/islands/CategoryBar.js";
 import { CategoryPie } from "../src/islands/CategoryPie.js";
 import { CorrelationScatter } from "../src/islands/CorrelationScatter.js";
 import { CustomPlaceholder } from "../src/islands/CustomPlaceholder.js";
+import { DistributionHeatmap } from "../src/islands/DistributionHeatmap.js";
 import { GaugeGoal } from "../src/islands/GaugeGoal.js";
 import { GaugeMeter } from "../src/islands/GaugeMeter.js";
 import { GaugeRings } from "../src/islands/GaugeRings.js";
@@ -23,6 +24,9 @@ const goalGauge = (value: number) => (
 );
 
 describe("island registry", () => {
+  it("resolves the distribution.heatmap renderer", () => {
+    expect(resolveRenderer("distribution.heatmap")).toBe(DistributionHeatmap);
+  });
   it("resolves ported built-in renderers", () => {
     expect(resolveRenderer("note.card")).toBe(NoteCard);
     expect(resolveRenderer("table.grid")).toBe(TableGrid);
