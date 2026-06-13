@@ -1,0 +1,105 @@
+import { LiveIsland } from "../../components/LiveIsland.client";
+import { netWorthByMonth } from "../../components/sampleData";
+
+# The Manifest
+
+An OpenIslands app is a typed **manifest**: a JSON declaration of reusable visual
+**islands** bound to **typed data contracts** built from files you own. You edit the
+manifest. You never write rendering code — the runtime owns that. The payoff is durability:
+a manifest is small, declarative, and validated, so an agent can maintain it for months
+without the dashboard rotting.
+
+## The skeleton
+
+Every manifest has the same spine — a version, a title, the datasets it reads, and the pages
+that render them:
+
+```jsonc
+{
+  "version": 1,
+  "title": "Finance Overview",
+  "icon": "wallet",                                          // optional — the app's tile icon
+  "datasets": {
+    "net_worth": { "source": "data/net_worth_monthly.csv" } // a file you own (see Data Contracts)
+  },
+  "pages": [
+    {
+      "id": "overview",                                      // one sidebar entry per page
+      "icon": "house",
+      "islands": [
+        {
+          "type": "metric.kpi",
+          "title": "Net worth",
+          "dataset": "net_worth",                            // names a dataset above
+          "value": "net_worth_eur",                          // a field that must exist in it
+          "compareTo": "prev",
+          "format": "eur",
+          "span": 3
+        }
+      ]
+    }
+  ]
+}
+```
+
+That single KPI island, fed its data, renders exactly like this — the docs run the real
+renderer, not a screenshot:
+
+<LiveIsland
+  type="metric.kpi"
+  config={{ title: "Net worth", value: "net_worth_eur", compareTo: "prev", format: "eur" }}
+  data={netWorthByMonth}
+  height={160}
+/>
+
+## Pages and groups
+
+Each page is one entry in the left sidebar (a single-page app stays chrome-free). A page
+holds **either** a flat list of `islands` **or** tabbed `groups` — never both. Groups render
+as tabs under the page header, deep-linked via `?group=<id>`:
+
+```jsonc
+{
+  "id": "holdings",
+  "groups": [
+    { "id": "positions", "title": "Positions", "islands": [ /* ... */ ] },
+    { "id": "activity",  "title": "Activity",   "islands": [ /* ... */ ] }
+  ]
+}
+```
+
+A page may also declare shared `filters` — a date range rendered in the page header that
+re-queries every island bound to the filtered column at once. See the
+[Manifest Reference](/reference/manifest) for the full shape.
+
+## Spans and the grid
+
+Every page (and every group) is a 12-column grid. An island's `span` is how many columns it
+takes, from 1 to 12. Each island type has a **minimum span** below which it stops being
+legible — a `table.grid` needs 5, most charts need 4, a `metric.kpi` needs 2. Set a span
+below the minimum and `validate` rejects it with a named error like *"span 1 is below the
+minimum 4 for timeseries.line."* The runtime also floors spans responsively, so a tile never
+renders narrower than its usable width on a small screen.
+
+## Fail loudly
+
+The manifest's job is to make a broken dashboard **impossible to ship silently.** Every
+island binds to named fields, and `validate` (and the agent's `propose_edit`) checks each one
+against the live, DuckDB-inferred columns of the data:
+
+- Bind to a field that exists → the island renders.
+- Bind to a field that **doesn't** → the build fails and **names the page, the island, and
+  the missing field.** You never get a silently-wrong chart pointed at a column that isn't
+  there.
+
+That check is the safety net the whole design rests on. Keep the manifest declarative — no
+data transforms inside island configs; shaping lives in the [data layer](/concepts/data-contracts) —
+and the net stays taut.
+
+## Where to go next
+
+- [Data Contracts](/concepts/data-contracts) — datasets, SQL transforms, and the binding
+  check in detail.
+- [Islands](/islands/overview) — every built-in island and its required fields, with live
+  previews.
+- [Manifest Reference](/reference/manifest) — the exhaustive, schema-generated field list.

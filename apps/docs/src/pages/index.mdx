@@ -1,0 +1,20 @@
+# OpenIslands
+
+OpenIslands is a local-first compiler and runtime for **agent-maintained data apps**. An
+app is a typed **manifest** of reusable visual **islands** bound to **typed data contracts**
+built from files you own. You edit the manifest; you never write rendering code. The point
+is that an agent can maintain a dashboard for months without it rotting.
+
+- **Declarative.** A dashboard is a JSON manifest of islands bound to datasets.
+- **Typed and safe.** Every binding is checked against your live data — a missing field
+  fails the build and names the island, so a dashboard can't silently break.
+- **Local-first.** Your files are the source of truth. The runtime queries them live; there
+  are no snapshots to drift out of date.
+
+## Start here
+
+- [Getting Started](/getting-started) — scaffold an app and serve it.
+- [The Manifest](/concepts/manifest) — how an app is described.
+- [Data Contracts](/concepts/data-contracts) — how islands bind to data.
+- [Islands](/islands/overview) — the visual building blocks, with live previews.
+- [MCP Server](/mcp) — the safe edit loop an agent uses.

@@ -11,7 +11,8 @@
   "engines": { "node": ">=20" },
   "packageManager": "pnpm@11.5.1",
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build --filter=!@openislands/docs",
+    "build:docs": "pnpm --filter @openislands/docs build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "oxlint",

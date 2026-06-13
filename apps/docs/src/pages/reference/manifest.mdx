@@ -1,0 +1,405 @@
+# Manifest Reference
+
+{/* Generated from @openislands/schema by scripts/gen-reference.ts — do not edit by hand. */}
+
+> Generated from `@openislands/schema` by `scripts/gen-reference.ts` — do not edit by hand.
+> Run `pnpm gen:reference` to refresh it after a schema change.
+
+A manifest is the typed declaration of a data app: the datasets it reads, the pages
+and islands that render them, and the optional actions and connectors that write to
+them. This page documents every field the schema accepts. The schema is the single
+source of truth — the CLI, runtime, and MCP server all validate against it, so an
+island bound to a field that doesn't exist fails the build and names the island.
+
+## Top level
+
+A manifest is a JSON object with the following top-level shape:
+
+```jsonc
+{
+  "version": 1,                  // required — the manifest format version, always 1
+  "title": "Finance Overview",   // required — the app title
+  "icon": "wallet",              // optional — the app's tile icon in the workspace app rail
+  "datasets": { /* ... */ },     // required — named data sources (see Datasets)
+  "pages": [ /* ... */ ],        // required — the app's pages (see Pages)
+  "actions": { /* ... */ },      // optional — typed data writes (see Actions)
+  "connectors": { /* ... */ }    // optional — vendored sync integrations (see Connectors)
+}
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `version` | `1` | yes | The manifest format version. Always `1`. |
+| `title` | `string` | yes | The app title, shown in the chrome. |
+| `icon` | `string` | no | One of the curated icon names, used for the app's tile in the workspace app rail. |
+| `datasets` | `object` | yes | A map of dataset name to a dataset declaration. |
+| `pages` | `array of object` | yes | The app's pages, one sidebar entry each. |
+| `actions` | `object` | no | A map of action name to an action declaration. |
+| `connectors` | `object` | no | A map of connector name to a connector declaration. |
+
+## Datasets
+
+`datasets` maps each dataset name to a source. A dataset is one of three shapes — a
+file source, a SQL transform, or a SQLite table:
+
+```jsonc
+"datasets": {
+  "net_worth": { "source": "data/net_worth.csv" },            // a CSV / JSON / Parquet / SQLite file
+  "monthly":   { "sql": "models/transforms/monthly.sql" },    // a DuckDB SQL transform over other datasets
+  "tracks":    { "source": "data/library.sqlite", "table": "tracks" } // a table within a SQLite database
+}
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | `string` | no | Path to a CSV / JSON / Parquet / SQLite file. One of `source` or `sql` is required. |
+| `sql` | `string` | no | Path to a DuckDB SQL transform. One of `source` or `sql` is required. |
+| `table` | `string` | no | The table within a `.sqlite` / `.db` source. Required for a SQLite source; an error on any other source. |
+| `description` | `string` | no | Free-form note describing the dataset. |
+
+A `.sqlite` / `.db` source requires `table`; supplying `table` for any other source is
+a validation error. A `sql` dataset is derived and read-only — it can never be the
+target of an action or a connector.
+
+## Pages
+
+Each entry in `pages` is a page — one sidebar entry. A page holds **either** a flat
+`islands` list **or** tabbed `groups`, never both:
+
+```jsonc
+{
+  "id": "overview",       // required — unique page id, used in the URL
+  "title": "Overview",    // optional — sidebar label
+  "icon": "house",        // optional — one of the curated page icons
+  "filters": [ /* ... */ ],  // optional — page-level shared filters (see Page filters)
+  "islands": [ /* ... */ ]   // a page has EITHER islands ...
+  // "groups": [ { "id": "...", "title": "...", "islands": [ /* ... */ ] } ] // ... OR groups
+}
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | yes | Unique page id, used in the `/<appId>/<pageId>` URL. |
+| `title` | `string` | no | Sidebar label for the page. |
+| `icon` | `string` | no | One of the curated page icons (e.g. `house`, `chart-line`, `wallet`). |
+| `filters` | `array of object` | no | Page-level shared date-range filters. |
+| `islands` | `array of object` | no | The page's islands. Exactly one of `islands` or `groups`. |
+| `groups` | `array of object` | no | Tabbed groups of islands. Exactly one of `islands` or `groups`. |
+
+A **group** is `{ id, title?, islands }`: a string `id`, an optional `title`, and its own
+`islands` list. Groups render as tabs under the page header, deep-linked via
+`?group=<id>`.
+
+### Page filters
+
+A page's optional `filters` declare shared controls in the page header. v1 supports a
+date range; `bind` maps each affected dataset to the date column the range applies to.
+Islands whose `dataset` appears in `bind` re-query when the range changes; the rest
+ignore it.
+
+```jsonc
+"filters": [
+  { "id": "period", "type": "daterange", "label": "Period",
+    "bind": { "net_worth": "month", "transactions": "ts" } }
+]
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | yes | Unique filter id within the page. |
+| `type` | `"daterange"` | yes | The filter kind. v1 supports `daterange`. |
+| `label` | `string` | no | Label shown on the control. |
+| `bind` | `object` | yes | A map of dataset name to the date column the range applies to. Each column is validated against the live data. |
+
+## Actions
+
+An **action** is a manifest-declared, typed write into a `source` dataset (a `sql`
+dataset is never writable). `mode: "insert"` appends rows — an append for a flat file
+(CSV / JSON(L)), an `INSERT` for a SQLite table. The row schema is derived from the
+live data; `fields` only narrows or annotates it.
+
+```jsonc
+"actions": {
+  "log_meal": {
+    "dataset": "meals",
+    "mode": "insert",
+    "fields": {
+      "meal_type": { "enum": ["breakfast", "lunch", "dinner", "snack"] }
+    }
+  }
+}
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `dataset` | `string` | yes | The `source` dataset to insert into. Must not be a `sql` dataset. |
+| `mode` | `"insert"` | yes | The write mode. v1 supports `insert`. |
+| `fields` | `object` | no | Per-column overrides on the derived row schema (see field overrides). |
+| `description` | `string` | no | Free-form note describing the action. |
+
+A **field override** (`fields.<column>`) narrows one column of the derived row schema:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `type` | `"string" \| "number" \| "boolean" \| "date"` | no | Constrain the column to one type. |
+| `enum` | `array of string` | no | Constrain the column to a fixed set of string values. |
+| `min` | `number` | no | Minimum for a numeric column. |
+| `max` | `number` | no | Maximum for a numeric column. |
+| `default` | `string \| number \| boolean` | no | Value applied when the column is omitted. |
+| `description` | `string` | no | Free-form note describing the column. |
+
+## Connectors
+
+A **connector** is a vendored integration that syncs a provider's data into `source`
+datasets through the same checkpointed write path actions use. The integration code
+lives in the user's project at `<module>/index.ts`; the manifest declares an instance:
+
+```jsonc
+"connectors": {
+  "whoop": {
+    "module": "connectors/whoop",                  // connector directory, relative to project root
+    "datasets": { "recovery": "whoop_recovery" },  // connector output name → manifest dataset name
+    "schedule": "6h",                              // optional — sync interval, overrides the connector default
+    "config": { "lookbackDays": 30 }               // optional — validated against the connector's own schema
+  }
+}
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `module` | `string` | yes | Connector directory relative to project root, e.g. `connectors/whoop`. |
+| `datasets` | `object` | yes | A map of connector output name to the writable `source` dataset it syncs into. |
+| `schedule` | `string` | no | Sync interval, overriding the connector default (`<n>m`, `<n>h`, `<n>d`, or ms-style). |
+| `config` | `object` | no | Free-form config, validated against the connector's own schema at load time. |
+| `description` | `string` | no | Free-form note describing the connector instance. |
+
+Each `datasets` value must name a writable `source` dataset (never a `sql` dataset),
+and each key must be one of the connector's declared outputs.
+
+## Islands
+
+Each island in a page's `islands` (or a group's `islands`) is an object discriminated
+by its `type`. Below is every built-in type with its minimum grid span and the fields
+its config accepts. `id`, `title`, and `span` are common optional fields on every
+data-bound island; `span` is a 1–12 grid column count and must not fall below the
+island's minimum span. Bind an island only to fields that exist in its dataset — a
+missing field fails validation and names the island.
+
+A `layout.row` is a structural wrapper: it holds other islands and forces them onto
+their own full-width grid row. It carries no `span`, `title`, or data binding, and it
+cannot nest another `layout.row`.
+
+### `metric.kpi`
+
+A single headline number, optionally with a delta vs the previous row or a target — use for at-a-glance KPIs.
+
+**Minimum span:** 2
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `value` | `string` | yes | field holding the headline value |
+| `compareTo` | `string` | no | 'prev', 'none', or a field name |
+| `target` | `string` | no | field holding a target to compare against |
+| `unit` | `string` | no |  |
+| `format` | `"eur" \| "kg" \| "int" \| "pct" \| "date" \| "datetime" \| "time"` | no |  |
+| `color` | `string` | no | 6-digit hex color (e.g. "#22C55E") for the sparkline, overriding the default palette |
+
+### `timeseries.line`
+
+A line chart over time — use for trends; supports multiple y fields, a series split, and a goal line.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `x` | `string` | yes | date/time field |
+| `y` | `string \| array of string` | yes | numeric field(s) |
+| `series` | `string` | no | field to split series by |
+| `colors` | `array of string` | no | CSS colors per y field (or per series value, in first-seen order), overriding the default palette |
+| `options` | `object` | no |  |
+
+### `category.bar`
+
+A bar chart across categories — use to compare discrete groups; supports grouped or stacked bars.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `x` | `string` | yes | category field |
+| `y` | `string` | yes | numeric field |
+| `group` | `string` | no |  |
+| `stacked` | `boolean` | no |  |
+| `colors` | `array of string` | no | CSS colors per series (group value or y field), overriding the default palette |
+
+### `breakdown.treemap`
+
+A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `label` | `string` | yes |  |
+| `value` | `string` | yes |  |
+| `parent` | `string` | no | field for hierarchy parent |
+| `colors` | `array of string` | no | CSS colors cycled across top-level nodes, overriding the default palette |
+
+### `table.grid`
+
+A paginated table of raw rows — use when exact values matter; supports column formats, click-to-open details, and collapsible groups.
+
+**Minimum span:** 5
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `columns` | `array of object` | no |  |
+| `details` | `array of object` | no | fields hidden from the row, revealed by clicking it |
+| `groupBy` | `object` | no |  |
+| `pageSize` | `number` | no |  |
+| `expand` | `boolean` | no | offer the see-all / expand dialog; false renders every row inline instead |
+| `drilldown` | `object` | no | an embedded island shown in a clicked row's details dialog, filtered to that row |
+
+### `timeline.feed`
+
+A reverse-chronological feed of events — use for logs and activity; supports detail dialogs and collapsible groups, and a rich row layout (header value, inline stats, meta footer) when highlight/stats/footer are set.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `ts` | `string` | yes | timestamp field |
+| `titleField` | `string` | yes |  |
+| `detail` | `string` | no |  |
+| `kind` | `string` | no |  |
+| `details` | `array of object` | no | fields hidden from the row, revealed by clicking it |
+| `groupBy` | `object` | no |  |
+| `highlight` | `object` | no | right-aligned emphasized value in the row header |
+| `stats` | `array of object` | no | labeled inline stats rendered under the title |
+| `footer` | `array of object` | no | small meta line below the row; the row timestamp always leads it. Setting any of highlight/stats/footer switches the row from a single line to the rich layout |
+| `expand` | `boolean` | no | offer the see-all dialog; false renders every row inline instead |
+| `drilldown` | `object` | no | an embedded island shown in a clicked row's details dialog, filtered to that row |
+
+### `gauge.rings`
+
+Up to four concentric progress rings read off the last row — use for tracking several goals or budgets at once.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `rings` | `array of object` | yes | concentric rings, outermost first; reads the last row (max 4 for legible geometry) |
+
+### `gauge.goal`
+
+A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range.
+
+**Minimum span:** 2
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `value` | `string` | yes | field holding the current value |
+| `goal` | `object` | yes | at least one bound; both = a target band |
+| `label` | `string` | no |  |
+| `unit` | `string` | no |  |
+| `format` | `"eur" \| "kg" \| "int" \| "pct" \| "date" \| "datetime" \| "time"` | no |  |
+
+### `gauge.meter`
+
+One or more horizontal usage meters read off the last row — use for quota- or capacity-style values.
+
+**Minimum span:** 3
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `meters` | `array of object` | yes | horizontal usage bars, top to bottom; reads the last row |
+
+### `search.box`
+
+A search box over a dataset — typing matches rows case-insensitively across `fields`, results drop down as an autocomplete; selecting a result opens the row's details.
+
+**Minimum span:** 3
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `fields` | `array of string` | yes | columns the query matches against |
+| `titleField` | `string` | yes | field each result shows |
+| `detail` | `string` | no | field shown as a secondary line under each result |
+| `placeholder` | `string` | no |  |
+| `limit` | `number` | no | max visible results |
+
+### `note.card`
+
+A static markdown card with no data binding — use for commentary, instructions, or context between islands.
+
+**Minimum span:** 3
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `markdown` | `string` | yes |  |
+
+### `source.doc`
+
+An embedded file or external link (pdf, markdown, image, link) — use to surface source documents alongside the data.
+
+**Minimum span:** 2
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `file` | `string` | no |  |
+| `href` | `string` | no |  |
+| `kind` | `"pdf" \| "markdown" \| "image" \| "link"` | no |  |
+
+## Custom islands
+
+When no built-in fits, register a renderer in the user's project under
+`components/custom/<type>/` — the directory name is the island type. An unknown island
+`type` is accepted as a custom island: with a `schema.ts` its manifest config is
+validated by the same machinery that guards the built-ins; without one it renders a
+placeholder. See the [Custom Islands](/islands/custom) guide for the full shape.

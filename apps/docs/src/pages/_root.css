@@ -1,0 +1,37 @@
+@source "../../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@import "@cloudflare/kumo/styles";
+@import "tailwindcss";
+
+/*
+ * Vocs stores the active theme on the document's color-scheme rather than a
+ * .dark class, so the islands' dark: utilities follow the docs theme toggle.
+ */
+@custom-variant dark (&:where(:root[style*='color-scheme:dark'] *, :root[style*='color-scheme: dark'] *));
+
+@theme {
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/*
+ * A dashboard tile that frames a live island the way the runtime's IslandCard
+ * does — a bordered, padded surface on the recessed background — so an island
+ * embedded in a docs page reads like one lifted out of a real dashboard.
+ */
+.oi-tile-frame {
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.75rem;
+  border: 1px solid var(--kumo-color-border, light-dark(#e5e7eb, #2f3645));
+  background: var(--kumo-color-surface, light-dark(#ffffff, #1a1f29));
+  padding: 1rem 1.25rem;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.oi-tile-frame > * {
+  min-width: 0;
+  flex: 1;
+}

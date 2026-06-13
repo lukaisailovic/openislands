@@ -1,0 +1,231 @@
+import { Callout } from "vocs";
+import { LiveIsland } from "../../components/LiveIsland.client";
+import { sampleData } from "../../components/sampleData";
+
+# Metrics & Gauges
+
+Four islands for at-a-glance numbers: one headline KPI and three gauges. Each previewed
+below is a real OpenIslands renderer — the same code a live dashboard runs, not a
+screenshot. For the full registry, see [Islands](/islands/overview).
+
+<Callout variant="tip">
+  Every gauge reads the **last row** of its dataset, so feed it data already aggregated to
+  the value you want shown — the most recent day, the current month-to-date, the running
+  total. The KPI reads the last row too, plus the row before it for the delta.
+</Callout>
+
+## metric.kpi
+
+A single headline number off the last row, with an optional delta versus the previous row
+and a sparkline drawn over the time axis it finds. Reach for it when one number — net
+worth, MRR, today's steps — deserves the top of a page.
+
+<LiveIsland
+  type="metric.kpi"
+  config={{ title: "Monthly revenue", value: "revenue_eur", compareTo: "prev", format: "eur" }}
+  data={sampleData(
+    [
+      { name: "month", type: "date" },
+      { name: "revenue_eur", type: "double" },
+    ],
+    [
+      { month: "2026-01-01", revenue_eur: 42_300 },
+      { month: "2026-02-01", revenue_eur: 45_100 },
+      { month: "2026-03-01", revenue_eur: 44_200 },
+      { month: "2026-04-01", revenue_eur: 49_800 },
+      { month: "2026-05-01", revenue_eur: 52_600 },
+      { month: "2026-06-01", revenue_eur: 56_400 },
+    ],
+    "revenue",
+  )}
+/>
+
+```jsonc
+{
+  "type": "metric.kpi",
+  "title": "Monthly revenue",
+  "dataset": "revenue",
+  "value": "revenue_eur",
+  "compareTo": "prev",
+  "format": "eur"
+}
+```
+
+- `value` — the field holding the headline number (required).
+- `compareTo` — `"prev"` draws a delta against the previous row; a field name compares to
+  that column instead; `"none"` (the default) shows no delta.
+- `target` — a field holding a target to measure the value against.
+- `format` — `eur`, `kg`, `int`, `pct`, `date`, `datetime`, or `time`; `unit` appends a
+  free-form suffix.
+- `color` — a 6-digit hex (e.g. `"#22C55E"`) for the sparkline, overriding the palette.
+
+## gauge.rings
+
+Up to four concentric progress rings read off the last row — the dashboard view when
+several goals or budgets share one tile. Each ring fills toward its `max` (a column or a
+fixed number); the center shows the outermost ring's percentage.
+
+<LiveIsland
+  type="gauge.rings"
+  config={{
+    title: "Today's targets",
+    rings: [
+      { value: "calories", max: "calorie_goal", label: "Calories" },
+      { value: "protein_g", max: "protein_goal", label: "Protein" },
+      { value: "water_ml", max: "water_goal", label: "Water" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "calories", type: "bigint" },
+      { name: "calorie_goal", type: "bigint" },
+      { name: "protein_g", type: "bigint" },
+      { name: "protein_goal", type: "bigint" },
+      { name: "water_ml", type: "bigint" },
+      { name: "water_goal", type: "bigint" },
+    ],
+    [
+      {
+        day: "2026-06-13",
+        calories: 1_840,
+        calorie_goal: 2_200,
+        protein_g: 118,
+        protein_goal: 140,
+        water_ml: 1_500,
+        water_goal: 2_000,
+      },
+    ],
+    "daily_targets",
+  )}
+/>
+
+```jsonc
+{
+  "type": "gauge.rings",
+  "title": "Today's targets",
+  "dataset": "daily_targets",
+  "rings": [
+    { "value": "calories", "max": "calorie_goal", "label": "Calories" },
+    { "value": "protein_g", "max": "protein_goal", "label": "Protein" },
+    { "value": "water_ml", "max": "water_goal", "label": "Water" }
+  ]
+}
+```
+
+- `rings` — one to four rings, outermost first (required). Each is
+  `{ value, max, label?, color?, direction? }`.
+- `max` — a column name or a fixed number; the goal the ring fills toward.
+- `direction` — `atLeast` (default, fills toward a goal) or `atMost` (a budget: crossing
+  the limit turns the ring danger-red).
+- `color` — a CSS color per ring; defaults to a built-in palette.
+
+## gauge.goal
+
+A single ring comparing the last row's value to a goal or a target band. Use it for one
+number with a defined good range — within the band reads success-green, under it amber,
+over it danger-red.
+
+<LiveIsland
+  type="gauge.goal"
+  config={{
+    title: "Resting heart rate",
+    value: "rhr",
+    goal: { min: 50, max: 60 },
+    unit: "bpm",
+    format: "int",
+  }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "rhr", type: "bigint" },
+    ],
+    [
+      { day: "2026-06-11", rhr: 58 },
+      { day: "2026-06-12", rhr: 55 },
+      { day: "2026-06-13", rhr: 54 },
+    ],
+    "vitals",
+  )}
+/>
+
+```jsonc
+{
+  "type": "gauge.goal",
+  "title": "Resting heart rate",
+  "dataset": "vitals",
+  "value": "rhr",
+  "goal": { "min": 50, "max": 60 },
+  "unit": "bpm",
+  "format": "int"
+}
+```
+
+- `value` — the field holding the current number (required).
+- `goal` — at least one of `min` / `max`, each a column or a number; supplying both makes
+  a target band.
+- `format` — same set as `metric.kpi`; `unit`/`label` annotate the ring.
+
+<Callout variant="note">
+  `gauge.goal` needs at least one bound — declaring `goal` with neither `min` nor `max` is
+  a named validation error, so a misconfigured goal fails the build rather than rendering
+  blank.
+</Callout>
+
+## gauge.meter
+
+One or more horizontal usage bars read off the last row — the quota- or capacity-style
+view. Each meter shows `value / max` and fills proportionally in its own color.
+
+<LiveIsland
+  type="gauge.meter"
+  config={{
+    title: "Plan usage",
+    meters: [
+      { value: "storage_gb", max: "storage_cap", label: "Storage (GB)" },
+      { value: "seats_used", max: "seat_cap", label: "Seats" },
+      { value: "api_calls", max: "api_cap", label: "API calls" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "storage_gb", type: "bigint" },
+      { name: "storage_cap", type: "bigint" },
+      { name: "seats_used", type: "bigint" },
+      { name: "seat_cap", type: "bigint" },
+      { name: "api_calls", type: "bigint" },
+      { name: "api_cap", type: "bigint" },
+    ],
+    [
+      {
+        day: "2026-06-13",
+        storage_gb: 64,
+        storage_cap: 100,
+        seats_used: 18,
+        seat_cap: 25,
+        api_calls: 82_000,
+        api_cap: 100_000,
+      },
+    ],
+    "plan_usage",
+  )}
+/>
+
+```jsonc
+{
+  "type": "gauge.meter",
+  "title": "Plan usage",
+  "dataset": "plan_usage",
+  "meters": [
+    { "value": "storage_gb", "max": "storage_cap", "label": "Storage (GB)" },
+    { "value": "seats_used", "max": "seat_cap", "label": "Seats" },
+    { "value": "api_calls", "max": "api_cap", "label": "API calls" }
+  ]
+}
+```
+
+- `meters` — one or more bars, top to bottom (required). Each is
+  `{ value, max, label?, color? }`.
+- `max` — a column name or a fixed number; the capacity the bar fills against.
+- `color` — a CSS color per meter; defaults to a built-in palette.

@@ -1,6 +1,11 @@
 packages:
   - "packages/*"
+  - "apps/docs"
   - "apps/examples/*"
 
 allowBuilds:
+  es5-ext: false
   esbuild: true
+
+minimumReleaseAgeExclude:
+  - vocs@2.0.13
