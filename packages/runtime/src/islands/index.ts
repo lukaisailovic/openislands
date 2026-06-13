@@ -11,4 +11,5 @@ export {
   resolveRenderer,
 } from "./registry.js";
 export { formatValue } from "./format.js";
-export type { IslandConfig, IslandRenderProps, QueryPayload } from "../types.js";
+export { IslandCard, type SourceInfo } from "../components/primitives.js";
+export type { Column, IslandConfig, IslandRenderProps, QueryPayload } from "../types.js";
