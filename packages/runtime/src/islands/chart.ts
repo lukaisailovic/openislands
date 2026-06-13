@@ -101,7 +101,7 @@ function tooltipRow(marker: string, name: string | undefined, value: string): st
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;line-height:1.6;">${label}${valueCell}</div>`;
 }
 
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

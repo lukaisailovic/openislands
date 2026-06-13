@@ -92,6 +92,23 @@ export const BreakdownTreemap = z.object({
     .describe("CSS colors cycled across top-level nodes, overriding the default palette"),
 }).describe("A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.");
 
+export const CorrelationScatter = z.object({
+  type: z.literal("correlation.scatter"),
+  ...baseFields,
+  dataset: z.string(),
+  x: z.string().describe("numeric field for the x axis"),
+  y: z.string().describe("numeric field for the y axis"),
+  series: z.string().optional().describe("field splitting points into one colored series per distinct value"),
+  size: z.string().optional().describe("numeric field driving bubble radius; omit for fixed-size dots"),
+  label: z.string().optional().describe("field naming each point, shown in the tooltip"),
+  colors: z
+    .array(z.string())
+    .optional()
+    .describe("CSS colors per series, overriding the default palette"),
+  format: ValueFormat.optional().describe("formats the y value (axis + tooltip)"),
+  xFormat: ValueFormat.optional().describe("formats the x value (axis + tooltip)"),
+}).describe("A scatter or bubble plot of two numeric fields — use to explore correlation; split into series by a field and size points by a third.");
+
 export const CategoryPie = z.object({
   type: z.literal("category.pie"),
   ...baseFields,
@@ -289,6 +306,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   CategoryBar,
   BreakdownTreemap,
   CategoryPie,
+  CorrelationScatter,
   TableGridBase,
   TimelineFeedBase,
   GaugeRings,
@@ -319,6 +337,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
   "breakdown.treemap": BreakdownTreemap,
+  "correlation.scatter": CorrelationScatter,
   "category.pie": CategoryPie,
   "table.grid": TableGrid,
   "timeline.feed": TimelineFeed,
@@ -350,6 +369,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "category.bar": 4,
   "timeline.feed": 4,
   "breakdown.treemap": 4,
+  "correlation.scatter": 4,
   "category.pie": 3,
   "table.grid": 5,
 };
@@ -360,6 +380,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   CategoryBar,
   BreakdownTreemap,
   CategoryPie,
+  CorrelationScatter,
   TableGrid,
   TimelineFeed,
   GaugeRings,

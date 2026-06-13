@@ -655,6 +655,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
   "category.bar": { type: "category.bar", dataset: "d", x: "cat", y: "amount", group: "region", stacked: true },
   "breakdown.treemap": { type: "breakdown.treemap", dataset: "d", label: "name", value: "size", parent: "group" },
   "category.pie": { type: "category.pie", dataset: "d", label: "cat", value: "amount", donut: true, format: "eur" },
+  "correlation.scatter": { type: "correlation.scatter", dataset: "d", x: "spend", y: "conv", series: "channel", size: "customers", label: "channel", format: "int", xFormat: "eur" },
   "table.grid": {
     type: "table.grid",
     dataset: "d",
@@ -687,6 +688,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "category.bar": { type: "category.bar", dataset: "d", x: "cat" },
   "breakdown.treemap": { type: "breakdown.treemap", dataset: "d", label: "name" },
   "category.pie": { type: "category.pie", dataset: "d", label: "cat" },
+  "correlation.scatter": { type: "correlation.scatter", dataset: "d", x: "spend" },
   "table.grid": { type: "table.grid", columns: [{ field: "f", format: "usd" }] },
   "timeline.feed": { type: "timeline.feed", dataset: "d", ts: "at", titleField: "t", stats: [{ label: "P" }] },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [] },

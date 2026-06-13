@@ -208,3 +208,65 @@ many of them.
 - `donut`: `true` cuts an inner radius (a donut); omit for a full pie.
 - `colors`: CSS colors per slice (largest-first), overriding the palette; `format` styles
   the tooltip values.
+
+## correlation.scatter
+
+A scatter plot of two numeric fields, for exploring how they relate. Split points into
+colored series with `series`, and turn dots into bubbles by pointing `size` at a third
+field. The `x`/`y` fields (and their `xFormat`/`format`) drive the axes and the tooltip.
+
+<LiveIsland
+  type="correlation.scatter"
+  config={{
+    title: "Spend vs. conversions by channel",
+    x: "marketing_spend_eur",
+    y: "conversions",
+    series: "channel",
+    size: "customers",
+    label: "channel",
+    xFormat: "eur",
+    format: "int",
+  }}
+  data={sampleData(
+    [
+      { name: "channel", type: "varchar" },
+      { name: "marketing_spend_eur", type: "double" },
+      { name: "conversions", type: "double" },
+      { name: "customers", type: "double" },
+    ],
+    [
+      { channel: "Paid Search", marketing_spend_eur: 4200, conversions: 180, customers: 120 },
+      { channel: "Paid Social", marketing_spend_eur: 3100, conversions: 140, customers: 95 },
+      { channel: "Display", marketing_spend_eur: 1800, conversions: 60, customers: 40 },
+      { channel: "Email", marketing_spend_eur: 600, conversions: 75, customers: 70 },
+      { channel: "Affiliate", marketing_spend_eur: 2400, conversions: 110, customers: 88 },
+      { channel: "Paid Search", marketing_spend_eur: 5600, conversions: 230, customers: 160 },
+      { channel: "Paid Social", marketing_spend_eur: 4400, conversions: 175, customers: 130 },
+      { channel: "Display", marketing_spend_eur: 2600, conversions: 80, customers: 55 },
+      { channel: "Email", marketing_spend_eur: 900, conversions: 95, customers: 90 },
+    ],
+    "channel_performance",
+  )}
+/>
+
+```jsonc
+{
+  "type": "correlation.scatter",
+  "title": "Spend vs. conversions by channel",
+  "dataset": "channel_performance",
+  "x": "marketing_spend_eur",
+  "y": "conversions",
+  "series": "channel",
+  "size": "customers",
+  "label": "channel",
+  "xFormat": "eur",
+  "format": "int"
+}
+```
+
+- `x`, `y`: the numeric fields for the axes (both required); points with a non-numeric
+  `x` or `y` are dropped.
+- `series`: splits points into one colored series per distinct value, with a legend.
+- `size`: a numeric field scaling each point into a bubble; omit for fixed-size dots.
+- `label`: names each point in the tooltip; `colors` overrides the per-series palette;
+  `xFormat`/`format` style the x/y values.

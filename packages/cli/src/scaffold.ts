@@ -24,6 +24,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
       value: "TODO",
     },
     "category.pie": { type, title: "New pie", dataset: "TODO", label: "TODO", value: "TODO" },
+    "correlation.scatter": { type, title: "New scatter", dataset: "TODO", x: "TODO", y: "TODO" },
     "table.grid": { type, title: "New table", dataset: "TODO" },
     "timeline.feed": {
       type,

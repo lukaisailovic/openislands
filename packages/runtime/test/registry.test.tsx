@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BreakdownTreemap } from "../src/islands/BreakdownTreemap.js";
 import { CategoryBar } from "../src/islands/CategoryBar.js";
 import { CategoryPie } from "../src/islands/CategoryPie.js";
+import { CorrelationScatter } from "../src/islands/CorrelationScatter.js";
 import { CustomPlaceholder } from "../src/islands/CustomPlaceholder.js";
 import { GaugeGoal } from "../src/islands/GaugeGoal.js";
 import { GaugeMeter } from "../src/islands/GaugeMeter.js";
@@ -39,6 +40,10 @@ describe("island registry", () => {
 
   it("resolves the category.pie renderer", () => {
     expect(resolveRenderer("category.pie")).toBe(CategoryPie);
+  });
+
+  it("resolves the correlation.scatter renderer", () => {
+    expect(resolveRenderer("correlation.scatter")).toBe(CorrelationScatter);
   });
 
   it("resolves the gauge.rings renderer", () => {

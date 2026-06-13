@@ -640,6 +640,13 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.label);
       add(island.value);
       break;
+    case "correlation.scatter":
+      add(island.x);
+      add(island.y);
+      add(island.series);
+      add(island.size);
+      add(island.label);
+      break;
     // note.card, source.doc, and custom islands bind to no dataset
   }
   return { dataset, fields: [...fields] };
