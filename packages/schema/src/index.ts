@@ -42,6 +42,26 @@ export const MetricKpi = z.object({
   color: z.string().optional().describe("6-digit hex color (e.g. \"#22C55E\") for the sparkline, overriding the default palette"),
 }).describe("A single headline number, optionally with a delta vs the previous row or a target — use for at-a-glance KPIs.");
 
+export const ScorecardStat = z.object({
+  value: z.string().describe("field holding the stat's value, read off the last row"),
+  label: z.string().optional().describe("label above the value; defaults to the field name"),
+  format: ValueFormat.optional(),
+  unit: z.string().optional().describe("small unit suffix after the value"),
+  compareTo: z
+    .enum(["prev", "none"])
+    .default("none")
+    .describe("'prev' adds a delta vs the previous row"),
+});
+export type ScorecardStat = z.infer<typeof ScorecardStat>;
+
+export const MetricScorecard = z.object({
+  type: z.literal("metric.scorecard"),
+  ...baseFields,
+  dataset: z.string(),
+  stats: z.array(ScorecardStat).min(1).describe("the stats to show, each read off the last row"),
+  columns: z.number().int().min(1).max(6).optional().describe("fixed grid column count; defaults to responsive"),
+}).describe("A compact scorecard of several KPIs off the last row — use for a tidy row of related numbers, each with an optional delta vs the previous row.");
+
 export const TimeseriesLine = z.object({
   type: z.literal("timeseries.line"),
   ...baseFields,
@@ -360,6 +380,7 @@ export const SourceDoc = z.object({
  */
 const DrilldownIsland = z.discriminatedUnion("type", [
   MetricKpi,
+  MetricScorecard,
   TimeseriesLine,
   CategoryBar,
   BreakdownTreemap,
@@ -396,6 +417,7 @@ export const TimelineFeed = TimelineFeedBase.extend({
 /** The closed registry of built-in island types. */
 export const BUILTIN_ISLAND_SCHEMAS = {
   "metric.kpi": MetricKpi,
+  "metric.scorecard": MetricScorecard,
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
   "breakdown.treemap": BreakdownTreemap,
@@ -425,6 +447,7 @@ export const BUILTIN_ISLAND_TYPES = Object.keys(BUILTIN_ISLAND_SCHEMAS) as Islan
  */
 export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "metric.kpi": 2,
+  "metric.scorecard": 3,
   "source.doc": 2,
   "note.card": 3,
   "gauge.rings": 4,
@@ -446,6 +469,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
 
 export const BuiltinIsland = z.discriminatedUnion("type", [
   MetricKpi,
+  MetricScorecard,
   TimeseriesLine,
   CategoryBar,
   BreakdownTreemap,

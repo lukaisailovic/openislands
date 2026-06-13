@@ -13,6 +13,7 @@ import { GaugeGoal } from "../src/islands/GaugeGoal.js";
 import { GaugeMeter } from "../src/islands/GaugeMeter.js";
 import { GaugeRings } from "../src/islands/GaugeRings.js";
 import { MetricKpi } from "../src/islands/MetricKpi.js";
+import { MetricScorecard } from "../src/islands/MetricScorecard.js";
 import { NoteCard } from "../src/islands/NoteCard.js";
 import { SearchBox } from "../src/islands/SearchBox.js";
 import { TableGrid } from "../src/islands/TableGrid.js";
@@ -41,6 +42,10 @@ describe("island registry", () => {
 
   it("resolves the compare.radar renderer", () => {
     expect(resolveRenderer("compare.radar")).toBe(CompareRadar);
+  });
+
+  it("resolves the metric.scorecard renderer", () => {
+    expect(resolveRenderer("metric.scorecard")).toBe(MetricScorecard);
   });
   it("resolves ported built-in renderers", () => {
     expect(resolveRenderer("note.card")).toBe(NoteCard);

@@ -651,6 +651,7 @@ describe("validateManifest — connectors", () => {
 
 const validIslands: Record<IslandType, Record<string, unknown>> = {
   "metric.kpi": { type: "metric.kpi", dataset: "d", value: "v", compareTo: "prev", format: "eur" },
+  "metric.scorecard": { type: "metric.scorecard", dataset: "d", stats: [{ value: "mrr", label: "MRR", format: "eur", compareTo: "prev" }, { value: "users", format: "int" }], columns: 4 },
   "timeseries.line": { type: "timeseries.line", dataset: "d", x: "month", y: ["a", "b"], options: { area: true, goalField: "target" } },
   "category.bar": { type: "category.bar", dataset: "d", x: "cat", y: "amount", group: "region", stacked: true },
   "breakdown.treemap": { type: "breakdown.treemap", dataset: "d", label: "name", value: "size", parent: "group" },
@@ -688,6 +689,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
 
 const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "metric.kpi": { type: "metric.kpi", dataset: "d" },
+  "metric.scorecard": { type: "metric.scorecard", dataset: "d", stats: [] },
   "timeseries.line": { type: "timeseries.line", dataset: "d", x: "month" },
   "category.bar": { type: "category.bar", dataset: "d", x: "cat" },
   "breakdown.treemap": { type: "breakdown.treemap", dataset: "d", label: "name" },

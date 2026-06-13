@@ -15,6 +15,7 @@ import { GaugeGoal } from "./GaugeGoal.js";
 import { GaugeMeter } from "./GaugeMeter.js";
 import { GaugeRings } from "./GaugeRings.js";
 import { MetricKpi } from "./MetricKpi.js";
+import { MetricScorecard } from "./MetricScorecard.js";
 import { NoteCard } from "./NoteCard.js";
 import { SearchBox } from "./SearchBox.js";
 import { SourceDoc } from "./SourceDoc.js";
@@ -31,6 +32,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "table.grid": TableGrid,
   "timeline.feed": TimelineFeed,
   "metric.kpi": MetricKpi,
+  "metric.scorecard": MetricScorecard,
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
   "category.pie": CategoryPie,

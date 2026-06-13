@@ -73,6 +73,7 @@ Get any island's exact config schema with `get_island_schema(type)` (MCP) or rea
 | type | required | notes |
 |---|---|---|
 | `metric.kpi` | `dataset`, `value` | `compareTo: "prev"` for a delta; `format: eur\|kg\|int\|pct\|date\|datetime\|time` (`date` → `Jun 11, 2026`, `datetime` → `Jun 11, 21:30`, `time` → `21:30`) |
+| `metric.scorecard` | `dataset`, `stats` | several KPIs off the last row; each stat `{value, label?, format?, unit?, compareTo?}`, `compareTo: "prev"` adds a delta; `columns` fixes the grid (1-6) |
 | `timeseries.line` | `dataset`, `x`, `y` | `y` may be a string or array; `options.goalField` for a goal line; with `series`, many distinct values auto-show a searchable picker (`options.seriesPicker` forces/disables it) |
 | `category.bar` | `dataset`, `x`, `y` | `group`, `stacked` optional |
 | `breakdown.treemap` | `dataset`, `label`, `value` | a treemap of (optionally hierarchical) parts of a whole |

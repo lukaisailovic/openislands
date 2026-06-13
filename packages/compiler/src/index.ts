@@ -666,6 +666,11 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.series);
       break;
     }
+    case "metric.scorecard": {
+      const stats = island.stats;
+      if (Array.isArray(stats)) for (const stat of stats) add((stat as Record<string, unknown>).value);
+      break;
+    }
     // note.card, source.doc, and custom islands bind to no dataset
   }
   return { dataset, fields: [...fields] };

@@ -14,6 +14,7 @@ export interface InferredColumn {
 export function islandSkeleton(type: string): Record<string, unknown> {
   const base: Record<string, Record<string, unknown>> = {
     "metric.kpi": { type, title: "New metric", dataset: "TODO", value: "TODO" },
+    "metric.scorecard": { type, title: "New scorecard", dataset: "TODO", stats: [{ value: "TODO" }] },
     "timeseries.line": { type, title: "New chart", dataset: "TODO", x: "TODO", y: "TODO" },
     "category.bar": { type, title: "New bars", dataset: "TODO", x: "TODO", y: "TODO" },
     "breakdown.treemap": {

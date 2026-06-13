@@ -4,7 +4,7 @@ import { sampleData } from "../../components/sampleData";
 
 # Metrics & Gauges
 
-Four islands for at-a-glance numbers: one headline KPI and three gauges. Each previewed
+Five islands for at-a-glance numbers: a headline KPI, a multi-stat scorecard, and three gauges. Each previewed
 below is a real OpenIslands renderer: the same code a live dashboard runs, not a
 screenshot. For the full registry, see [Islands](/islands/overview).
 
@@ -58,6 +58,59 @@ MRR, today's steps) deserves the top of a page.
 - `format`: `eur`, `kg`, `int`, `pct`, `date`, `datetime`, or `time`; `unit` appends a
   free-form suffix.
 - `color`: a 6-digit hex (e.g. `"#22C55E"`) for the sparkline, overriding the palette.
+
+## metric.scorecard
+
+A compact scorecard of several KPIs read off the last row, each with an optional delta
+versus the previous row. Reach for it when a handful of related numbers (MRR, active users,
+churn, NPS) belong together in one tidy tile instead of separate KPI cards.
+
+<LiveIsland
+  type="metric.scorecard"
+  config={{
+    title: "This month",
+    stats: [
+      { value: "mrr_eur", label: "MRR", format: "eur", compareTo: "prev" },
+      { value: "active_users", label: "Active users", format: "int", compareTo: "prev" },
+      { value: "churn", label: "Churn", format: "pct" },
+      { value: "nps", label: "NPS", format: "int" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "month", type: "varchar" },
+      { name: "mrr_eur", type: "double" },
+      { name: "active_users", type: "double" },
+      { name: "churn", type: "double" },
+      { name: "nps", type: "double" },
+    ],
+    [
+      { month: "2026-04", mrr_eur: 80_000, active_users: 1100, churn: 0.042, nps: 42 },
+      { month: "2026-05", mrr_eur: 92_000, active_users: 1240, churn: 0.031, nps: 48 },
+    ],
+    "saas_metrics",
+  )}
+  height={150}
+/>
+
+```jsonc
+{
+  "type": "metric.scorecard",
+  "title": "This month",
+  "dataset": "saas_metrics",
+  "stats": [
+    { "value": "mrr_eur", "label": "MRR", "format": "eur", "compareTo": "prev" },
+    { "value": "active_users", "label": "Active users", "format": "int", "compareTo": "prev" },
+    { "value": "churn", "label": "Churn", "format": "pct" },
+    { "value": "nps", "label": "NPS", "format": "int" }
+  ]
+}
+```
+
+- `stats`: the list of numbers to show (at least one), each reading its `value` off the last row.
+- `stats[].label` defaults to the field name; `format`/`unit` style the value; `compareTo: "prev"`
+  adds a delta badge versus the previous row.
+- `columns`: a fixed grid column count (1-6); omitted, the grid is responsive.
 
 ## gauge.rings
 
