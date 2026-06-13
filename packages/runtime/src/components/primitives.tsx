@@ -35,7 +35,7 @@ export function IslandCard({
           {source ? <SourceButton source={source} /> : null}
         </LayerCard.Secondary>
       ) : null}
-      <LayerCard.Primary className="flex min-w-0 flex-1 flex-col">{children}</LayerCard.Primary>
+      <LayerCard.Primary className="flex min-w-0 flex-1 flex-col pr-4">{children}</LayerCard.Primary>
     </LayerCard>
   );
 }

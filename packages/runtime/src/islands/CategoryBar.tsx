@@ -93,7 +93,7 @@ function buildOptions(spec: BarSpec, data: BarData, dark: boolean): KumoChartOpt
   const dates = isDateCategories(data.categories);
   return {
     backgroundColor: "transparent",
-    grid: { left: 56, right: 16, top: 16, bottom: 32 },
+    grid: { left: 8, right: 8, top: 16, bottom: 8, containLabel: true },
     tooltip: tooltip({
       trigger: "axis",
       dark,

@@ -59,6 +59,8 @@ function sparkOptions(
     }),
     xAxis: {
       type: "time",
+      min: "dataMin",
+      max: "dataMax",
       axisLine: { show: false },
       axisTick: { show: false },
       splitNumber: 3,
