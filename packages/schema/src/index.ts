@@ -410,6 +410,20 @@ export const GaugeMeter = z.object({
     .describe("horizontal usage bars, top to bottom; reads the last row"),
 }).describe("One or more horizontal usage meters read off the last row — use for quota- or capacity-style values.");
 
+export const StatusGrid = z.object({
+  type: z.literal("status.grid"),
+  ...baseFields,
+  dataset: z.string(),
+  label: z.string().describe("field naming each entity (service, check, host)"),
+  state: z.string().describe("field holding each entity's status value"),
+  value: z.string().optional().describe("optional metric shown under the label"),
+  format: ValueFormat.optional(),
+  tones: z
+    .record(z.string(), z.enum(["success", "warning", "danger", "neutral"]))
+    .optional()
+    .describe("map a state value to a tone; unmapped values fall back to a keyword convention (up/ok/healthy/online → success, warn/degraded/pending → warning, down/error/critical/fail → danger, else neutral)"),
+}).describe("A responsive grid of state tiles — use for service/check health on ops & status-page dashboards; each tile's tone comes from its state value.");
+
 export const SearchBox = z.object({
   type: z.literal("search.box"),
   ...baseFields,
@@ -461,6 +475,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   GaugeRings,
   GaugeGoal,
   GaugeMeter,
+  StatusGrid,
   SearchBox,
   NoteCard,
   SourceDoc,
@@ -501,6 +516,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,
   "gauge.meter": GaugeMeter,
+  "status.grid": StatusGrid,
   "search.box": SearchBox,
   "note.card": NoteCard,
   "source.doc": SourceDoc,
@@ -522,6 +538,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "gauge.rings": 4,
   "gauge.goal": 2,
   "gauge.meter": 3,
+  "status.grid": 4,
   "search.box": 3,
   "timeseries.line": 4,
   "category.bar": 4,
@@ -559,6 +576,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   GaugeRings,
   GaugeGoal,
   GaugeMeter,
+  StatusGrid,
   SearchBox,
   NoteCard,
   SourceDoc,

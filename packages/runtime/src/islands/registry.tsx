@@ -22,6 +22,7 @@ import { NoteCard } from "./NoteCard.js";
 import { RankList } from "./RankList.js";
 import { SearchBox } from "./SearchBox.js";
 import { SourceDoc } from "./SourceDoc.js";
+import { StatusGrid } from "./StatusGrid.js";
 import { TableGrid } from "./TableGrid.js";
 import { TimelineFeed } from "./TimelineFeed.js";
 import { TimeseriesLine } from "./TimeseriesLine.js";
@@ -51,6 +52,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "gauge.rings": GaugeRings,
   "gauge.goal": GaugeGoal,
   "gauge.meter": GaugeMeter,
+  "status.grid": StatusGrid,
   "search.box": SearchBox,
 };
 

@@ -635,6 +635,11 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       }
       break;
     }
+    case "status.grid":
+      add(island.label);
+      add(island.state);
+      add(island.value);
+      break;
     case "gauge.goal": {
       add(island.value);
       const goal = island.goal as Record<string, unknown> | undefined;

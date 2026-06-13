@@ -52,6 +52,7 @@
           "id": "health",
           "title": "Health",
           "islands": [
+            { "type": "status.grid", "title": "Service status", "dataset": "services", "label": "service", "state": "status", "value": "p95_ms", "format": "int", "span": 12 },
             { "type": "table.grid", "title": "Service health", "dataset": "services_health", "span": 12, "columns": [
               { "field": "service", "label": "Service" },
               { "field": "status", "label": "Status", "status": { "signal": "status_signal" } },

@@ -19,6 +19,7 @@ import { MetricScorecard } from "../src/islands/MetricScorecard.js";
 import { NoteCard } from "../src/islands/NoteCard.js";
 import { RankList } from "../src/islands/RankList.js";
 import { SearchBox } from "../src/islands/SearchBox.js";
+import { StatusGrid } from "../src/islands/StatusGrid.js";
 import { TableGrid } from "../src/islands/TableGrid.js";
 import { TimeseriesLine } from "../src/islands/TimeseriesLine.js";
 import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
@@ -95,6 +96,10 @@ describe("island registry", () => {
 
   it("resolves the gauge.meter renderer", () => {
     expect(resolveRenderer("gauge.meter")).toBe(GaugeMeter);
+  });
+
+  it("resolves the status.grid renderer", () => {
+    expect(resolveRenderer("status.grid")).toBe(StatusGrid);
   });
 
   it("resolves the search.box renderer", () => {
