@@ -32,11 +32,15 @@ The registry is intentionally small and closed — a sharp set beats a sprawling
 Open an issue before adding a built-in island. If we agree it belongs:
 
 1. Add its Zod config schema in `packages/schema/src/index.ts` and register it in
-   `BUILTIN_ISLAND_SCHEMAS` (this gives runtime validation + types + JSON Schema for free).
+   `BUILTIN_ISLAND_SCHEMAS`, `ISLAND_MIN_SPAN`, and the `BuiltinIsland`/`DrilldownIsland`
+   unions (this gives runtime validation + types + JSON Schema for free).
 2. Add its field requirements to `islandRequirements` in `packages/compiler/src/index.ts`
    so the contract check knows what data it needs.
-3. Add a renderer in `packages/runtime/src/index.ts`.
-4. Use it in a template and add a test.
+3. Add a renderer component under `packages/runtime/src/islands/` and register it in
+   `packages/runtime/src/islands/registry.tsx`.
+4. Add a starter config to `islandSkeleton` in `packages/cli/src/scaffold.ts` (the `add`
+   command scaffolds from it; a test asserts every type has a valid skeleton).
+5. Use it in a template and add tests.
 
 For one-off needs, prefer a **custom island** in your own project's `components/custom/`
 rather than expanding the core.
