@@ -4,13 +4,17 @@ export default defineConfig({
   title: "OpenIslands",
   description:
     "A local-first compiler and runtime for agent-maintained data apps — typed manifests of reusable islands bound to data you own.",
+  // The runtime renders islands dark-only, so the docs match: dark everywhere,
+  // no theme toggle. The accent is a tide teal tuned for the dark surface.
+  colorScheme: "dark",
+  accentColor: "#2dd4bf",
   topNav: [{ text: "GitHub", link: "https://github.com/lukaisailovic/openislands" }],
   sidebar: [
     {
       text: "Guide",
       collapsed: false,
       items: [
-        { text: "Introduction", link: "/" },
+        { text: "Introduction", link: "/introduction" },
         { text: "Getting Started", link: "/getting-started" },
       ],
     },

@@ -63,10 +63,10 @@ const loopSteps = [
 /**
  * The documentation landing page. The hero uses Vocs' own HomePage primitives
  * so it inherits the site theme; the sections below are themed with the Vocs
- * color variables (so light/dark follow the docs toggle) and carry the one idea
- * worth proving on a marketing page: a manifest on the left renders, live, into
- * a real island on the right — drawn by the same runtime renderer the docs and
- * a production dashboard share.
+ * color variables (which resolve against the docs' forced dark scheme) and carry
+ * the one idea worth proving on a marketing page: a manifest on the left renders,
+ * live, into a real island on the right — drawn by the same runtime renderer the
+ * docs and a production dashboard share.
  */
 export function Home() {
   return (

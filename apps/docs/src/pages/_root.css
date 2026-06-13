@@ -42,13 +42,13 @@
  * Landing page (src/pages/index.mdx → components/Home.tsx).
  *
  * Themed entirely with Vocs' color variables (a Radix-style gray scale plus
- * --vocs-color-accent) so the page tracks the docs light/dark toggle with no
- * dark: variants of its own. The landing opts out of prose (`.oi-home` carries
- * `not-prose`), so these classes fully own its typography and spacing.
+ * --vocs-color-accent), which resolve against the docs' forced dark scheme, so
+ * the landing needs no dark: variants of its own. It opts out of prose
+ * (`.oi-home` carries `not-prose`), so these classes fully own its typography
+ * and spacing.
  * ───────────────────────────────────────────────────────────────────────── */
 .oi-home {
   --oi-edge: var(--vocs-color-gray4);
-  --oi-edge-strong: var(--vocs-color-gray6);
   --oi-surface: var(--vocs-color-background2, var(--vocs-color-gray2));
   --oi-heading: var(--vocs-color-gray12);
   --oi-body: var(--vocs-color-gray11);
