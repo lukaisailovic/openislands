@@ -22,6 +22,7 @@ import { SearchBox } from "../src/islands/SearchBox.js";
 import { StatusGrid } from "../src/islands/StatusGrid.js";
 import { TableGrid } from "../src/islands/TableGrid.js";
 import { TimeseriesLine } from "../src/islands/TimeseriesLine.js";
+import { WaterfallBars } from "../src/islands/WaterfallBars.js";
 import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
 
 const goalGauge = (value: number) => (
@@ -76,6 +77,10 @@ describe("island registry", () => {
 
   it("resolves the category.combo renderer", () => {
     expect(resolveRenderer("category.combo")).toBe(CategoryCombo);
+  });
+
+  it("resolves the waterfall.bars renderer", () => {
+    expect(resolveRenderer("waterfall.bars")).toBe(WaterfallBars);
   });
 
   it("resolves the category.pie renderer", () => {

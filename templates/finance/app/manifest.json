@@ -6,6 +6,7 @@
     "allocation": { "sql": "models/transforms/allocation.sql", "description": "value + share by asset class (derived from holdings)" },
     "holdings": { "sql": "models/transforms/holdings_pnl.sql", "description": "positions with derived gain/loss" },
     "transactions": { "source": "data/transactions.csv", "description": "recent money movements" },
+    "net_worth_bridge": { "source": "data/pnl_bridge.csv", "description": "opening → +/− steps → closing net-worth bridge (step, delta, kind)" },
     "strategy_notes": { "source": "docs/strategy.md", "description": "portfolio strategy (markdown)" }
   },
   "actions": {
@@ -32,7 +33,9 @@
         { "type": "timeseries.line", "title": "Net worth vs. target", "dataset": "net_worth_monthly", "x": "month", "y": "net_worth_eur", "options": { "goalField": "target_eur", "area": true }, "span": 7 },
         { "type": "breakdown.treemap", "title": "Allocation by class", "dataset": "allocation", "label": "class", "value": "value_eur", "span": 5 },
 
-        { "type": "category.combo", "title": "Net worth vs. monthly income", "dataset": "net_worth_monthly", "x": "month", "bars": "net_worth_eur", "lines": "monthly_income_eur", "format": "eur", "lineFormat": "eur", "span": 12 }
+        { "type": "category.combo", "title": "Net worth vs. monthly income", "dataset": "net_worth_monthly", "x": "month", "bars": "net_worth_eur", "lines": "monthly_income_eur", "format": "eur", "lineFormat": "eur", "span": 12 },
+
+        { "type": "waterfall.bars", "title": "Net worth bridge", "dataset": "net_worth_bridge", "label": "step", "value": "delta", "kind": "kind", "format": "eur", "span": 12 }
       ]
     },
     {

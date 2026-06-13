@@ -26,6 +26,7 @@ import { StatusGrid } from "./StatusGrid.js";
 import { TableGrid } from "./TableGrid.js";
 import { TimelineFeed } from "./TimelineFeed.js";
 import { TimeseriesLine } from "./TimeseriesLine.js";
+import { WaterfallBars } from "./WaterfallBars.js";
 
 export type IslandRenderer = ComponentType<IslandRenderProps>;
 
@@ -40,6 +41,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
   "category.combo": CategoryCombo,
+  "waterfall.bars": WaterfallBars,
   "category.pie": CategoryPie,
   "correlation.scatter": CorrelationScatter,
   "breakdown.treemap": BreakdownTreemap,

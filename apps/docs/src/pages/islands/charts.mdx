@@ -176,6 +176,54 @@ accept a single field or an array.
 - `colors`: CSS colors per series (bars first, then lines), overriding the palette.
 - `format` / `lineFormat`: [value formats](/reference/value-formats) for the bar (primary) and line (secondary) axes.
 
+## waterfall.bars
+
+A waterfall, or bridge, chart: an opening anchor, signed `+`/`−` steps that float on the running
+total, and closing anchors. Reach for it to walk a P&L (revenue down to profit), explain a
+variance, or bridge an opening balance to a closing one. Mark each anchor row by setting its
+`kind` field to `"total"`; every other row is a signed delta. The running-total math lives in the
+renderer, so the dataset stays a flat list of `(step, delta, kind)` rows.
+
+<LiveIsland
+  type="waterfall.bars"
+  config={{ title: "Operating profit bridge", label: "step", value: "amount_eur", kind: "kind", format: "eur" }}
+  data={sampleData(
+    [
+      { name: "step", type: "varchar" },
+      { name: "amount_eur", type: "double" },
+      { name: "kind", type: "varchar" },
+    ],
+    [
+      { step: "Revenue", amount_eur: 482_000, kind: "total" },
+      { step: "COGS", amount_eur: -184_000, kind: "delta" },
+      { step: "Opex", amount_eur: -141_000, kind: "delta" },
+      { step: "Operating profit", amount_eur: 157_000, kind: "total" },
+    ],
+    "pnl_bridge",
+  )}
+/>
+
+```jsonc
+{
+  "type": "waterfall.bars",
+  "title": "Operating profit bridge",
+  "dataset": "pnl_bridge",
+  "label": "step",
+  "value": "amount_eur",
+  "kind": "kind",
+  "format": "eur"
+}
+```
+
+- `label`: the step-name field on the x axis (required); `value`: the signed delta per step, or the
+  absolute level for a `total` row (required).
+- `kind`: a field marking anchor rows — a row whose value here is `"total"` draws as an absolute bar
+  from zero (opening, closing, or a subtotal). Omit it to make every row a delta.
+- `colors`: per-tone CSS colors overriding the defaults (`increase` green, `decrease` red, `total`
+  neutral grey) — e.g. `{ "increase": "#16a34a", "decrease": "#dc2626" }`.
+- [`format`](/reference/value-formats) styles the y axis and the per-step tooltip, which shows each
+  step's signed value.
+
 ## rank.list
 
 A ranked Top-N list with proportional horizontal bars, the island for a leaderboard: top products,

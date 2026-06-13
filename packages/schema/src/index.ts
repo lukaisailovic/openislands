@@ -135,6 +135,20 @@ export const CategoryCombo = z.object({
   lineFormat: ValueFormat.optional().describe("format for the secondary (line) y-axis"),
 }).describe("A dual-axis chart: bars on the primary axis, lines on a secondary axis — use to compare a level against a rate (revenue vs margin, volume vs price).");
 
+export const WaterfallBars = z.object({
+  type: z.literal("waterfall.bars"),
+  ...baseFields,
+  dataset: z.string(),
+  label: z.string().describe("step-name field (x axis)"),
+  value: z.string().describe("signed delta per step; for a total/anchor row, its absolute level"),
+  kind: z.string().optional().describe('field marking anchor rows: a row whose value here is "total" draws as an absolute bar from zero (opening/closing/subtotal). Omit to make every row a delta.'),
+  colors: z
+    .object({ increase: z.string().optional(), decrease: z.string().optional(), total: z.string().optional() })
+    .optional()
+    .describe("CSS colors per tone, overriding the defaults (increase green, decrease red, total neutral)"),
+  format: ValueFormat.optional(),
+}).describe("A waterfall / bridge chart — use for a P&L walk or variance: an opening anchor, signed +/− steps that accumulate, and closing anchors. Mark anchor rows via a kind field whose value is \"total\".");
+
 export const BreakdownTreemap = z.object({
   type: z.literal("breakdown.treemap"),
   ...baseFields,
@@ -461,6 +475,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   TimeseriesLine,
   CategoryBar,
   CategoryCombo,
+  WaterfallBars,
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,
@@ -502,6 +517,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "timeseries.line": TimeseriesLine,
   "category.bar": CategoryBar,
   "category.combo": CategoryCombo,
+  "waterfall.bars": WaterfallBars,
   "breakdown.treemap": BreakdownTreemap,
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
@@ -543,6 +559,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "timeseries.line": 4,
   "category.bar": 4,
   "category.combo": 4,
+  "waterfall.bars": 4,
   "timeline.feed": 4,
   "breakdown.treemap": 4,
   "distribution.heatmap": 4,
@@ -562,6 +579,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   TimeseriesLine,
   CategoryBar,
   CategoryCombo,
+  WaterfallBars,
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,
