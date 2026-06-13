@@ -21,8 +21,39 @@ describe("value formatting", () => {
     expect(formatValue(1234, "eur")).toContain("€");
   });
 
+  it("renders usd, gbp, and jpy with the right symbol", () => {
+    expect(formatValue(1234, "usd")).toContain("$");
+    expect(formatValue(1234, "usd")).toContain("1,234");
+    expect(formatValue(1234, "gbp")).toContain("£");
+    expect(formatValue(1234, "jpy")).toContain("¥");
+    expect(formatValue(1234, "jpy")).toContain("1,234");
+  });
+
   it("renders pct as a scaled percentage", () => {
     expect(formatValue(0.125, "pct")).toBe("12.5%");
+  });
+
+  it("renders decimal with up to two fraction digits", () => {
+    expect(formatValue(1234.5, "decimal")).toBe("1,234.5");
+  });
+
+  it("renders compact notation", () => {
+    expect(formatValue(1200, "compact")).toBe("1.2K");
+    expect(formatValue(3_400_000, "compact")).toBe("3.4M");
+  });
+
+  it("renders bytes on a binary scale", () => {
+    expect(formatValue(512, "bytes")).toBe("512 B");
+    expect(formatValue(1536, "bytes")).toBe("1.5 KB");
+  });
+
+  it("renders a duration from seconds as the two largest units", () => {
+    expect(formatValue(90, "duration")).toBe("1m 30s");
+    expect(formatValue(3900, "duration")).toBe("1h 5m");
+  });
+
+  it("renders month from a date string", () => {
+    expect(formatValue("2026-06-11", "month")).toBe("Jun 2026");
   });
 
   it("renders kg and int", () => {

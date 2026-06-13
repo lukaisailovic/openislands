@@ -32,10 +32,10 @@ A manifest is a JSON object with the following top-level shape:
 | `version` | `1` | yes | The manifest format version. Always `1`. |
 | `title` | `string` | yes | The app title, shown in the chrome. |
 | `icon` | `string` | no | One of the curated icon names, used for the app's tile in the workspace app rail. |
-| `datasets` | `object` | yes | A map of dataset name to a dataset declaration. |
-| `pages` | `array of object` | yes | The app's pages, one sidebar entry each. |
-| `actions` | `object` | no | A map of action name to an action declaration. |
-| `connectors` | `object` | no | A map of connector name to a connector declaration. |
+| `datasets` | `object` | yes | A map of dataset name to a dataset declaration. See [Datasets](#datasets). |
+| `pages` | `array of object` | yes | The app's pages, one sidebar entry each. See [Pages](#pages). |
+| `actions` | `object` | no | A map of action name to an action declaration. See [Actions](#actions). |
+| `connectors` | `object` | no | A map of connector name to a connector declaration. See [Connectors](#connectors). |
 
 ## Datasets
 
@@ -189,6 +189,8 @@ A `layout.row` is a structural wrapper: it holds other islands and forces them o
 their own full-width grid row. It carries no `span`, `title`, or data binding, and it
 cannot nest another `layout.row`.
 
+**Built-in islands:** [`metric.kpi`](#metrickpi) · [`metric.scorecard`](#metricscorecard) · [`timeseries.line`](#timeseriesline) · [`category.bar`](#categorybar) · [`breakdown.treemap`](#breakdowntreemap) · [`distribution.heatmap`](#distributionheatmap) · [`activity.calendar`](#activitycalendar) · [`funnel.steps`](#funnelsteps) · [`compare.radar`](#compareradar) · [`map.choropleth`](#mapchoropleth) · [`correlation.scatter`](#correlationscatter) · [`category.pie`](#categorypie) · [`table.grid`](#tablegrid) · [`timeline.feed`](#timelinefeed) · [`gauge.rings`](#gaugerings) · [`gauge.goal`](#gaugegoal) · [`gauge.meter`](#gaugemeter) · [`search.box`](#searchbox) · [`note.card`](#notecard) · [`source.doc`](#sourcedoc)
+
 ### `metric.kpi`
 
 A single headline number, optionally with a delta vs the previous row or a target — use for at-a-glance KPIs.
@@ -205,8 +207,23 @@ A single headline number, optionally with a delta vs the previous row or a targe
 | `compareTo` | `string` | no | 'prev', 'none', or a field name |
 | `target` | `string` | no | field holding a target to compare against |
 | `unit` | `string` | no |  |
-| `format` | `"eur" \| "kg" \| "int" \| "pct" \| "date" \| "datetime" \| "time"` | no |  |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
 | `color` | `string` | no | 6-digit hex color (e.g. "#22C55E") for the sparkline, overriding the default palette |
+
+### `metric.scorecard`
+
+A compact scorecard of several KPIs off the last row — use for a tidy row of related numbers, each with an optional delta vs the previous row.
+
+**Minimum span:** 3
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `stats` | `array of object` | yes | the stats to show, each read off the last row |
+| `columns` | `number` | no | fixed grid column count; defaults to responsive |
 
 ### `timeseries.line`
 
@@ -260,6 +277,134 @@ A treemap of part-to-whole composition — use to show how a total splits across
 | `value` | `string` | yes |  |
 | `parent` | `string` | no | field for hierarchy parent |
 | `colors` | `array of string` | no | CSS colors cycled across top-level nodes, overriding the default palette |
+
+### `distribution.heatmap`
+
+A matrix heatmap — use to show one value across two categorical dimensions (x × y), shaded by a continuous color scale.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `x` | `string` | yes | column-category field (x axis) |
+| `y` | `string` | yes | row-category field (y axis) |
+| `value` | `string` | yes | numeric field mapped to each cell's color |
+| `colors` | `array of string` | no | gradient color stops for the scale, overriding the default |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
+
+### `activity.calendar`
+
+A calendar heatmap — use to show a daily value over weeks and months, GitHub-contributions style; rows on the same day sum.
+
+**Minimum span:** 6
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `date` | `string` | yes | date field — any parseable date or timestamp |
+| `value` | `string` | yes | numeric field mapped to the day's color intensity |
+| `colors` | `array of string` | no | gradient color stops, overriding the default |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
+
+### `funnel.steps`
+
+A funnel of sequential stages — use for conversion or drop-off; each stage's width is its share, ordered by the rows unless sort is set.
+
+**Minimum span:** 3
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `label` | `string` | yes | stage-name field |
+| `value` | `string` | yes | numeric field — the count at each stage |
+| `sort` | `"none" \| "ascending" \| "descending"` | no | funnel ordering; 'none' keeps the declared row order |
+| `colors` | `array of string` | no | CSS colors per stage, overriding the default palette |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
+
+### `compare.radar`
+
+A radar (spider) chart — use to compare entities across several metrics at once; each metric is an axis, each row a polygon.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `metrics` | `array of string` | yes | numeric fields, one radar axis each |
+| `series` | `string` | no | field naming each polygon (one per row); omitted numbers them Series 1, 2, … |
+| `max` | `number` | no | fixed max for every axis; omitted maxes each axis at its metric's peak |
+| `colors` | `array of string` | no | CSS colors per polygon, overriding the default palette |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
+
+### `map.choropleth`
+
+A geographic choropleth — use to shade regions (world countries) by a value; region names must match the map's names. Local-first: the map ships as vendored GeoJSON, no network.
+
+**Minimum span:** 5
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `region` | `string` | yes | field holding each row's region name, matching the map's region names (e.g. a country name like "France") |
+| `value` | `string` | yes | numeric field mapped to each region's color |
+| `map` | `string` | no | the registered map name |
+| `colors` | `array of string` | no | gradient color stops, overriding the default |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
+
+### `correlation.scatter`
+
+A scatter or bubble plot of two numeric fields — use to explore correlation; split into series by a field and size points by a third.
+
+**Minimum span:** 4
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `x` | `string` | yes | numeric field for the x axis |
+| `y` | `string` | yes | numeric field for the y axis |
+| `series` | `string` | no | field splitting points into one colored series per distinct value |
+| `size` | `string` | no | numeric field driving bubble radius; omit for fixed-size dots |
+| `label` | `string` | no | field naming each point, shown in the tooltip |
+| `colors` | `array of string` | no | CSS colors per series, overriding the default palette |
+| `format` | [`value format`](/reference/value-formats) | no | formats the y value (axis + tooltip) |
+| `xFormat` | [`value format`](/reference/value-formats) | no | formats the x value (axis + tooltip) |
+
+### `category.pie`
+
+A pie or donut chart of part-to-whole composition — use for one series' share across a handful of categories; set donut for a hole.
+
+**Minimum span:** 3
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `label` | `string` | yes | category field naming each slice |
+| `value` | `string` | yes | numeric field sizing each slice |
+| `donut` | `boolean` | no | render with an inner radius (a donut hole) |
+| `colors` | `array of string` | no | CSS colors per slice (in descending-value order), overriding the default palette |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
 
 ### `table.grid`
 
@@ -334,7 +479,7 @@ A single ring comparing the last row's value to a goal or target band — use fo
 | `goal` | `object` | yes | at least one bound; both = a target band |
 | `label` | `string` | no |  |
 | `unit` | `string` | no |  |
-| `format` | `"eur" \| "kg" \| "int" \| "pct" \| "date" \| "datetime" \| "time"` | no |  |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
 
 ### `gauge.meter`
 

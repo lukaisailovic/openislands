@@ -72,13 +72,61 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-function formatDateParts(p: DateParts, kind: "date" | "datetime" | "time"): string {
+function formatDateParts(p: DateParts, kind: "date" | "datetime" | "time" | "month"): string {
   const month = MONTHS[p.month - 1] ?? p.month;
   const date = `${month} ${p.day}, ${p.year}`;
   const time = `${pad(p.hour)}:${pad(p.minute)}`;
   if (kind === "date") return date;
   if (kind === "time") return time;
+  if (kind === "month") return `${month} ${p.year}`;
   return `${month} ${p.day}, ${time}`;
+}
+
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"];
+
+/** Binary 1024-scale byte size; whole bytes, one decimal for larger units. */
+function formatBytes(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  let value = Math.abs(n);
+  let unit = 0;
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 ? 0 : 1;
+  return `${sign}${value.toFixed(digits)} ${BYTE_UNITS[unit]}`;
+}
+
+const DURATION_UNITS: ReadonlyArray<[label: string, seconds: number]> = [
+  ["d", 86400],
+  ["h", 3600],
+  ["m", 60],
+  ["s", 1],
+];
+
+/** A number of seconds as the two largest non-zero units, e.g. `1h 5m`. */
+function formatDuration(totalSeconds: number): string {
+  const sign = totalSeconds < 0 ? "-" : "";
+  let remaining = Math.round(Math.abs(totalSeconds));
+  const parts: string[] = [];
+  for (const [label, seconds] of DURATION_UNITS) {
+    if (parts.length === 2) break;
+    const amount = Math.floor(remaining / seconds);
+    if (amount === 0 && parts.length === 0) continue;
+    if (amount === 0) break;
+    parts.push(`${amount}${label}`);
+    remaining -= amount * seconds;
+  }
+  if (parts.length === 0) return "0s";
+  return `${sign}${parts.join(" ")}`;
+}
+
+function currency(n: number, locale: string, code: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: code,
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
 /**
@@ -95,23 +143,31 @@ export function formatTimestamp(value: Scalar): string {
 
 /** Render a scalar in one of the manifest's value formats; falls back to a plain string. */
 export function formatValue(value: Scalar, format?: ValueFormat): string {
-  if (format === "date" || format === "datetime" || format === "time") {
+  if (format === "date" || format === "datetime" || format === "time" || format === "month") {
     const parts = parseDateParts(value);
     return parts === null ? String(value ?? "") : formatDateParts(parts, format);
   }
   const n = toNumber(value);
   if (n === null) return String(value ?? "");
   switch (format) {
+    case "usd":
+      return currency(n, "en-US", "USD");
     case "eur":
-      return new Intl.NumberFormat("en-IE", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }).format(n);
+      return currency(n, "en-IE", "EUR");
+    case "gbp":
+      return currency(n, "en-GB", "GBP");
+    case "jpy":
+      return currency(n, "en-US", "JPY");
     case "pct":
       return `${(n * 100).toFixed(1)}%`;
+    case "compact":
+      return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
     case "kg":
       return `${n.toFixed(1)} kg`;
+    case "bytes":
+      return formatBytes(n);
+    case "duration":
+      return formatDuration(n);
     case "int":
       return new Intl.NumberFormat("en-US").format(Math.round(n));
     default:

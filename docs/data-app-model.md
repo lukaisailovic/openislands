@@ -41,8 +41,9 @@ this lives in the docs site under `apps/docs/src/pages/`.
 
 `span` is a 1–12 grid column count; each group gets its own 12-column grid. Every island type
 has a minimum span below which it stops being legible (`ISLAND_MIN_SPAN` in
-`packages/schema/src/index.ts`): `metric.kpi`/`source.doc`/`gauge.goal` 2, `note.card`/`gauge.meter`/`search.box` 3, `table.grid` 5,
-everything else 4. An explicit `span` below its type's minimum is a named validation error
+`packages/schema/src/index.ts`): `metric.kpi`/`source.doc`/`gauge.goal` 2,
+`note.card`/`gauge.meter`/`search.box`/`category.pie`/`funnel.steps`/`metric.scorecard` 3,
+`table.grid`/`map.choropleth` 5, `activity.calendar` 6, everything else 4. An explicit `span` below its type's minimum is a named validation error
 (e.g. "span 1 is below the minimum 4 for timeseries.line"). The runtime additionally floors
 spans responsively — below ~640px every tile goes full-width, and in a middle band spans render
 at `max(span, 6)` — so a tile never renders narrower than its minimum usable width.
@@ -72,7 +73,7 @@ Get any island's exact config schema with `get_island_schema(type)` (MCP) or rea
 
 | type | required | notes |
 |---|---|---|
-| `metric.kpi` | `dataset`, `value` | `compareTo: "prev"` for a delta; `format: eur\|kg\|int\|pct\|date\|datetime\|time` (`date` → `Jun 11, 2026`, `datetime` → `Jun 11, 21:30`, `time` → `21:30`) |
+| `metric.kpi` | `dataset`, `value` | `compareTo: "prev"` for a delta; `format`: optional value format — currency (`usd`/`eur`/`gbp`/`jpy`), number (`int`/`decimal`/`pct`/`compact`), unit (`kg`/`bytes`/`duration`), date/time (`date`/`datetime`/`time`/`month`); full catalog + footguns (`pct` = 0–1 fraction, `duration` = seconds, `bytes` = 1024-scale, dates render tz-free) in `apps/docs/src/pages/reference/value-formats.mdx` (`/reference/value-formats`). `unit` appends a free-form suffix |
 | `metric.scorecard` | `dataset`, `stats` | several KPIs off the last row; each stat `{value, label?, format?, unit?, compareTo?}`, `compareTo: "prev"` adds a delta; `columns` fixes the grid (1-6) |
 | `timeseries.line` | `dataset`, `x`, `y` | `y` may be a string or array; `options.goalField` for a goal line; with `series`, many distinct values auto-show a searchable picker (`options.seriesPicker` forces/disables it) |
 | `category.bar` | `dataset`, `x`, `y` | `group`, `stacked` optional |

@@ -58,10 +58,11 @@ matter and a chart would hide them: positions, transactions, line items. It need
 
 **Key options.**
 
-- `columns: [{ field, label?, format? }]`: pick and order the columns and set their display
-  format (`eur`, `kg`, `int`, `pct`, `date`, `datetime`, `time`). Omit it to show every column.
+- `columns: [{ field, label?, format? }]`: pick and order the columns and set each column's
+  [value format](/reference/value-formats). Omit it to show every column.
 - `details: [{ field, label?, format? }]`: fields *hidden* from the row and revealed in a
-  click-to-open dialog. Declaring `details` makes each row clickable.
+  click-to-open dialog, each with its own optional [value format](/reference/value-formats).
+  Declaring `details` makes each row clickable.
 - `groupBy: { field, titleField?, subtitleField? }`: render rows as collapsible sections by
   `field`; the section title and subtitle read from each group's first row.
 - `drilldown: { island, match }`: embed another island in the row-details dialog, its rows
@@ -134,6 +135,9 @@ each timestamp smartly (a date-only value as `Jun 11, 2026`, a real timestamp as
     labels default to a palette, `color` pins one.
   - `footer: [{ field, label?, format?, unit?, pill? }]`: a meta line led by the timestamp;
     `pill: true` renders the value as a badge.
+
+  Each of these takes an optional [value format](/reference/value-formats) (`format`) or
+  free-form `unit` to style its value.
 
 ```jsonc
 {

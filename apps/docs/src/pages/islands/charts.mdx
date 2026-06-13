@@ -64,7 +64,7 @@ value appears beneath the chart.
 - `options.goalField`: a column drawn as a neutral goal line; `options.area` fills under
   the lines.
 - `colors`: CSS colors per `y` field (or per series value), overriding the palette;
-  `format` styles the axis and tooltips.
+  [`format`](/reference/value-formats) styles the axis and tooltips.
 
 <Callout variant="tip">
   With many series values, pass `series` and let the picker keep the chart legible: it
@@ -206,8 +206,8 @@ many of them.
 - `label`: the field naming each slice (required); `value`: the numeric field sizing it
   (required). Slices sum by label; only positive values render.
 - `donut`: `true` cuts an inner radius (a donut); omit for a full pie.
-- `colors`: CSS colors per slice (largest-first), overriding the palette; `format` styles
-  the tooltip values.
+- `colors`: CSS colors per slice (largest-first), overriding the palette;
+  [`format`](/reference/value-formats) styles the tooltip values.
 
 ## correlation.scatter
 
@@ -269,7 +269,7 @@ field. The `x`/`y` fields (and their `xFormat`/`format`) drive the axes and the 
 - `series`: splits points into one colored series per distinct value, with a legend.
 - `size`: a numeric field scaling each point into a bubble; omit for fixed-size dots.
 - `label`: names each point in the tooltip; `colors` overrides the per-series palette;
-  `xFormat`/`format` style the x/y values.
+  `xFormat`/[`format`](/reference/value-formats) style the x/y values.
 
 ## distribution.heatmap
 
@@ -316,8 +316,8 @@ the last value seen for a repeated cell.
 - `x`, `y`: the column and row category fields (both required); a cell sits at each `x`/`y` pair.
 - `value`: the numeric field shading each cell (required); the scale spans its range, and
   cell labels show for small grids.
-- `colors`: gradient stops overriding the default blues; `format` styles cells, tooltip,
-  and the legend.
+- `colors`: gradient stops overriding the default blues; [`format`](/reference/value-formats)
+  styles cells, tooltip, and the legend.
 
 ## activity.calendar
 
@@ -367,7 +367,8 @@ and rows landing on the same day sum. Give it a half-width or wider tile.
 
 - `date`: the day field; any parseable date or timestamp, bucketed to a UTC day (required).
 - `value`: a numeric field mapped to each day's color; same-day rows sum (required).
-- `colors`: gradient stops overriding the default blues; `format` styles the tooltip value.
+- `colors`: gradient stops overriding the default blues; [`format`](/reference/value-formats)
+  styles the tooltip value.
 
 ## funnel.steps
 
@@ -408,7 +409,8 @@ follow the row order; set `sort` to reorder them.
 
 - `label`: the stage-name field (required); `value`: the numeric count at each stage (required).
 - `sort`: `none` (the default, keeping row order), `descending`, or `ascending`.
-- `colors`: per-stage CSS colors overriding the palette; `format` styles the labels and tooltip.
+- `colors`: per-stage CSS colors overriding the palette; [`format`](/reference/value-formats)
+  styles the labels and tooltip.
 
 ## compare.radar
 
@@ -452,7 +454,8 @@ across every axis when the metrics are on a common scale (e.g. all 0-100 scores)
 - `metrics`: the numeric fields that become the axes (at least one, required).
 - `series`: a field naming each row's polygon; omitted, polygons are numbered Series 1, 2, …
 - `max`: a fixed max shared by every axis; omitted, each axis maxes at its own metric's peak.
-- `colors`: per-polygon CSS colors overriding the palette; `format` styles the tooltip values.
+- `colors`: per-polygon CSS colors overriding the palette; [`format`](/reference/value-formats)
+  styles the tooltip values.
 
 ## map.choropleth
 
@@ -497,8 +500,8 @@ country name.
 
 - `region`: the field holding each row's region name, matching the map's names (required).
 - `value`: the numeric field shading each region (required); regions with no row stay neutral.
-- `map`: the registered map name (default `world`); `colors` overrides the gradient; `format`
-  styles the tooltip and legend.
+- `map`: the registered map name (default `world`); `colors` overrides the gradient;
+  [`format`](/reference/value-formats) styles the tooltip and legend.
 
 <Callout variant="tip">
   Region names must match the map exactly. The `world` map uses full English country names:

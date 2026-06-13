@@ -17,7 +17,27 @@ import { z } from "zod";
 const Span = z.number().int().min(1).max(12).optional();
 
 /** The display formats a numeric value can be rendered in. */
-export const ValueFormat = z.enum(["eur", "kg", "int", "pct", "date", "datetime", "time"]);
+export const ValueFormat = z
+  .enum([
+    "usd",
+    "eur",
+    "gbp",
+    "jpy",
+    "int",
+    "decimal",
+    "pct",
+    "compact",
+    "kg",
+    "bytes",
+    "duration",
+    "date",
+    "datetime",
+    "time",
+    "month",
+  ])
+  .describe(
+    "Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats).",
+  );
 export type ValueFormat = z.infer<typeof ValueFormat>;
 
 const baseFields = {
@@ -26,7 +46,7 @@ const baseFields = {
   span: Span,
 };
 
-// --- The nine built-in islands --------------------------------------------------
+// --- The built-in islands -------------------------------------------------------
 // Each is a stable, code-backed component with a typed config. An agent moves and
 // configures instances; it never writes the rendering code.
 

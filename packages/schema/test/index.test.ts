@@ -5,6 +5,7 @@ import {
   flattenPageIslands,
   type IslandType,
   type Page,
+  ValueFormat,
   jsonSchemaFor,
   manifestJsonSchema,
   validateManifest,
@@ -61,7 +62,7 @@ describe("validateManifest", () => {
 
   it("reports an invalid format enum value with its field path", () => {
     const bad = structuredClone(goodManifest);
-    (bad.pages[0]!.islands[0] as Record<string, unknown>).format = "usd";
+    (bad.pages[0]!.islands[0] as Record<string, unknown>).format = "florins";
     const r = validateManifest(bad);
     expect(r.ok).toBe(false);
     expect(r.errors.some((e) => e.field === "format")).toBe(true);
@@ -701,7 +702,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "funnel.steps": { type: "funnel.steps", dataset: "d", label: "stage" },
   "compare.radar": { type: "compare.radar", dataset: "d", metrics: [] },
   "map.choropleth": { type: "map.choropleth", dataset: "d", region: "country" },
-  "table.grid": { type: "table.grid", columns: [{ field: "f", format: "usd" }] },
+  "table.grid": { type: "table.grid", columns: [{ field: "f", format: "florins" }] },
   "timeline.feed": { type: "timeline.feed", dataset: "d", ts: "at", titleField: "t", stats: [{ label: "P" }] },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [] },
   "gauge.goal": { type: "gauge.goal", dataset: "d", goal: { max: "kcal_high" } },
@@ -857,7 +858,7 @@ describe("JSON Schema emission", () => {
   it("encodes the format enum values where format appears", () => {
     const enums: string[] = [];
     collectKeys(jsonSchemaFor("metric.kpi"), "enum", enums);
-    expect(enums).toContain(JSON.stringify(["eur", "kg", "int", "pct", "date", "datetime", "time"]));
+    expect(enums).toContain(JSON.stringify(ValueFormat.options));
   });
 
   it("encodes the source.doc kind enum", () => {

@@ -77,6 +77,7 @@ interface FieldRow {
   type: string;
   required: boolean;
   description: string;
+  typeMarkdown?: string;
 }
 
 /**
@@ -94,11 +95,13 @@ function fieldRows(schema: JsonSchemaNode): FieldRow[] {
   for (const [name, prop] of Object.entries(properties)) {
     if (name === "type") continue;
     const hasDefault = prop.default !== undefined;
+    const isValueFormat = name === "format" || name === "xFormat";
     rows.push({
       name,
       type: renderType(prop),
       required: required.has(name) && !hasDefault,
       description: prop.description?.replace(/\s+/g, " ").trim() ?? "",
+      typeMarkdown: isValueFormat ? "[`value format`](/reference/value-formats)" : undefined,
     });
   }
   return rows;
@@ -117,7 +120,7 @@ function fieldTable(rows: FieldRow[]): string {
     "| --- | --- | --- | --- |",
   ];
   for (const row of rows) {
-    const type = `\`${cell(row.type)}\``;
+    const type = row.typeMarkdown ?? `\`${cell(row.type)}\``;
     const req = row.required ? "yes" : "no";
     lines.push(`| \`${row.name}\` | ${type} | ${req} | ${cell(row.description)} |`);
   }
@@ -158,8 +161,16 @@ function islandSection(type: IslandType): string {
   ].join("\n");
 }
 
+/** github-slugger anchor for a `### \`<type>\`` heading: backticks and the dot drop out. */
+function islandAnchor(type: IslandType): string {
+  return type.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function buildDoc(): string {
   const islandSections = BUILTIN_ISLAND_TYPES.map(islandSection).join("\n\n");
+  const islandIndex = `**Built-in islands:** ${BUILTIN_ISLAND_TYPES.map(
+    (type) => `[\`${type}\`](#${islandAnchor(type)})`,
+  ).join(" · ")}`;
 
   return `# Manifest Reference
 
@@ -195,10 +206,10 @@ A manifest is a JSON object with the following top-level shape:
 | \`version\` | \`1\` | yes | The manifest format version. Always \`1\`. |
 | \`title\` | \`string\` | yes | The app title, shown in the chrome. |
 | \`icon\` | \`string\` | no | One of the curated icon names, used for the app's tile in the workspace app rail. |
-| \`datasets\` | \`object\` | yes | A map of dataset name to a dataset declaration. |
-| \`pages\` | \`array of object\` | yes | The app's pages, one sidebar entry each. |
-| \`actions\` | \`object\` | no | A map of action name to an action declaration. |
-| \`connectors\` | \`object\` | no | A map of connector name to a connector declaration. |
+| \`datasets\` | \`object\` | yes | A map of dataset name to a dataset declaration. See [Datasets](#datasets). |
+| \`pages\` | \`array of object\` | yes | The app's pages, one sidebar entry each. See [Pages](#pages). |
+| \`actions\` | \`object\` | no | A map of action name to an action declaration. See [Actions](#actions). |
+| \`connectors\` | \`object\` | no | A map of connector name to a connector declaration. See [Connectors](#connectors). |
 
 ## Datasets
 
@@ -351,6 +362,8 @@ missing field fails validation and names the island.
 A \`layout.row\` is a structural wrapper: it holds other islands and forces them onto
 their own full-width grid row. It carries no \`span\`, \`title\`, or data binding, and it
 cannot nest another \`layout.row\`.
+
+${islandIndex}
 
 ${islandSections}
 

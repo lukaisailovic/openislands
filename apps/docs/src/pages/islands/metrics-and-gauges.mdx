@@ -55,8 +55,7 @@ MRR, today's steps) deserves the top of a page.
 - `compareTo`: `"prev"` draws a delta against the previous row; a field name compares to
   that column instead; `"none"` (the default) shows no delta.
 - `target`: a field holding a target to measure the value against.
-- `format`: `eur`, `kg`, `int`, `pct`, `date`, `datetime`, or `time`; `unit` appends a
-  free-form suffix.
+- `format`: any [value format](/reference/value-formats); `unit` appends a free-form suffix.
 - `color`: a 6-digit hex (e.g. `"#22C55E"`) for the sparkline, overriding the palette.
 
 ## metric.scorecard
@@ -108,8 +107,8 @@ churn, NPS) belong together in one tidy tile instead of separate KPI cards.
 ```
 
 - `stats`: the list of numbers to show (at least one), each reading its `value` off the last row.
-- `stats[].label` defaults to the field name; `format`/`unit` style the value; `compareTo: "prev"`
-  adds a delta badge versus the previous row.
+- `stats[].label` defaults to the field name; a [value format](/reference/value-formats) (`format`)
+  or free-form `unit` styles the value; `compareTo: "prev"` adds a delta badge versus the previous row.
 - `columns`: a fixed grid column count (1-6); omitted, the grid is responsive.
 
 ## gauge.rings
@@ -217,7 +216,7 @@ over it danger-red.
 - `value`: the field holding the current number (required).
 - `goal`: at least one of `min` / `max`, each a column or a number; supplying both makes
   a target band.
-- `format`: same set as `metric.kpi`; `unit`/`label` annotate the ring.
+- `format`: any [value format](/reference/value-formats); `unit`/`label` annotate the ring.
 
 <Callout variant="note">
   `gauge.goal` needs at least one bound: declaring `goal` with neither `min` nor `max` is

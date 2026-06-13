@@ -52,6 +52,7 @@ export default defineConfig({
       collapsed: false,
       items: [
         { text: "Manifest Reference", link: "/reference/manifest" },
+        { text: "Value Formats", link: "/reference/value-formats" },
         { text: "MCP Server", link: "/mcp" },
       ],
     },
