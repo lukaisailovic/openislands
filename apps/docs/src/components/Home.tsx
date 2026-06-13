@@ -96,7 +96,7 @@ export function Home() {
       <section className="oi-section">
         <p className="oi-eyebrow">the whole idea</p>
         <h2 className="oi-section-title">
-          You write the manifest. The runtime renders the island.
+          Your agent writes the manifest. The runtime renders the island.
         </h2>
         <div className="oi-split">
           <figure className="oi-panel oi-panel-code">
