@@ -85,6 +85,29 @@
   pointer-events: none;
 }
 
+/* Hero brand lockup: the mark stacked above the wordmark, set in the site font
+ * (an <img> SVG can't reach the web font, so the wordmark stays HTML text). */
+.oi-hero-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.oi-hero-mark {
+  width: 60px;
+  height: 60px;
+}
+
+.oi-hero-word {
+  margin: 0;
+  font-size: clamp(2.5rem, 6vw, 3.75rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--oi-heading);
+}
+
 .oi-command {
   display: inline-flex;
   align-items: center;

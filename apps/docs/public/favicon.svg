@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="OpenIslands">
+  <style>
+    .tile { fill: #0C1414; }
+    .accent { fill: #0D9488; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #FFFFFF; }
+      .accent { fill: #2DD4BF; }
+    }
+  </style>
+  <rect class="tile" x="3" y="3" width="10" height="10" rx="2.6"/>
+  <rect class="tile" x="14.8" y="3" width="6.2" height="10" rx="2.2"/>
+  <rect class="tile" x="3" y="14.8" width="10" height="6.2" rx="2.2"/>
+  <rect class="accent" x="14.8" y="14.8" width="6.2" height="6.2" rx="2"/>
+</svg>

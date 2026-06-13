@@ -1,6 +1,6 @@
 import { Banner, Sidebar, Text, useSidebar } from "@cloudflare/kumo";
 import { useParams } from "@tanstack/react-router";
-import { Island, WarningCircle } from "@phosphor-icons/react";
+import { WarningCircle } from "@phosphor-icons/react";
 import type { Manifest } from "@openislands/schema";
 import type { CSSProperties, ReactNode } from "react";
 import type { IslandValidationError } from "../types.js";
@@ -8,6 +8,7 @@ import type { WorkspaceAppInfo } from "../server/dashboard.js";
 import { useAppId } from "../client/useAppId.js";
 import { AppRail } from "./AppRail.js";
 import { ConnectionsButton } from "./ConnectionsDialog.js";
+import { Brandmark } from "./Brandmark.js";
 import { pageIcon } from "./pageIcons.js";
 
 function ManifestErrorBanner({ errors }: { errors: IslandValidationError[] }) {
@@ -90,8 +91,8 @@ function TopBar({ showTrigger, hasConnectors }: { showTrigger: boolean; hasConne
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-kumo-line px-3">
       {showTrigger ? <Sidebar.Trigger className="md:hidden" /> : null}
-      <div className="grid size-7 place-items-center rounded-md bg-kumo-contrast text-kumo-inverse">
-        <Island size={16} weight="fill" />
+      <div className="grid size-7 place-items-center rounded-md bg-[#0c1314] text-white ring-1 ring-white/10">
+        <Brandmark className="size-[18px]" />
       </div>
       <Text variant="heading3" as="span" className="tracking-tight">
         OpenIslands

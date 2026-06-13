@@ -72,7 +72,10 @@ export function Home() {
   return (
     <div className="oi-home">
       <HomePage.Root className="oi-hero">
-        <HomePage.Logo />
+        <div className="oi-hero-brand">
+          <img className="oi-hero-mark" src="/logo-light.svg" alt="" width="60" height="60" />
+          <h1 className="oi-hero-word">OpenIslands</h1>
+        </div>
         <HomePage.Tagline>
           Dashboards an agent can maintain for months, without them rotting.
         </HomePage.Tagline>

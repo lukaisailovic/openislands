@@ -8,6 +8,8 @@ export default defineConfig({
   // no theme toggle. The accent is a tide teal tuned for the dark surface.
   colorScheme: "dark",
   accentColor: "#2dd4bf",
+  logoUrl: { light: "/logo-dark.svg", dark: "/logo-light.svg" },
+  iconUrl: "/favicon.svg",
   topNav: [{ text: "GitHub", link: "https://github.com/lukaisailovic/openislands" }],
   sidebar: [
     {
