@@ -8,6 +8,7 @@
     "dev": "vocs dev",
     "build": "vocs build",
     "preview": "vocs preview",
+    "typecheck": "tsc --noEmit",
     "gen:reference": "tsx scripts/gen-reference.ts"
   },
   "dependencies": {

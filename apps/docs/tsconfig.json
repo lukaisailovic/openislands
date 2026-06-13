@@ -6,6 +6,8 @@
     "allowImportingTsExtensions": true,
     "moduleDetection": "force",
     "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
     "jsx": "react-jsx",
     "noUncheckedSideEffectImports": true,
     "types": ["node", "react", "react-dom"]

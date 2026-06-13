@@ -45,14 +45,16 @@ apps/docs/           # the docs site (Vocs)
 
 ```bash
 pnpm install && pnpm build
+pnpm typecheck             # tsc --noEmit per package (the build strips types, never checks them)
 pnpm test                  # vitest
 pnpm lint                  # oxlint
 pnpm validate:templates    # every template's manifest + bindings
 node_modules/.bin/tsx packages/cli/src/index.ts serve templates/finance
 ```
 
-Run `pnpm build && pnpm test && pnpm lint` before calling anything done. Toolchain: pnpm +
-Turborepo, tsdown (rolldown/Oxc) builds, oxlint + oxfmt, Vitest, ESM-only, Node ≥ 20.
+Run `pnpm build && pnpm typecheck && pnpm test && pnpm lint` before calling anything done.
+Toolchain: pnpm + Turborepo, tsdown (rolldown/Oxc) builds, oxlint + oxfmt, Vitest, ESM-only,
+Node ≥ 20.
 
 ## Working style
 
@@ -63,7 +65,7 @@ Turborepo, tsdown (rolldown/Oxc) builds, oxlint + oxfmt, Vitest, ESM-only, Node 
 - **Verifying a served dashboard?** Drive it with `/agent-browser` rather than guessing.
 - **Editing the docs site (`apps/docs`)?** It's built with Vocs — use the **vocs MCP**
   (`search_docs` / `read_page`) to look up Vocs components and config.
-- **Before committing**, run `/simplify` on the changed code, then `pnpm build && pnpm test && pnpm lint`.
+- **Before committing**, run `/simplify` on the changed code, then `pnpm build && pnpm typecheck && pnpm test && pnpm lint`.
 
 ## Deeper reference (read on demand)
 

@@ -54,9 +54,11 @@ rather than expanding the core.
 
 ## Before opening a PR
 
-`pnpm build && pnpm test && pnpm lint` should be green, and `pnpm validate:templates`
-and `pnpm e2e` (per-template `init` → `serve` → render + `/api/query`) should pass.
-CI runs the same steps.
+`pnpm build && pnpm typecheck && pnpm test && pnpm lint` should be green, and
+`pnpm validate:templates` and `pnpm e2e` (per-template `init` → `serve` → render +
+`/api/query`) should pass. CI runs the same steps. `typecheck` runs `tsc --noEmit`
+per package through Turborepo — the build (Oxc) strips types without checking them,
+so this is the only gate that does.
 
 ## Releasing
 

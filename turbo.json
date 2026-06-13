@@ -6,8 +6,11 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "templates/**"]
     },
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["topo"]
     },
     "test": {
       "dependsOn": ["^build"]
