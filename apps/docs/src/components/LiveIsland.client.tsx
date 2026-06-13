@@ -1,7 +1,9 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { IslandCard, resolveRenderer, type SourceInfo } from "@openislands/runtime/islands";
+import { IslandCard, resolveRenderer, type Column, type SourceInfo } from "@openislands/runtime/islands";
+
+type ColumnType = Column["type"];
 
 export interface LiveIslandColumn {
   name: string;
@@ -30,9 +32,27 @@ export interface LiveIslandProps {
 
 const DEFAULT_HEIGHT = 220;
 
+/**
+ * Bucket a DuckDB-style type name (what docs authors write — `bigint`, `double`,
+ * `varchar`, `timestamp`) into the runtime's coarse {@link ColumnType}, matching
+ * how the compiler classifies real query columns. Unrecognized names read as
+ * text, mirroring the compiler's own fallback.
+ */
+function columnTypeFrom(name: string): ColumnType {
+  const type = name.toLowerCase();
+  if (type === "boolean" || type === "bool") return "boolean";
+  if (type.startsWith("date") || type.startsWith("time")) return "date";
+  if (/(int|float|double|decimal|numeric|real)/.test(type)) return "number";
+  return "string";
+}
+
 function sourceFrom(data: LiveIslandData | undefined): SourceInfo | null {
   if (!data) return null;
-  return { name: data.dataset, kind: "file", columns: data.columns };
+  const columns: Column[] = data.columns.map(({ name, type }) => ({
+    name,
+    type: columnTypeFrom(type),
+  }));
+  return { name: data.dataset, kind: "file", columns };
 }
 
 /**
