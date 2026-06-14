@@ -685,11 +685,17 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.value);
       break;
     case "gauge.goal": {
-      add(island.value);
-      const goal = island.goal as Record<string, unknown> | undefined;
-      if (goal) {
-        add(goal.min);
-        add(goal.max);
+      const goals = island.goals;
+      if (Array.isArray(goals)) {
+        for (const entry of goals) {
+          const spec = entry as Record<string, unknown>;
+          add(spec.value);
+          const goal = spec.goal as Record<string, unknown> | undefined;
+          if (goal) {
+            add(goal.min);
+            add(goal.max);
+          }
+        }
       }
       break;
     }

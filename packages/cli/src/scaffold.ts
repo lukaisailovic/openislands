@@ -43,7 +43,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
       titleField: "TODO",
     },
     "gauge.rings": { type, title: "New rings", dataset: "TODO", rings: [{ value: "TODO", max: "TODO" }] },
-    "gauge.goal": { type, title: "New goal", dataset: "TODO", value: "TODO", goal: { max: "TODO" } },
+    "gauge.goal": { type, title: "New goal", dataset: "TODO", goals: [{ value: "TODO", goal: { max: "TODO" } }] },
     "gauge.meter": { type, title: "New meter", dataset: "TODO", meters: [{ value: "TODO", max: "TODO" }] },
     "status.grid": { type, title: "New status", dataset: "TODO", label: "TODO", state: "TODO" },
     "search.box": { type, title: "New search", dataset: "TODO", fields: ["TODO"], titleField: "TODO" },

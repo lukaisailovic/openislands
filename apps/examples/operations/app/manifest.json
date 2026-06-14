@@ -59,7 +59,7 @@
         ] },
         { "type": "layout.row", "id": "delivery", "islands": [
           { "type": "timeseries.line", "title": "Throughput vs commitment", "dataset": "throughput", "x": "week", "y": "shipped", "options": { "goalField": "committed" }, "span": 7 },
-          { "type": "gauge.goal", "title": "Error budget remaining", "dataset": "summary", "value": "error_budget_pct", "goal": { "min": 0.2 }, "format": "pct", "label": "remaining", "span": 5 }
+          { "type": "gauge.goal", "title": "Error budget remaining", "dataset": "summary", "goals": [{ "value": "error_budget_pct", "goal": { "min": 0.2 }, "format": "pct", "label": "remaining" }], "span": 5 }
         ] },
         { "type": "layout.row", "id": "sprint", "islands": [
           { "type": "timeseries.line", "title": "Sprint burndown", "dataset": "burndown", "x": "day", "y": "remaining", "options": { "goalField": "ideal" }, "span": 6 },

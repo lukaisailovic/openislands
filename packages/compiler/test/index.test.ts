@@ -163,8 +163,7 @@ describe("islandRequirements", () => {
     const r = islandRequirements({
       type: "gauge.goal",
       dataset: "macros",
-      value: "kcal",
-      goal: { min: "kcal_low", max: 2600 },
+      goals: [{ value: "kcal", goal: { min: "kcal_low", max: 2600 } }],
     });
     expect(r.dataset).toBe("macros");
     expect(r.fields.toSorted()).toEqual(["kcal", "kcal_low"]);

@@ -10,7 +10,7 @@ const columns = [
 function renderGoal(configOverrides: Record<string, unknown>, value: number) {
   return render(
     <GaugeGoal
-      config={{ type: "gauge.goal", dataset: "vitals", value: "rhr", goal: { min: 50, max: 60 }, ...configOverrides }}
+      config={{ type: "gauge.goal", dataset: "vitals", goals: [{ value: "rhr", goal: { min: 50, max: 60 } }], ...configOverrides }}
       data={{ dataset: "vitals", columns: [...columns], rows: [{ day: "2026-06-13", rhr: value }] }}
     />,
   );
@@ -48,16 +48,38 @@ describe("gauge.goal sizes", () => {
 describe("gauge.goal status classification", () => {
   it("is within when the value sits inside the band", () => {
     renderGoal({ size: "medium" }, 55);
-    expect(screen.getByTestId("gauge-goal")).toHaveAttribute("data-status", "within");
+    expect(screen.getByTestId("gauge-goal-ring")).toHaveAttribute("data-status", "within");
   });
 
   it("is over when the value exceeds the max", () => {
     renderGoal({ size: "medium" }, 72);
-    expect(screen.getByTestId("gauge-goal")).toHaveAttribute("data-status", "over");
+    expect(screen.getByTestId("gauge-goal-ring")).toHaveAttribute("data-status", "over");
   });
 
   it("is under when the value falls below the min", () => {
     renderGoal({ size: "medium" }, 41);
-    expect(screen.getByTestId("gauge-goal")).toHaveAttribute("data-status", "under");
+    expect(screen.getByTestId("gauge-goal-ring")).toHaveAttribute("data-status", "under");
+  });
+});
+
+describe("gauge.goal multiple goals", () => {
+  it("renders one independently classified ring per goal", () => {
+    render(
+      <GaugeGoal
+        config={{
+          type: "gauge.goal",
+          dataset: "vitals",
+          goals: [
+            { value: "rhr", goal: { min: 50, max: 60 } },
+            { value: "spo2", goal: { max: 95 } },
+          ],
+        }}
+        data={{ dataset: "vitals", columns: [...columns], rows: [{ day: "2026-06-13", rhr: 55, spo2: 99 }] }}
+      />,
+    );
+    const rings = screen.getAllByTestId("gauge-goal-ring");
+    expect(rings).toHaveLength(2);
+    expect(rings[0]).toHaveAttribute("data-status", "within");
+    expect(rings[1]).toHaveAttribute("data-status", "over");
   });
 });

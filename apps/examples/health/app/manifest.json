@@ -101,7 +101,7 @@
             { "value": "fat_g", "max": "fat_goal_g", "label": "Fat", "direction": "atLeast" },
             { "value": "sat_fat_g", "max": "sat_fat_limit_g", "label": "Sat fat", "direction": "atMost" }
           ] },
-          { "type": "gauge.goal", "title": "Calories in range", "dataset": "macros_daily", "value": "kcal", "goal": { "min": "kcal_goal_low", "max": "kcal_goal_high" }, "label": "kcal", "format": "int", "span": 5 }
+          { "type": "gauge.goal", "title": "Calories in range", "dataset": "macros_daily", "goals": [{ "value": "kcal", "goal": { "min": "kcal_goal_low", "max": "kcal_goal_high" }, "label": "kcal", "format": "int" }], "span": 5 }
         ] },
 
         { "type": "layout.row", "id": "vitals", "islands": [

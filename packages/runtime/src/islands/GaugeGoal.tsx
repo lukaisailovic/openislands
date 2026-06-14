@@ -2,11 +2,14 @@ import { Badge, Tooltip } from "@cloudflare/kumo";
 import type { ValueFormat } from "@openislands/schema";
 import type { IslandRenderProps } from "../types.js";
 import { CENTER, EASE_OUT, FILL_MS, GaugeRing, SIZE, useMountedFill, usePrefersReducedMotion } from "./gauge.js";
-import { formatValue, toNumber } from "./format.js";
+import { formatValue, type Row, toNumber } from "./format.js";
 
 interface GoalSpec {
-  min?: string | number;
-  max?: string | number;
+  value: string;
+  goal?: { min?: string | number; max?: string | number };
+  label?: string;
+  unit?: string;
+  format?: ValueFormat;
 }
 
 const STROKE = 18;
@@ -54,40 +57,39 @@ function fillFraction(value: number, min: number | null, max: number | null): nu
   return Math.max(0, Math.min(value / target, 1));
 }
 
-export function GaugeGoal({ config, data }: IslandRenderProps) {
-  const rows = data?.rows ?? [];
-  const row = rows.at(-1) ?? {};
-  const format = config.format as ValueFormat | undefined;
-  const goal = (config.goal ?? {}) as GoalSpec;
-  const size = (config.size as Size | undefined) ?? "medium";
-  const sizeSpec = SIZES[size];
-  const reducedMotion = usePrefersReducedMotion();
-  const filled = useMountedFill() || reducedMotion;
+interface GoalRingProps {
+  goal: GoalSpec;
+  row: Row;
+  sizeSpec: SizeSpec;
+  filled: boolean;
+  reducedMotion: boolean;
+}
 
-  const value = toNumber(row[config.value as string]) ?? 0;
-  const min = resolveBound(goal.min, row);
-  const max = resolveBound(goal.max, row);
+function GoalRing({ goal, row, sizeSpec, filled, reducedMotion }: GoalRingProps) {
+  const bounds = goal.goal ?? {};
+  const value = toNumber(row[goal.value]) ?? 0;
+  const min = resolveBound(bounds.min, row);
+  const max = resolveBound(bounds.max, row);
   const status = classify(value, min, max);
   const tone = TONE[status];
   const fraction = fillFraction(value, min, max);
 
-  const display = formatValue(row[config.value as string] ?? null, format);
-  const label = (config.label as string | undefined) ?? (config.unit as string | undefined);
+  const display = formatValue(row[goal.value] ?? null, goal.format);
+  const label = goal.label ?? goal.unit;
 
   const goalText =
     min !== null && max !== null
-      ? `${formatValue(min, format)}–${formatValue(max, format)}`
+      ? `${formatValue(min, goal.format)}–${formatValue(max, goal.format)}`
       : max !== null
-        ? `≤ ${formatValue(max, format)}`
-        : `≥ ${formatValue(min ?? 0, format)}`;
+        ? `≤ ${formatValue(max, goal.format)}`
+        : `≥ ${formatValue(min ?? 0, goal.format)}`;
   const tooltip = `${display} (goal ${goalText})`;
 
   return (
     <div
       className={`flex flex-col items-center ${sizeSpec.rootGap}`}
-      data-testid="gauge-goal"
+      data-testid="gauge-goal-ring"
       data-status={status}
-      data-size={size}
     >
       <Tooltip content={tooltip} render={<div />}>
         <svg
@@ -95,7 +97,7 @@ export function GaugeGoal({ config, data }: IslandRenderProps) {
           width={sizeSpec.svg}
           height={sizeSpec.svg}
           role="img"
-          aria-label={(config.title as string) ?? "Goal gauge"}
+          aria-label={goal.label ?? goal.value}
         >
           <GaugeRing
             radius={RADIUS}
@@ -133,6 +135,34 @@ export function GaugeGoal({ config, data }: IslandRenderProps) {
           <Badge variant={tone.badge}>{tone.text}</Badge>
         )}
       </div>
+    </div>
+  );
+}
+
+export function GaugeGoal({ config, data }: IslandRenderProps) {
+  const row: Row = (data?.rows ?? []).at(-1) ?? {};
+  const goals = (config.goals ?? []) as GoalSpec[];
+  const size = (config.size as Size | undefined) ?? "medium";
+  const sizeSpec = SIZES[size];
+  const reducedMotion = usePrefersReducedMotion();
+  const filled = useMountedFill() || reducedMotion;
+
+  return (
+    <div
+      className="flex flex-wrap items-start justify-center gap-x-6 gap-y-5"
+      data-testid="gauge-goal"
+      data-size={size}
+    >
+      {goals.map((goal, i) => (
+        <GoalRing
+          key={`${goal.value}-${i}`}
+          goal={goal}
+          row={row}
+          sizeSpec={sizeSpec}
+          filled={filled}
+          reducedMotion={reducedMotion}
+        />
+      ))}
     </div>
   );
 }

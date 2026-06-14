@@ -27,7 +27,7 @@ import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
 
 const goalGauge = (value: number) => (
   <GaugeGoal
-    config={{ type: "gauge.goal", dataset: "macros", value: "kcal", goal: { min: "low", max: "high" }, label: "kcal", format: "int" }}
+    config={{ type: "gauge.goal", dataset: "macros", goals: [{ value: "kcal", goal: { min: "low", max: "high" }, label: "kcal", format: "int" }] }}
     data={{ dataset: "macros", columns: [], rows: [{ kcal: value, low: 2200, high: 2600 }] }}
   />
 );
@@ -207,7 +207,7 @@ describe("island registry", () => {
 
   it("renders gauge.goal within its band as success, off the last row", () => {
     render(goalGauge(2400));
-    const gauge = screen.getByTestId("gauge-goal");
+    const gauge = screen.getByTestId("gauge-goal-ring");
     expect(gauge.dataset.status).toBe("within");
     expect(screen.getByText("Within goal")).toBeInTheDocument();
     expect(screen.getByText("2,400")).toBeInTheDocument();
@@ -215,24 +215,24 @@ describe("island registry", () => {
 
   it("renders gauge.goal below the band as warning", () => {
     render(goalGauge(1800));
-    expect(screen.getByTestId("gauge-goal").dataset.status).toBe("under");
+    expect(screen.getByTestId("gauge-goal-ring").dataset.status).toBe("under");
     expect(screen.getByText("Under goal")).toBeInTheDocument();
   });
 
   it("renders gauge.goal above the band as danger", () => {
     render(goalGauge(3000));
-    expect(screen.getByTestId("gauge-goal").dataset.status).toBe("over");
+    expect(screen.getByTestId("gauge-goal-ring").dataset.status).toBe("over");
     expect(screen.getByText("Over goal")).toBeInTheDocument();
   });
 
   it("treats a single lower bound as satisfied at or above it", () => {
     render(
       <GaugeGoal
-        config={{ type: "gauge.goal", dataset: "d", value: "v", goal: { min: "g" } }}
+        config={{ type: "gauge.goal", dataset: "d", goals: [{ value: "v", goal: { min: "g" } }] }}
         data={{ dataset: "d", columns: [], rows: [{ v: 80, g: 100 }, { v: 120, g: 100 }] }}
       />,
     );
-    expect(screen.getByTestId("gauge-goal").dataset.status).toBe("within");
+    expect(screen.getByTestId("gauge-goal-ring").dataset.status).toBe("within");
   });
 
   it("renders gauge.meter bars from the last row with per-meter colors", () => {

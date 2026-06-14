@@ -685,7 +685,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
     drilldown: { island: { type: "table.grid", dataset: "components", columns: [{ field: "name" }] }, match: { meal_id: "id" } },
   },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [{ value: "protein_g", max: "protein_goal_g", label: "Protein" }, { value: "carb_g", max: 250, color: "#0a84ff" }] },
-  "gauge.goal": { type: "gauge.goal", dataset: "d", value: "kcal", goal: { min: "kcal_low", max: "kcal_high" }, label: "kcal", format: "int" },
+  "gauge.goal": { type: "gauge.goal", dataset: "d", goals: [{ value: "kcal", goal: { min: "kcal_low", max: "kcal_high" }, label: "kcal", format: "int" }] },
   "gauge.meter": { type: "gauge.meter", dataset: "d", meters: [{ value: "used_gb", max: "quota_gb", label: "Storage" }, { value: "req", max: 1000, color: "#0a84ff" }] },
   "status.grid": { type: "status.grid", dataset: "d", label: "service", state: "status", value: "latency_ms", format: "int", tones: { degraded: "warning" } },
   "search.box": { type: "search.box", dataset: "d", fields: ["name", "artist"], titleField: "name", detail: "artist", placeholder: "Search tracks…", limit: 5 },
@@ -713,7 +713,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "table.grid": { type: "table.grid", columns: [{ field: "f", format: "florins" }] },
   "timeline.feed": { type: "timeline.feed", dataset: "d", ts: "at", titleField: "t", stats: [{ label: "P" }] },
   "gauge.rings": { type: "gauge.rings", dataset: "d", rings: [] },
-  "gauge.goal": { type: "gauge.goal", dataset: "d", goal: { max: "kcal_high" } },
+  "gauge.goal": { type: "gauge.goal", dataset: "d", goals: [] },
   "gauge.meter": { type: "gauge.meter", dataset: "d", meters: [] },
   "status.grid": { type: "status.grid", dataset: "d", label: "service" },
   "search.box": { type: "search.box", dataset: "d", fields: [], titleField: "name" },
@@ -776,7 +776,7 @@ describe("gauge.goal bounds", () => {
   const goalManifest = (goal: unknown) => {
     const m = structuredClone(goodManifest) as Record<string, unknown>;
     (m.pages as { id: string; islands: unknown[] }[])[0]!.islands = [
-      { type: "gauge.goal", dataset: "net_worth", value: "net_worth_eur", goal },
+      { type: "gauge.goal", dataset: "net_worth", goals: [{ value: "net_worth_eur", goal }] },
     ];
     return m;
   };
@@ -790,20 +790,21 @@ describe("gauge.goal bounds", () => {
     expect(validateManifest(goalManifest({ min: "low", max: "high" })).ok).toBe(true);
   });
 
-  it("rejects a goal with neither bound, naming the island", () => {
+  it("rejects a goal entry with neither bound, naming the island", () => {
     const r = validateManifest(goalManifest({}));
     expect(r.ok).toBe(false);
     const err = r.errors.find((e) => e.type === "gauge.goal");
     expect(err).toBeDefined();
     expect(err!.page).toBe("overview");
     expect(err!.index).toBe(0);
-    expect(err!.field).toBe("goal");
+    expect(err!.field).toBe("goals.0.goal");
+    expect(err!.message).toContain("goals[0] needs at least one of min or max");
   });
 });
 
 describe("new island config fields", () => {
   it("gauge.goal accepts a size and defaults it to medium", () => {
-    const base = { type: "gauge.goal", dataset: "d", value: "v", goal: { max: 1 } };
+    const base = { type: "gauge.goal", dataset: "d", goals: [{ value: "v", goal: { max: 1 } }] };
     expect(BUILTIN_ISLAND_SCHEMAS["gauge.goal"].safeParse({ ...base, size: "small" }).success).toBe(true);
     const parsed = BUILTIN_ISLAND_SCHEMAS["gauge.goal"].safeParse(base);
     expect(parsed.success && parsed.data.size).toBe("medium");
@@ -811,7 +812,7 @@ describe("new island config fields", () => {
 
   it("gauge.goal rejects an unknown size", () => {
     const r = BUILTIN_ISLAND_SCHEMAS["gauge.goal"].safeParse({
-      type: "gauge.goal", dataset: "d", value: "v", goal: { max: 1 }, size: "huge",
+      type: "gauge.goal", dataset: "d", goals: [{ value: "v", goal: { max: 1 } }], size: "huge",
     });
     expect(r.success).toBe(false);
   });

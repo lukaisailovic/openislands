@@ -391,10 +391,7 @@ export const GaugeRings = z.object({
     .describe("concentric rings, outermost first; reads the last row (max 4 for legible geometry)"),
 }).describe("Up to four concentric progress rings read off the last row — use for tracking several goals or budgets at once.");
 
-export const GaugeGoal = z.object({
-  type: z.literal("gauge.goal"),
-  ...baseFields,
-  dataset: z.string(),
+const GoalSpec = z.object({
   value: z.string().describe("field holding the current value"),
   goal: z
     .object({
@@ -405,11 +402,22 @@ export const GaugeGoal = z.object({
   label: z.string().optional(),
   unit: z.string().optional(),
   format: ValueFormat.optional(),
+});
+
+export const GaugeGoal = z.object({
+  type: z.literal("gauge.goal"),
+  ...baseFields,
+  dataset: z.string(),
+  goals: z
+    .array(GoalSpec)
+    .min(1)
+    .max(6)
+    .describe("one ring per goal, side by side in a row that wraps; each reads the last row (max 6 to stay legible)"),
   size: z
     .enum(["small", "medium", "large"])
     .default("medium")
-    .describe("ring footprint: `small` packs several goals into a row, `large` emphasizes a single one"),
-}).describe("A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range; `size` (small/medium/large) sets its footprint so several can share a row.");
+    .describe("footprint shared by every ring: `small` packs several goals into a row, `large` emphasizes one or two"),
+}).describe("One ring per goal comparing the last row's value to a goal or target band — use for numbers with a defined good range; within the band reads success-green, under amber, over danger-red. `size` sets the shared ring footprint so several share a row.");
 
 const MeterSpec = z.object({
   value: z.string().describe("field holding the meter's current value"),
@@ -1045,16 +1053,19 @@ export function validateManifest(input: unknown): ValidationResult {
         });
       }
       if (type === "gauge.goal") {
-        const goal = (result.data as { goal?: { min?: unknown; max?: unknown } }).goal;
-        if (!goal || (goal.min === undefined && goal.max === undefined)) {
-          errors.push({
-            page: pageId,
-            index,
-            type,
-            message: "goal needs at least one of min or max",
-            field: "goal",
-          });
-        }
+        const goals = (result.data as { goals?: Array<{ goal?: { min?: unknown; max?: unknown } }> }).goals ?? [];
+        goals.forEach((entry, goalIndex) => {
+          const goal = entry.goal;
+          if (!goal || (goal.min === undefined && goal.max === undefined)) {
+            errors.push({
+              page: pageId,
+              index,
+              type,
+              message: `goals[${goalIndex}] needs at least one of min or max`,
+              field: `goals.${goalIndex}.goal`,
+            });
+          }
+        });
       }
       if (type === "content.editor") {
         const cfg = result.data as { file?: string; dir?: string; csv?: boolean; include?: unknown; groups?: unknown };
