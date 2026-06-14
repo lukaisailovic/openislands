@@ -8,6 +8,7 @@ import { CategoryBar } from "./CategoryBar.js";
 import { CategoryCombo } from "./CategoryCombo.js";
 import { CategoryPie } from "./CategoryPie.js";
 import { CompareRadar } from "./CompareRadar.js";
+import { ContentEditor } from "./ContentEditor.js";
 import { CorrelationScatter } from "./CorrelationScatter.js";
 import { CustomPlaceholder } from "./CustomPlaceholder.js";
 import { DistributionHeatmap } from "./DistributionHeatmap.js";
@@ -56,6 +57,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "gauge.meter": GaugeMeter,
   "status.grid": StatusGrid,
   "search.box": SearchBox,
+  "content.editor": ContentEditor,
 };
 
 export function registerIsland(type: IslandType, renderer: IslandRenderer): void {
@@ -70,7 +72,10 @@ export function resolveRenderer(type: string): IslandRenderer {
 
 setDrilldownResolver(resolveRenderer);
 
-/** Islands that bind to a dataset need a client query; data-free ones (note/source) don't. */
+/**
+ * Islands that bind to a dataset need a client query. Data-free ones (note/source)
+ * don't, and `content.editor` manages its own file fetching.
+ */
 export function islandNeedsData(type: string): boolean {
-  return type !== "note.card" && type !== "source.doc";
+  return type !== "note.card" && type !== "source.doc" && type !== "content.editor";
 }

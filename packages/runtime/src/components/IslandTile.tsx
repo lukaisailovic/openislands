@@ -101,6 +101,14 @@ export function IslandTile({
     );
   }
 
+  if (config.type === "content.editor") {
+    return (
+      <div className="oi-tile" style={tileStyle}>
+        <Renderer config={config} data={undefined} />
+      </div>
+    );
+  }
+
   return (
     <IslandCard
       className="oi-tile"
