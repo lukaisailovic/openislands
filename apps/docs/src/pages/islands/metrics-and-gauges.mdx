@@ -218,6 +218,9 @@ over it danger-red.
 - `goal`: at least one of `min` / `max`, each a column or a number; supplying both makes
   a target band.
 - `format`: any [value format](/reference/value-formats); `unit`/`label` annotate the ring.
+- `size`: the ring's footprint — `small`, `medium` (the default), or `large`. Use `small` to
+  pack several goals side by side across a row (it shrinks the ring and swaps the status badge
+  for a compact colored status dot); use `large` to emphasize a single goal on its own.
 
 <Callout variant="note">
   `gauge.goal` needs at least one bound: declaring `goal` with neither `min` nor `max` is

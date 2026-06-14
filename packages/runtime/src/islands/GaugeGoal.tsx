@@ -20,6 +20,22 @@ const TONE = {
 
 type Status = keyof typeof TONE;
 
+type Size = "small" | "medium" | "large";
+
+interface SizeSpec {
+  svg: number;
+  rootGap: string;
+  metaGap: string;
+  labelClass: string;
+  compactStatus: boolean;
+}
+
+const SIZES: Record<Size, SizeSpec> = {
+  small: { svg: 88, rootGap: "gap-2", metaGap: "gap-1", labelClass: "text-xs font-medium opacity-80", compactStatus: true },
+  medium: { svg: 150, rootGap: "gap-3", metaGap: "gap-1.5", labelClass: "text-sm font-medium opacity-80", compactStatus: false },
+  large: { svg: 210, rootGap: "gap-4", metaGap: "gap-2", labelClass: "text-base font-medium opacity-80", compactStatus: false },
+};
+
 function resolveBound(bound: string | number | undefined, row: Record<string, unknown>): number | null {
   if (bound === undefined) return null;
   if (typeof bound === "number") return bound;
@@ -43,6 +59,8 @@ export function GaugeGoal({ config, data }: IslandRenderProps) {
   const row = rows.at(-1) ?? {};
   const format = config.format as ValueFormat | undefined;
   const goal = (config.goal ?? {}) as GoalSpec;
+  const size = (config.size as Size | undefined) ?? "medium";
+  const sizeSpec = SIZES[size];
   const reducedMotion = usePrefersReducedMotion();
   const filled = useMountedFill() || reducedMotion;
 
@@ -66,15 +84,16 @@ export function GaugeGoal({ config, data }: IslandRenderProps) {
 
   return (
     <div
-      className="flex flex-col items-center gap-3"
+      className={`flex flex-col items-center ${sizeSpec.rootGap}`}
       data-testid="gauge-goal"
       data-status={status}
+      data-size={size}
     >
       <Tooltip content={tooltip} render={<div />}>
         <svg
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          width={SIZE}
-          height={SIZE}
+          width={sizeSpec.svg}
+          height={sizeSpec.svg}
           role="img"
           aria-label={(config.title as string) ?? "Goal gauge"}
         >
@@ -99,9 +118,20 @@ export function GaugeGoal({ config, data }: IslandRenderProps) {
           </text>
         </svg>
       </Tooltip>
-      <div className="flex flex-col items-center gap-1.5">
-        {label ? <span className="text-sm font-medium opacity-80">{label}</span> : null}
-        <Badge variant={tone.badge}>{tone.text}</Badge>
+      <div className={`flex flex-col items-center ${sizeSpec.metaGap}`}>
+        {label ? <span className={sizeSpec.labelClass}>{label}</span> : null}
+        {sizeSpec.compactStatus ? (
+          <Tooltip content={tone.text} render={<div />}>
+            <span
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: tone.stroke }}
+              role="img"
+              aria-label={tone.text}
+            />
+          </Tooltip>
+        ) : (
+          <Badge variant={tone.badge}>{tone.text}</Badge>
+        )}
       </div>
     </div>
   );
