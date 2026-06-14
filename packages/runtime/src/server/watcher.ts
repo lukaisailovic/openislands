@@ -4,11 +4,12 @@ import { compile, resetCustomSchemaCache, resetEngine } from "@openislands/compi
 import type { Manifest } from "@openislands/schema";
 import type { IslandValidationError, RuntimeEvent } from "../types.js";
 import { resetCustomBuildCache } from "./custom.js";
+import { isEditableTextFile, takeSelfWrite } from "./editorSync.js";
 import { appDir } from "./workspace.js";
 
 const MANIFEST_REL = join("app", "manifest.json");
 const COMPONENTS_DIR = "components";
-const WATCH_DIRS = ["data", "models", "app", COMPONENTS_DIR] as const;
+const WATCH_DIRS = ["data", "docs", "models", "app", COMPONENTS_DIR] as const;
 
 function isComponentChange(changedRel: string): boolean {
   return normRel(changedRel).startsWith(`${COMPONENTS_DIR}/`);
@@ -120,6 +121,20 @@ export async function eventsForChange(
   return [{ type: "datasets-changed", datasets }];
 }
 
+/**
+ * A `files-changed` event for the externally edited content files in a batch —
+ * additive to the dataset/validation events so the `content.editor` island
+ * re-reads them. Drops non-editable paths and any path a route just wrote (an
+ * own-write echo), so it fires only for genuinely external edits.
+ */
+export function filesChangedEvent(
+  projectDir: string,
+  rels: string[],
+): Extract<RuntimeEvent, { type: "files-changed" }> | null {
+  const paths = rels.filter((rel) => isEditableTextFile(rel) && !takeSelfWrite(projectDir, rel));
+  return paths.length ? { type: "files-changed", paths } : null;
+}
+
 export interface WatchHandle {
   close: () => Promise<void>;
 }
@@ -168,10 +183,10 @@ export async function startWatcher(
     timer = undefined;
     const changed = [...pending];
     pending.clear();
+    const rels = changed.map((abs) => normRel(relative(projectDir, abs)));
     const seen = new Set<string>();
     const events: RuntimeEvent[] = [];
-    for (const abs of changed) {
-      const rel = normRel(relative(projectDir, abs));
+    for (const rel of rels) {
       for (const event of await eventsForChange(projectDir, rel)) {
         const key = JSON.stringify(event);
         if (seen.has(key)) continue;
@@ -180,6 +195,8 @@ export async function startWatcher(
       }
     }
     for (const event of mergeEvents(events)) opts.broadcaster.publish(event);
+    const fc = filesChangedEvent(projectDir, rels);
+    if (fc) opts.broadcaster.publish(fc);
   };
 
   const onChange = (abs: string) => {

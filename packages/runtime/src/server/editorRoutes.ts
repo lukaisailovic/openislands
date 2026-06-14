@@ -19,13 +19,12 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, extname, join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
+import { fileExtension, isEditableTextFile, markSelfWrite } from "./editorSync.js";
 import { FileAccessError, confineProjectFile } from "./file.js";
 import { getVersion, listVersions, recordVersion } from "./editorStore.js";
 import { broadcasterFor } from "./watcher.js";
 import { type AppResolution, appDirFromParams } from "./workspace.js";
-
-const EDITOR_EXTENSIONS = new Set(["md", "markdown", "txt", "csv"]);
 
 interface EditorFile {
   path: string;
@@ -43,15 +42,6 @@ function resolveApp(request: Request): AppResolution {
   return appDirFromParams(new URL(request.url).searchParams);
 }
 
-/** Lowercase extension without the dot, e.g. `docs/a.MD` → `md`. */
-function extOf(path: string): string {
-  return extname(path).slice(1).toLowerCase();
-}
-
-function isEditable(path: string): boolean {
-  return EDITOR_EXTENSIONS.has(extOf(path));
-}
-
 /**
  * Project-relative posix path for an absolute file under the project dir.
  * `confineProjectFile` resolves paths against the project root's realpath, so
@@ -62,7 +52,8 @@ function relPosix(projectDir: string, abs: string): string {
   return relative(realpathSync(projectDir), abs).split(sep).join("/");
 }
 
-function publishFilesChanged(appId: string, relPath: string): void {
+function publishFilesChanged(appId: string, projectDir: string, relPath: string): void {
+  markSelfWrite(projectDir, relPath);
   broadcasterFor(appId).publish({ type: "files-changed", paths: [relPath] });
 }
 
@@ -76,12 +67,12 @@ function walkEditable(projectDir: string, dir: string): EditorFile[] {
       out.push(...walkEditable(projectDir, abs));
       continue;
     }
-    if (!entry.isFile() || !isEditable(entry.name)) continue;
+    if (!entry.isFile() || !isEditableTextFile(entry.name)) continue;
     const stat = statSync(abs);
     out.push({
       path: relPosix(projectDir, abs),
       name: entry.name,
-      ext: extOf(entry.name),
+      ext: fileExtension(entry.name),
       size: stat.size,
       mtime: stat.mtimeMs,
     });
@@ -115,12 +106,12 @@ export async function writeResponse(request: Request): Promise<Response> {
   const body = (await request.json()) as WriteBody;
   try {
     const abs = confineProjectFile(app.dir, body.path ?? "");
-    if (!isEditable(abs)) return new Response("only text files are editable", { status: 400 });
+    if (!isEditableTextFile(abs)) return new Response("only text files are editable", { status: 400 });
     const content = body.content ?? "";
     const rel = relPosix(app.dir, abs);
     if (existsSync(abs)) await recordVersion(app.dir, rel, readFileSync(abs, "utf8"));
     writeFileSync(abs, content);
-    publishFilesChanged(app.appId, rel);
+    publishFilesChanged(app.appId, app.dir, rel);
     return json({ ok: true });
   } catch (err) {
     if (err instanceof FileAccessError) return new Response(err.message, { status: err.status });
@@ -158,7 +149,7 @@ export async function restoreResponse(request: Request): Promise<Response> {
     if (content == null) return new Response("version not found", { status: 404 });
     if (existsSync(abs)) await recordVersion(app.dir, rel, readFileSync(abs, "utf8"));
     writeFileSync(abs, content);
-    publishFilesChanged(app.appId, rel);
+    publishFilesChanged(app.appId, app.dir, rel);
     return json({ ok: true });
   } catch (err) {
     if (err instanceof FileAccessError) return new Response(err.message, { status: err.status });
@@ -172,12 +163,12 @@ export async function createResponse(request: Request): Promise<Response> {
   const body = (await request.json()) as WriteBody;
   try {
     const abs = confineProjectFile(app.dir, body.path ?? "");
-    if (!isEditable(abs)) return new Response("only text files are editable", { status: 400 });
+    if (!isEditableTextFile(abs)) return new Response("only text files are editable", { status: 400 });
     if (existsSync(abs)) return new Response("file already exists", { status: 409 });
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, body.content ?? "");
     const rel = relPosix(app.dir, abs);
-    publishFilesChanged(app.appId, rel);
+    publishFilesChanged(app.appId, app.dir, rel);
     return json({ ok: true });
   } catch (err) {
     if (err instanceof FileAccessError) return new Response(err.message, { status: err.status });
@@ -200,7 +191,7 @@ export async function deleteResponse(request: Request): Promise<Response> {
       await recordVersion(app.dir, rel, readFileSync(abs, "utf8"));
       rmSync(abs);
     }
-    publishFilesChanged(app.appId, rel);
+    publishFilesChanged(app.appId, app.dir, rel);
     return json({ ok: true });
   } catch (err) {
     if (err instanceof FileAccessError) return new Response(err.message, { status: err.status });

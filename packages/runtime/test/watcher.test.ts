@@ -8,9 +8,12 @@ import {
   islandErrorKey,
   queryKeyMatchesDatasets,
 } from "../src/client/useLiveUpdates.js";
+import type { RuntimeEvent } from "../src/types.js";
+import { isEditableTextFile, markSelfWrite, takeSelfWrite } from "../src/server/editorSync.js";
 import {
   affectedDatasets,
   eventsForChange,
+  filesChangedEvent,
   mergeEvents,
   RuntimeEventBroadcaster,
   startWatcher,
@@ -70,6 +73,54 @@ describe("mergeEvents", () => {
       { type: "validation", islandErrors: [] },
     ]);
     expect(merged).toEqual([{ type: "validation", islandErrors: [] }]);
+  });
+});
+
+describe("isEditableTextFile", () => {
+  it("accepts the editable text extensions", () => {
+    for (const name of ["a.md", "a.markdown", "a.txt", "a.csv"]) {
+      expect(isEditableTextFile(name)).toBe(true);
+    }
+  });
+
+  it("rejects non-text extensions", () => {
+    for (const name of ["a.json", "a.js", "a.png"]) {
+      expect(isEditableTextFile(name)).toBe(false);
+    }
+  });
+});
+
+describe("self-write suppression", () => {
+  it("consumes a mark once and ignores unmarked paths", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oi-selfwrite-"));
+    markSelfWrite(dir, "data/note.md");
+    expect(takeSelfWrite(dir, "data/note.md")).toBe(true);
+    expect(takeSelfWrite(dir, "data/note.md")).toBe(false);
+    expect(takeSelfWrite(dir, "data/other.md")).toBe(false);
+  });
+});
+
+describe("filesChangedEvent", () => {
+  it("keeps only editable paths", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oi-fc-"));
+    expect(filesChangedEvent(dir, ["data/a.md", "data/b.json", "data/c.csv"])).toEqual({
+      type: "files-changed",
+      paths: ["data/a.md", "data/c.csv"],
+    });
+  });
+
+  it("returns null when no path is editable", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oi-fc-"));
+    expect(filesChangedEvent(dir, ["data/a.json", "data/b.png"])).toBeNull();
+  });
+
+  it("excludes a self-written path while keeping an external sibling", () => {
+    const dir = mkdtempSync(join(tmpdir(), "oi-fc-"));
+    markSelfWrite(dir, "data/self.md");
+    expect(filesChangedEvent(dir, ["data/self.md", "data/external.md"])).toEqual({
+      type: "files-changed",
+      paths: ["data/external.md"],
+    });
   });
 });
 
@@ -169,5 +220,44 @@ describe("startWatcher integration", () => {
 
     unsub();
     expect(received).toContainEqual({ type: "datasets-changed", datasets: ["net_worth_monthly"] });
+  });
+
+  it("emits files-changed when an external content file under data/ is added", async () => {
+    const dir = financeCopy();
+    const received: RuntimeEvent[] = [];
+    const broadcaster = new RuntimeEventBroadcaster();
+    broadcaster.subscribe((e) => received.push(e));
+    handle = await startWatcher(dir, { broadcaster, debounceMs: 20 });
+
+    const filesChanged = new Promise<void>((resolve) => {
+      const stop = broadcaster.subscribe((e) => {
+        if (e.type !== "files-changed") return;
+        stop();
+        resolve();
+      });
+    });
+    writeFileSync(join(dir, "data", "note.md"), "# external note\n");
+    await Promise.race([
+      filesChanged,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("no files-changed in 3s")), 3000)),
+    ]);
+
+    expect(received).toContainEqual({ type: "files-changed", paths: ["data/note.md"] });
+  });
+
+  it("suppresses the files-changed echo for a self-written path", async () => {
+    const dir = financeCopy();
+    const received: RuntimeEvent[] = [];
+    const broadcaster = new RuntimeEventBroadcaster();
+    broadcaster.subscribe((e) => received.push(e));
+    handle = await startWatcher(dir, { broadcaster, debounceMs: 20 });
+
+    markSelfWrite(dir, "data/note.md");
+    writeFileSync(join(dir, "data", "note.md"), "# self write\n");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(
+      received.some((e) => e.type === "files-changed" && e.paths.includes("data/note.md")),
+    ).toBe(false);
   });
 });
