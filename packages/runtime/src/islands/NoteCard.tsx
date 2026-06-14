@@ -1,4 +1,5 @@
-import { Link } from "@cloudflare/kumo";
+import { Link, cn } from "@cloudflare/kumo";
+import { CheckCircle, Info, Warning, WarningOctagon, type Icon } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import type { IslandRenderProps } from "../types.js";
 
@@ -96,9 +97,71 @@ export function stripFrontmatter(markdown: string): string {
 }
 
 export function renderMarkdown(markdown: string): ReactNode {
-  return <div className="text-sm text-kumo-default">{markdown.split("\n\n").map(renderBlock)}</div>;
+  return (
+    <div className="text-sm leading-relaxed text-kumo-default [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+      {markdown.split("\n\n").map(renderBlock)}
+    </div>
+  );
+}
+
+type Tone = "info" | "success" | "warning" | "danger";
+
+interface ToneStyle {
+  Glyph: Icon;
+  icon: string;
+  border: string;
+  surface: string;
+}
+
+const TONES: Record<Tone, ToneStyle> = {
+  info: {
+    Glyph: Info,
+    icon: "text-kumo-info",
+    border: "border-l-kumo-info",
+    surface: "bg-kumo-info-tint/40",
+  },
+  success: {
+    Glyph: CheckCircle,
+    icon: "text-kumo-success",
+    border: "border-l-kumo-success",
+    surface: "bg-kumo-success-tint/40",
+  },
+  warning: {
+    Glyph: Warning,
+    icon: "text-kumo-warning",
+    border: "border-l-kumo-warning",
+    surface: "bg-kumo-warning-tint/50",
+  },
+  danger: {
+    Glyph: WarningOctagon,
+    icon: "text-kumo-danger",
+    border: "border-l-kumo-danger",
+    surface: "bg-kumo-danger-tint/40",
+  },
+};
+
+function isTone(value: unknown): value is Tone {
+  return value === "info" || value === "success" || value === "warning" || value === "danger";
+}
+
+function Callout({ tone, children }: { tone: Tone; children: ReactNode }) {
+  const { Glyph, icon, border, surface } = TONES[tone];
+  return (
+    <div
+      data-tone={tone}
+      className={cn("flex gap-2.5 rounded-md border-l-2 px-3.5 py-3", border, surface)}
+    >
+      <Glyph size={17} weight="fill" aria-hidden className={cn("mt-px flex-none", icon)} />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
 }
 
 export function NoteCard({ config }: IslandRenderProps) {
-  return renderMarkdown(String(config.markdown ?? ""));
+  const markdown = String(config.markdown ?? "");
+  const body = renderMarkdown(markdown);
+
+  if (!isTone(config.tone)) return body;
+
+  return <Callout tone={config.tone}>{body}</Callout>;
 }

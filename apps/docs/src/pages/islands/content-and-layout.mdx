@@ -10,14 +10,15 @@ or link, and a **layout row** to control how a page wraps. See the
 ## `note.card`
 
 **What it is.** A static Markdown card with no data binding. **When to use it:** commentary, a
-caption, instructions, or a link, dropped right between data islands. It takes only
-`markdown`: headings, lists, inline code, bold/italic, and links all render.
+caption, instructions, or a link, dropped right between data islands. It renders `markdown`:
+headings, lists, inline code, bold/italic, and links all render. Set a `tone` to turn it into a
+callout that stands out from the prose around it.
 
 <LiveIsland
   type="note.card"
   config={{
     markdown:
-      "## How to read this page\nThe top row tracks **net worth**; the table below lists every position.\n\n- Values update live as the source files change\n- See the [manifest reference](/reference/manifest) for the schema",
+      "The top row tracks **net worth**; the table below lists every position.\n\n- Values update live as the source files change\n- See the [manifest reference](/reference/manifest) for the schema",
   }}
   height={160}
 />
@@ -26,7 +27,7 @@ caption, instructions, or a link, dropped right between data islands. It takes o
 {
   "type": "note.card",
   "title": "How to read this page",
-  "markdown": "## How to read this page\nThe top row tracks **net worth**..."
+  "markdown": "The top row tracks **net worth**..."
 }
 ```
 
@@ -34,6 +35,31 @@ caption, instructions, or a link, dropped right between data islands. It takes o
 
 - `markdown`: the only required field; no `dataset`. Use `\n\n` between blocks and `\n` for a
   soft break inside one.
+- `tone: "info" | "success" | "warning" | "danger"` (optional): renders the note as a callout —
+  a tinted panel with a colored left accent and a matching icon. Omit it for plain prose.
+
+**Tones.** Reach for a tone when the note is an aside the reader shouldn't miss — a caveat next
+to a metric, a heads-up about stale data, a confirmation. Without one, the note reads as quiet
+commentary.
+
+<LiveIsland
+  type="note.card"
+  config={{
+    tone: "warning",
+    markdown:
+      "Balances settle overnight, so **today's row updates after midnight UTC**. Treat the latest day as provisional.",
+  }}
+  height={140}
+/>
+
+```jsonc
+{
+  "type": "note.card",
+  "title": "Heads up",
+  "tone": "warning",
+  "markdown": "Balances settle overnight, so **today's row updates after midnight UTC**."
+}
+```
 
 <Callout variant="tip">
 `note.card` is the lightest island, perfect for explaining a dashboard to whoever opens it next.
@@ -42,18 +68,21 @@ Its minimum span is `3`, so it sits comfortably beside a metric or a small chart
 
 ## `source.doc`
 
-**What it is.** An embedded document or external link. **When to use it:** to surface a source
-right next to the data it backs: a PDF statement, a Markdown brief, an image, or a plain link
-out. Set `kind` to choose how it renders, and give it either a `file` (a path inside the
-project) or an `href` (an external URL).
+**What it is.** A document card that surfaces a source right next to the data it backs: a PDF
+statement, a Markdown brief, an image, or a plain link out. **When to use it:** when a reader will
+want the underlying file. Every card shows a type icon, a readable name, and an **Open** button
+that opens the source in a new tab. Set `kind` to choose how it renders, and give it either a
+`file` (a path inside the project) or an `href` (an external URL).
 
 <LiveIsland
   type="source.doc"
   config={{
     kind: "link",
+    label: "OpenIslands on GitHub",
+    description: "Source, issues, and the manifest schema",
     href: "https://github.com/lukaisailovic/openislands",
   }}
-  height={100}
+  height={120}
 />
 
 ```jsonc
@@ -61,6 +90,8 @@ project) or an `href` (an external URL).
   "type": "source.doc",
   "title": "Methodology",
   "kind": "link",
+  "label": "OpenIslands on GitHub",
+  "description": "Source, issues, and the manifest schema",
   "href": "https://github.com/lukaisailovic/openislands"
 }
 ```
@@ -68,10 +99,13 @@ project) or an `href` (an external URL).
 **Key options.**
 
 - `kind: "pdf" | "markdown" | "image" | "link"` (default `link`): how the source renders. `pdf`
-  embeds the file in a viewer, `markdown` renders it inline, `image` shows it, `link` is an
-  external link out.
+  embeds the file in a viewer below the card header, `markdown` renders it inline, `image` shows a
+  preview that opens full size, `link` is an external link out.
 - `file`: a path relative to the project root; it resolves through the runtime's confined file
   route. `href` is an external URL used as-is.
+- `label`: the name shown on the card. Without it, the card falls back to the file's name or the
+  link's host — never the raw file URL.
+- `description`: a short line under the name explaining what the document is.
 
 <Callout variant="note">
 A `file`-based doc needs a real file in the project (resolved through the runtime's `/api/file`

@@ -246,12 +246,42 @@ describe("note.card markdown", () => {
     expect(screen.getByText("and").tagName).toBe("EM");
   });
 
+  it("renders headings and a list", () => {
+    render(
+      <NoteCard
+        config={{ type: "note.card", markdown: "## How to read this\n\n- first\n- second" }}
+      />,
+    );
+    expect(screen.getByText("How to read this").tagName).toBe("H3");
+    expect(screen.getByText("first").tagName).toBe("LI");
+  });
+
   it("renders a fenced code block", () => {
     const { container } = render(
       <NoteCard config={{ type: "note.card", markdown: "```\nnpm run build\n```" }} />,
     );
     const pre = container.querySelector("pre code");
     expect(pre?.textContent).toBe("npm run build");
+  });
+
+  it("renders plain prose with no callout wrapper when tone is omitted", () => {
+    const { container } = render(
+      <NoteCard config={{ type: "note.card", markdown: "Just commentary." }} />,
+    );
+    expect(container.querySelector("[data-tone]")).toBeNull();
+    expect(screen.getByText("Just commentary.")).toBeInTheDocument();
+  });
+
+  it("wraps the body in a tinted callout when a tone is set", () => {
+    const { container } = render(
+      <NoteCard
+        config={{ type: "note.card", tone: "warning", markdown: "Mind the **gap**." }}
+      />,
+    );
+    const callout = container.querySelector("[data-tone='warning']");
+    expect(callout).not.toBeNull();
+    expect(callout?.querySelector("svg")).not.toBeNull();
+    expect(screen.getByText("gap").tagName).toBe("STRONG");
   });
 
   it("strips a leading frontmatter block but nothing else", () => {
@@ -271,20 +301,44 @@ describe("source.doc renderer", () => {
     );
     const img = container.querySelector("img");
     expect(img?.getAttribute("src")).toBe("/api/file?app=fin&path=data%2Fchart.png");
+    expect(img?.getAttribute("alt")).toBeTruthy();
   });
 
-  it("renders a link kind as an external anchor", () => {
-    render(<SourceDoc config={{ type: "source.doc", kind: "link", href: "https://x.dev" }} />);
-    const link = screen.getByText("https://x.dev");
-    expect(link).toHaveAttribute("href", "https://x.dev");
-    expect(link).toHaveAttribute("target", "_blank");
+  it("renders a link kind as a document card with a hostname label, not the raw url", () => {
+    render(
+      <SourceDoc config={{ type: "source.doc", kind: "link", href: "https://www.x.dev/path" }} />,
+    );
+    expect(screen.getByText("x.dev")).toBeInTheDocument();
+    expect(screen.queryByText("https://www.x.dev/path")).toBeNull();
+    const open = screen.getByRole("link", { name: /open/i });
+    expect(open).toHaveAttribute("href", "https://www.x.dev/path");
+    expect(open).toHaveAttribute("target", "_blank");
   });
 
-  it("embeds a pdf with an open-link fallback", () => {
+  it("shows a label and description when provided", () => {
+    render(
+      <SourceDoc
+        config={{
+          type: "source.doc",
+          kind: "link",
+          href: "https://x.dev",
+          label: "Methodology",
+          description: "How the numbers are derived",
+        }}
+      />,
+    );
+    expect(screen.getByText("Methodology")).toBeInTheDocument();
+    expect(screen.getByText("How the numbers are derived")).toBeInTheDocument();
+  });
+
+  it("embeds a pdf with an open-in-new-tab fallback", () => {
     const { container } = render(
-      <SourceDoc config={{ type: "source.doc", kind: "pdf", file: "docs/report.pdf" }} />,
+      <AppIdContext.Provider value="fin">
+        <SourceDoc config={{ type: "source.doc", kind: "pdf", file: "docs/report.pdf" }} />
+      </AppIdContext.Provider>,
     );
     expect(container.querySelector("object")?.getAttribute("type")).toBe("application/pdf");
+    expect(screen.getByText("report.pdf")).toBeInTheDocument();
     expect(screen.getByText("Open in new tab")).toBeInTheDocument();
   });
 });
