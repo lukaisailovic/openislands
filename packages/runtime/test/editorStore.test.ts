@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   getVersion,
   listVersions,
+  moveVersions,
   pruneVersions,
   recordVersion,
 } from "../src/server/editorStore.js";
@@ -46,5 +47,28 @@ describe("editorStore", () => {
     expect(kept).toHaveLength(3);
     expect(kept.map((v) => v.id)).toEqual([8, 7, 6]);
     expect(await getVersion(dir, "data/log.csv", 5)).toBeNull();
+  });
+
+  it("carries a path's history to its new name on move", async () => {
+    await recordVersion(dir, "docs/old.md", "v1");
+    await recordVersion(dir, "docs/old.md", "v2");
+    await moveVersions(dir, "docs/old.md", "docs/new.md");
+
+    expect(await listVersions(dir, "docs/old.md")).toEqual([]);
+    const moved = await listVersions(dir, "docs/new.md");
+    expect(moved.map((v) => v.id)).toEqual([2, 1]);
+    expect(await getVersion(dir, "docs/new.md", 2)).toBe("v2");
+  });
+
+  it("shifts ids past any history already at the destination", async () => {
+    await recordVersion(dir, "src/a.md", "a1");
+    await recordVersion(dir, "src/b.md", "b1");
+    await recordVersion(dir, "src/b.md", "b2");
+    await moveVersions(dir, "src/b.md", "src/a.md");
+
+    const merged = await listVersions(dir, "src/a.md");
+    expect(merged.map((v) => v.id).toSorted((x, y) => x - y)).toEqual([1, 2, 3]);
+    expect(await getVersion(dir, "src/a.md", 1)).toBe("a1");
+    expect(await getVersion(dir, "src/a.md", 3)).toBe("b2");
   });
 });

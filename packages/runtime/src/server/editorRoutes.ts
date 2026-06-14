@@ -15,6 +15,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -22,7 +23,7 @@ import {
 import { dirname, join, relative, sep } from "node:path";
 import { fileExtension, isEditableTextFile, markSelfWrite } from "./editorSync.js";
 import { FileAccessError, confineProjectFile } from "./file.js";
-import { getVersion, listVersions, recordVersion } from "./editorStore.js";
+import { getVersion, listVersions, moveVersions, recordVersion } from "./editorStore.js";
 import { broadcasterFor } from "./watcher.js";
 import { type AppResolution, appDirFromParams } from "./workspace.js";
 
@@ -52,9 +53,9 @@ function relPosix(projectDir: string, abs: string): string {
   return relative(realpathSync(projectDir), abs).split(sep).join("/");
 }
 
-function publishFilesChanged(appId: string, projectDir: string, relPath: string): void {
-  markSelfWrite(projectDir, relPath);
-  broadcasterFor(appId).publish({ type: "files-changed", paths: [relPath] });
+function publishFilesChanged(appId: string, projectDir: string, ...rels: string[]): void {
+  for (const rel of rels) markSelfWrite(projectDir, rel);
+  broadcasterFor(appId).publish({ type: "files-changed", paths: rels });
 }
 
 /** Collect every editable text file under `dir` (absolute, confined), skipping dotfiles and `.openislands`. */
@@ -109,7 +110,11 @@ export async function writeResponse(request: Request): Promise<Response> {
     if (!isEditableTextFile(abs)) return new Response("only text files are editable", { status: 400 });
     const content = body.content ?? "";
     const rel = relPosix(app.dir, abs);
-    if (existsSync(abs)) await recordVersion(app.dir, rel, readFileSync(abs, "utf8"));
+    if (existsSync(abs)) {
+      const current = readFileSync(abs, "utf8");
+      if (current === content) return json({ ok: true });
+      await recordVersion(app.dir, rel, current);
+    }
     writeFileSync(abs, content);
     publishFilesChanged(app.appId, app.dir, rel);
     return json({ ok: true });
@@ -169,6 +174,40 @@ export async function createResponse(request: Request): Promise<Response> {
     writeFileSync(abs, body.content ?? "");
     const rel = relPosix(app.dir, abs);
     publishFilesChanged(app.appId, app.dir, rel);
+    return json({ ok: true });
+  } catch (err) {
+    if (err instanceof FileAccessError) return new Response(err.message, { status: err.status });
+    throw err;
+  }
+}
+
+interface MoveBody {
+  from?: string;
+  to?: string;
+}
+
+/**
+ * Rename a file on disk and carry its version history with it: the store rows
+ * are re-keyed old→new, and a `files-changed` event names BOTH paths so open
+ * clients drop the old entry and pick up the new one. 404 if the source is
+ * gone, 409 if the destination is taken.
+ */
+export async function moveResponse(request: Request): Promise<Response> {
+  const app = resolveApp(request);
+  if (!app.ok) return new Response(app.error, { status: app.status });
+  const body = (await request.json()) as MoveBody;
+  try {
+    const fromAbs = confineProjectFile(app.dir, body.from ?? "");
+    const toAbs = confineProjectFile(app.dir, body.to ?? "");
+    if (!isEditableTextFile(toAbs)) return new Response("only text files are editable", { status: 400 });
+    if (!existsSync(fromAbs)) return new Response("source not found", { status: 404 });
+    if (existsSync(toAbs)) return new Response("destination already exists", { status: 409 });
+    const relFrom = relPosix(app.dir, fromAbs);
+    const relTo = relPosix(app.dir, toAbs);
+    mkdirSync(dirname(toAbs), { recursive: true });
+    renameSync(fromAbs, toAbs);
+    await moveVersions(app.dir, relFrom, relTo);
+    publishFilesChanged(app.appId, app.dir, relFrom, relTo);
     return json({ ok: true });
   } catch (err) {
     if (err instanceof FileAccessError) return new Response(err.message, { status: err.status });

@@ -4,14 +4,22 @@ import { ListItemNode, ListNode } from "@lexical/list";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { $getRoot, createEditor } from "lexical";
+import { $createParagraphNode, $getRoot, createEditor } from "lexical";
 import type { RefObject } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { AppIdContext } from "../src/client/useAppId.js";
 import { CsvTable } from "../src/islands/editor/CsvTable.js";
 import { parseCsv, serializeCsv } from "../src/islands/editor/csv.js";
-import { groupFiles, includeFilter, matchGlob, relativeToDir } from "../src/islands/editor/grouping.js";
-import { editorToMarkdown, markdownToEditor } from "../src/islands/editor/markdown.js";
+import {
+  groupDirPrefix,
+  groupFiles,
+  groupTargetPath,
+  includeFilter,
+  matchGlob,
+  relativeToDir,
+  UNGROUPED,
+} from "../src/islands/editor/grouping.js";
+import { editorToMarkdown, editorToMarkdownRaw, markdownToEditor } from "../src/islands/editor/markdown.js";
 import type { EditorFile, EditorHandle } from "../src/islands/editor/types.js";
 import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
 import { ContentEditor } from "../src/islands/ContentEditor.js";
@@ -107,6 +115,26 @@ describe("groupFiles", () => {
     const grouped = groupFiles([file("d/a.md")], "d", undefined);
     expect(grouped).toHaveLength(1);
     expect(grouped[0]!.group.id).toBe("__ungrouped__");
+  });
+});
+
+describe("groupDirPrefix / groupTargetPath", () => {
+  it("derives the folder from the first glob that names one", () => {
+    expect(groupDirPrefix({ id: "s", match: ["specs/**", "architecture.md"] })).toBe("specs");
+    expect(groupDirPrefix({ id: "r", match: ["runbooks/**", "incident-*.md"] })).toBe("runbooks");
+    expect(groupDirPrefix({ id: "n", match: ["notes/sub/*.md"] })).toBe("notes/sub");
+  });
+
+  it("falls back to the dir root when no glob names a folder", () => {
+    expect(groupDirPrefix({ id: "x", match: ["roadmap.md", "incident-*.md"] })).toBe("");
+    expect(groupDirPrefix(UNGROUPED)).toBe("");
+  });
+
+  it("builds a create/move target under the group's folder, collapsing stray slashes", () => {
+    const specs = { id: "s", match: ["specs/**"] };
+    expect(groupTargetPath("data", specs, "idea.md")).toBe("data/specs/idea.md");
+    expect(groupTargetPath("data", UNGROUPED, "idea.md")).toBe("data/idea.md");
+    expect(groupTargetPath("data/docs/", specs, "idea.md")).toBe("data/docs/specs/idea.md");
   });
 });
 
@@ -323,6 +351,34 @@ describe("markdown round-trip (no data loss on save)", () => {
     expect(out).toContain("# Title");
     expect(out).toContain("| 1 | 2 |");
     expect(out).toContain("- after");
+  });
+});
+
+describe("dirty detection (a trailing blank paragraph still counts as a change)", () => {
+  it("sees an appended empty paragraph that normalized markdown hides", () => {
+    const editor = createEditor({ nodes: EDITOR_NODES, onError: (e) => { throw e; } });
+    editor.update(() => markdownToEditor("Hello", $getRoot()), { discrete: true });
+
+    let rawBefore = "";
+    let normBefore = "";
+    editor.getEditorState().read(() => {
+      rawBefore = editorToMarkdownRaw();
+      normBefore = editorToMarkdown();
+    });
+
+    editor.update(() => $getRoot().append($createParagraphNode()), { discrete: true });
+
+    let rawAfter = "";
+    let normAfter = "";
+    editor.getEditorState().read(() => {
+      rawAfter = editorToMarkdownRaw();
+      normAfter = editorToMarkdown();
+    });
+
+    // The normalized form (what we save) is identical — the old equality check missed the edit.
+    expect(normAfter).toBe(normBefore);
+    // The raw form (what dirty detection now compares) reflects the new blank paragraph.
+    expect(rawAfter).not.toBe(rawBefore);
   });
 });
 

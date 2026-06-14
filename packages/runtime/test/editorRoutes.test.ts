@@ -6,6 +6,7 @@ import {
   createResponse,
   deleteResponse,
   historyResponse,
+  moveResponse,
   restoreResponse,
   treeResponse,
   writeResponse,
@@ -72,6 +73,41 @@ describe("writeResponse", () => {
   it("rejects a non-text extension with 400", async () => {
     const res = await writeResponse(post("write", { path: "app/evil.js", content: "x" }));
     expect(res.status).toBe(400);
+  });
+
+  it("does not record a version when the content is unchanged", async () => {
+    await writeResponse(post("write", { path: "docs/n.md", content: "same" }));
+    await writeResponse(post("write", { path: "docs/n.md", content: "same" }));
+
+    const versions = (await jsonOf(await historyResponse(get("history", { path: "docs/n.md" })))).versions as unknown[];
+    expect(versions).toHaveLength(0);
+  });
+});
+
+describe("moveResponse", () => {
+  it("renames the file into a new folder and carries its history", async () => {
+    await writeResponse(post("write", { path: "docs/a.md", content: "one" }));
+    await writeResponse(post("write", { path: "docs/a.md", content: "two" }));
+
+    const res = await moveResponse(post("move", { from: "docs/a.md", to: "docs/sub/b.md" }));
+    expect(res.status).toBe(200);
+    expect(existsSync(join(projectDir, "docs", "a.md"))).toBe(false);
+    expect(readFileSync(join(projectDir, "docs", "sub", "b.md"), "utf8")).toBe("two");
+
+    const moved = (await jsonOf(await historyResponse(get("history", { path: "docs/sub/b.md" })))).versions as unknown[];
+    expect(moved.length).toBeGreaterThan(0);
+    const old = (await jsonOf(await historyResponse(get("history", { path: "docs/a.md" })))).versions as unknown[];
+    expect(old).toHaveLength(0);
+  });
+
+  it("404s a missing source and 409s an existing destination", async () => {
+    const missing = await moveResponse(post("move", { from: "docs/nope.md", to: "docs/x.md" }));
+    expect(missing.status).toBe(404);
+
+    await writeResponse(post("write", { path: "docs/here.md", content: "h" }));
+    await writeResponse(post("write", { path: "docs/there.md", content: "t" }));
+    const conflict = await moveResponse(post("move", { from: "docs/here.md", to: "docs/there.md" }));
+    expect(conflict.status).toBe(409);
   });
 });
 

@@ -127,11 +127,14 @@ no title bar) and wants a full-width `span` of 12 (minimum 6). Give it exactly *
   - `groups: [{ id, label?, icon?, match }]` — **virtual folders** that gather scattered files into
     tidy sidebar buckets regardless of where they sit on disk. `match` is an array of globs relative
     to `dir`; `icon` is a Phosphor name (e.g. `files`, `folder`), falling back to a folder icon.
-    Files matching no group fall into an **Ungrouped** bucket.
+    Files matching no group fall into an **Ungrouped** bucket. New notes pick a folder, and a note
+    can be moved between folders (drag it onto a group, or use its move menu) — its disk path and
+    version history move with it.
 
-`readOnly: true` turns the whole island into a viewer (no editing or saving). Otherwise edits save
-straight back to the file, and **every save records a restorable version** in a per-app SQLite store
-at `.openislands/editor.sqlite` — the UI offers history and one-click rollback. See
+`readOnly: true` turns the whole island into a viewer (no editing or saving). Otherwise edits
+**autosave** about a second after you stop typing (Save / ⌘S still work), straight back to the file,
+and **every save records a restorable version** in a per-app SQLite store at
+`.openislands/editor.sqlite` — the UI offers history and one-click rollback. See
 `apps/examples/knowledge` for a live workspace bound to a whole `data/` tree with an editable CSV and
 virtual folders.
 

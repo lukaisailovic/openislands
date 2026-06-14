@@ -54,3 +54,7 @@ export function createFile(appId: string, path: string, content = ""): Promise<v
 export function deleteFile(appId: string, path: string): Promise<void> {
   return post(appId, "delete", { path });
 }
+
+export function moveFile(appId: string, from: string, to: string): Promise<void> {
+  return post(appId, "move", { from, to });
+}

@@ -16,7 +16,8 @@ import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
 import { $getRoot, type EditorState } from "lexical";
 import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
-import { EDITOR_TRANSFORMERS, editorToMarkdown, markdownToEditor } from "./markdown.js";
+import { FloatingLinkPlugin } from "./FloatingLink.js";
+import { EDITOR_TRANSFORMERS, editorToMarkdown, editorToMarkdownRaw, markdownToEditor } from "./markdown.js";
 import { Toolbar } from "./Toolbar.js";
 import type { EditorHandle } from "./types.js";
 
@@ -99,7 +100,7 @@ function LoadFilePlugin({
     );
     let serialized = "";
     editor.getEditorState().read(() => {
-      serialized = editorToMarkdown();
+      serialized = editorToMarkdownRaw();
     });
     onLoadedRef.current(serialized);
   }, [editor, path, content]);
@@ -172,7 +173,7 @@ export function EditorPane({
 
   const handleChange = (editorState: EditorState) => {
     editorState.read(() => {
-      onDirtyChange(editorToMarkdown() !== baselineRef.current);
+      onDirtyChange(editorToMarkdownRaw() !== baselineRef.current);
     });
   };
 
@@ -193,6 +194,7 @@ export function EditorPane({
       <HistoryPlugin />
       <ListPlugin />
       <LinkPlugin />
+      <FloatingLinkPlugin editable={!readOnly} />
       <TablePlugin />
       <MarkdownShortcutPlugin transformers={EDITOR_TRANSFORMERS} />
       <OnChangePlugin onChange={handleChange} ignoreSelectionChange />

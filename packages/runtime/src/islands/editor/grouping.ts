@@ -81,7 +81,41 @@ export interface FileGroup {
   files: EditorFile[];
 }
 
-const UNGROUPED: EditorGroup = { id: "__ungrouped__", label: "Ungrouped", match: [] };
+export const UNGROUPED: EditorGroup = { id: "__ungrouped__", label: "Ungrouped", match: [] };
+
+/** Join posix path parts, dropping empty ones and any leading/trailing slashes. */
+function joinPosix(...parts: string[]): string {
+  return parts
+    .map((part) => part.replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
+}
+
+/**
+ * The literal directory a glob targets: the path segments before its first
+ * wildcard. `specs/**` → `specs`, `notes/sub/*.md` → `notes/sub`, a bare
+ * `roadmap.md` → "" (no folder).
+ */
+function literalDirPrefix(glob: string): string {
+  const wildcard = glob.search(/[*?[{]/);
+  const head = wildcard === -1 ? glob : glob.slice(0, wildcard);
+  const lastSlash = head.lastIndexOf("/");
+  return lastSlash === -1 ? "" : head.slice(0, lastSlash);
+}
+
+/** A group's directory prefix — the first of its globs that names a folder, else "" (the `dir` root). */
+export function groupDirPrefix(group: EditorGroup): string {
+  for (const glob of group.match) {
+    const prefix = literalDirPrefix(glob);
+    if (prefix) return prefix;
+  }
+  return "";
+}
+
+/** Where a file named `name` must live to fall into `group` under `dir`: `<dir>/<group prefix>/<name>`. */
+export function groupTargetPath(dir: string, group: EditorGroup, name: string): string {
+  return joinPosix(dir, groupDirPrefix(group), name);
+}
 
 /**
  * Partition files into the author's virtual folders: each file lands in the

@@ -31,12 +31,14 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import {
   $createParagraphNode,
+  $getRoot,
   $getSelection,
   $isRangeSelection,
   type ElementNode,
   FORMAT_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
 } from "lexical";
+import { InsertTableDialog } from "./dialogs.js";
 
 /** The current selection's block kind, used to highlight the matching toolbar button. */
 type BlockType = "paragraph" | "h1" | "h2" | "h3" | "quote" | "code" | "bullet" | "number" | null;
@@ -127,6 +129,7 @@ const DIVIDER = <span className="mx-1 h-5 w-px bg-kumo-hairline" aria-hidden />;
 export function Toolbar() {
   const [editor] = useLexicalComposerContext();
   const [state, setState] = useState<SelectionState>(EMPTY);
+  const [tableOpen, setTableOpen] = useState(false);
 
   const refresh = useCallback(() => {
     editor.getEditorState().read(() => setState(readSelection()));
@@ -175,8 +178,17 @@ export function Toolbar() {
     editor.dispatchCommand(TOGGLE_LINK_COMMAND, state.link ? null : "https://");
   };
 
-  const insertTable = () => {
-    editor.dispatchCommand(INSERT_TABLE_COMMAND, { columns: "3", rows: "3", includeHeaders: true });
+  const insertTable = (rows: number, columns: number, header: boolean) => {
+    // The dialog takes focus, so a selection may no longer exist; anchor the
+    // insert to the document end when it doesn't, otherwise the command no-ops.
+    editor.update(() => {
+      if (!$getSelection()) $getRoot().selectEnd();
+    });
+    editor.dispatchCommand(INSERT_TABLE_COMMAND, {
+      columns: String(columns),
+      rows: String(rows),
+      includeHeaders: header ? { rows: true, columns: false } : false,
+    });
   };
 
   return (
@@ -225,7 +237,8 @@ export function Toolbar() {
       <ToolButton label="Code block" glyph={CodeBlock} active={state.block === "code"} onClick={toggleCodeBlock} />
       {DIVIDER}
       <ToolButton label="Link" glyph={LinkIcon} active={state.link} onClick={toggleLink} />
-      <ToolButton label="Insert table" glyph={TableIcon} onClick={insertTable} />
+      <ToolButton label="Insert table" glyph={TableIcon} onClick={() => setTableOpen(true)} />
+      <InsertTableDialog open={tableOpen} onOpenChange={setTableOpen} onInsert={insertTable} />
     </div>
   );
 }

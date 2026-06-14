@@ -78,6 +78,20 @@ export async function recordVersion(
   });
 }
 
+/**
+ * Re-key a path's version rows from `from` to `to` so history follows a moved
+ * or renamed file. Ids are shifted past any history already under `to` (a path
+ * reused after a delete), keeping them unique within the destination.
+ */
+export async function moveVersions(projectDir: string, from: string, to: string): Promise<void> {
+  if (from === to) return;
+  await withStore(projectDir, async (run, all) => {
+    const rows = await all("SELECT COALESCE(MAX(id), 0) AS max FROM _store.versions WHERE path = ?", [to]);
+    const offset = Number(rows[0]?.max ?? 0);
+    await run("UPDATE _store.versions SET id = id + ?, path = ? WHERE path = ?", [offset, to, from]);
+  });
+}
+
 /** This path's versions, newest first. */
 export async function listVersions(projectDir: string, path: string): Promise<VersionMeta[]> {
   return withStore(projectDir, async (_run, all) => {

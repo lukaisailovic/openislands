@@ -121,9 +121,19 @@ export function markdownToEditor(markdown: string, root: ElementNode): void {
   $convertFromMarkdownString(markdown, EDITOR_TRANSFORMERS, root);
 }
 
+/**
+ * The editor's content exactly as Lexical serializes it, with no trailing-newline
+ * normalization. Use this for change detection: the normalization in
+ * `editorToMarkdown` maps both "text" and "text\n" to "text\n", so a trailing
+ * blank paragraph (pressing Enter at the end) would otherwise look unchanged.
+ */
+export function editorToMarkdownRaw(): string {
+  return $convertToMarkdownString(EDITOR_TRANSFORMERS);
+}
+
 export function editorToMarkdown(): string {
   // End with a single trailing newline (POSIX/git convention); Lexical's serializer omits it,
   // which would otherwise strip the final newline from every file on save.
-  const markdown = $convertToMarkdownString(EDITOR_TRANSFORMERS);
+  const markdown = editorToMarkdownRaw();
   return markdown.endsWith("\n") ? markdown : `${markdown}\n`;
 }

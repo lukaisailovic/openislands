@@ -13,6 +13,7 @@ import {
   createFile,
   deleteFile,
   editorTree,
+  moveFile,
   readFile,
   writeFile,
 } from "./editor/api.js";
@@ -31,6 +32,9 @@ function basename(path: string): string {
 function isCsv(path: string): boolean {
   return path.toLowerCase().endsWith(".csv");
 }
+
+/** Quiet period after the last edit before an autosave fires. */
+const AUTOSAVE_MS = 1000;
 
 /** A document open in the editor: its path and the content read for it. */
 interface OpenDoc {
@@ -63,6 +67,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
   const [doc, setDoc] = useState<OpenDoc | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -72,6 +77,14 @@ export function ContentEditor({ config }: IslandRenderProps) {
   dirtyRef.current = dirty;
   const activePathRef = useRef(activePath);
   activePathRef.current = activePath;
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const cancelAutoSave = useCallback(() => {
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current);
+      autoSaveTimer.current = undefined;
+    }
+  }, []);
 
   const visibleFiles = useMemo(
     () => includeFilter(files, cfg.include, dir, cfg.csv === true),
@@ -86,11 +99,13 @@ export function ContentEditor({ config }: IslandRenderProps) {
 
   const openFile = useCallback(
     async (path: string) => {
+      cancelAutoSave();
+      setSaved(false);
       setActivePath(path);
       const content = await readFile(appId, path);
       setDoc({ path, content });
     },
-    [appId],
+    [appId, cancelAutoSave],
   );
 
   useEffect(() => {
@@ -125,17 +140,39 @@ export function ContentEditor({ config }: IslandRenderProps) {
 
   const handleSave = useCallback(async () => {
     const handle = editorRef.current;
-    if (!handle || !activePath || readOnly) return;
+    if (!handle || !activePath || readOnly || !dirtyRef.current) return;
+    cancelAutoSave();
     setSaving(true);
     try {
       const content = handle.serialize();
       await writeFile(appId, activePath, content);
       setDoc({ path: activePath, content });
       setDirty(false);
+      setSaved(true);
     } finally {
       setSaving(false);
     }
-  }, [appId, activePath, readOnly]);
+  }, [appId, activePath, readOnly, cancelAutoSave]);
+
+  // Debounced autosave: ~1s after edits stop, save the dirty document — coalescing a
+  // burst of keystrokes into the single version snapshot the write route records.
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
+  const handleDirtyChange = useCallback(
+    (next: boolean) => {
+      setDirty(next);
+      cancelAutoSave();
+      if (!next) return;
+      setSaved(false);
+      autoSaveTimer.current = setTimeout(() => {
+        if (dirtyRef.current) void handleSaveRef.current();
+      }, AUTOSAVE_MS);
+    },
+    [cancelAutoSave],
+  );
+
+  useEffect(() => cancelAutoSave, [cancelAutoSave]);
 
   const handleCreate = useCallback(
     async (path: string) => {
@@ -153,6 +190,16 @@ export function ContentEditor({ config }: IslandRenderProps) {
     setDoc(null);
     await refreshTree();
   }, [appId, activePath, refreshTree]);
+
+  const handleMove = useCallback(
+    async (from: string, to: string) => {
+      if (from === to) return;
+      await moveFile(appId, from, to);
+      await refreshTree();
+      if (activePathRef.current === from) await openFile(to);
+    },
+    [appId, refreshTree, openFile],
+  );
 
   if (!mounted) return <Placeholder />;
 
@@ -186,6 +233,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
               groups={cfg.groups}
               activePath={activePath}
               onSelect={(path) => void openFile(path)}
+              onMove={readOnly ? undefined : (from, to) => void handleMove(from, to)}
             />
           </div>
         </aside>
@@ -197,12 +245,20 @@ export function ContentEditor({ config }: IslandRenderProps) {
           <Text size="sm" DANGEROUS_className="min-w-0 flex-1 truncate font-medium text-kumo-strong">
             {activePath ? basename(activePath) : "No file selected"}
           </Text>
-          {dirty ? (
+          {saving ? (
+            <Text size="xs" variant="secondary" DANGEROUS_className="flex-none">
+              Saving…
+            </Text>
+          ) : dirty ? (
             <span
               className="size-1.5 flex-none rounded-full bg-kumo-warning"
               aria-label="Unsaved changes"
               title="Unsaved changes"
             />
+          ) : saved ? (
+            <Text size="xs" variant="secondary" DANGEROUS_className="flex-none">
+              Saved
+            </Text>
           ) : null}
           {activePath ? (
             <Button
@@ -250,7 +306,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
                 content={doc.content}
                 readOnly={readOnly}
                 onSave={() => void handleSave()}
-                onDirtyChange={setDirty}
+                onDirtyChange={handleDirtyChange}
                 handleRef={editorRef}
               />
             ) : (
@@ -260,7 +316,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
                 content={doc.content}
                 readOnly={readOnly}
                 onSave={() => void handleSave()}
-                onDirtyChange={setDirty}
+                onDirtyChange={handleDirtyChange}
                 handleRef={editorRef}
               />
             )
@@ -285,7 +341,13 @@ export function ContentEditor({ config }: IslandRenderProps) {
         />
       ) : null}
       {singleFile ? null : (
-        <NewFileDialog open={newOpen} onOpenChange={setNewOpen} dir={dir} onCreate={handleCreate} />
+        <NewFileDialog
+          open={newOpen}
+          onOpenChange={setNewOpen}
+          dir={dir}
+          groups={cfg.groups}
+          onCreate={handleCreate}
+        />
       )}
       {activePath && !singleFile ? (
         <DeleteFileDialog
