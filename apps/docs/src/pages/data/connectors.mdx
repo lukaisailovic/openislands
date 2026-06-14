@@ -1,11 +1,16 @@
-import { Callout } from "vocs";
-
 # Connectors
 
 A connector syncs an external provider's data into your `source` datasets. It pulls from an
 API, shapes the rows, and writes them through the same checkpointed path [actions](/data/actions)
 use, so a sync is as reversible as any other write. The code lives in your project, the manifest
 declares an instance of it, and authorization happens in the dashboard, never from an agent.
+
+```mermaid
+flowchart LR
+  P[Provider API] --> C[Connector]
+  C --> D[source dataset<br/>file in data/]
+  D --> I[Island]
+```
 
 ## Using a connector
 
@@ -174,10 +179,10 @@ both: replace the volatile outputs, insert-and-advance the append-only ones. You
 in your own code. The first sync into an empty dataset takes whatever columns you write; later
 syncs are checked against the dataset's settled schema.
 
-<Callout variant="note">
-  Tokens and `ctx.state` live together at `.openislands/connectors/<name>.json`, outside your
-  data files and outside git. The dataset files hold only rows.
-</Callout>
+:::note
+Tokens and `ctx.state` live together at `.openislands/connectors/<name>.json`, outside your data
+files and outside git. The dataset files hold only rows.
+:::
 
 ### Types without an install
 

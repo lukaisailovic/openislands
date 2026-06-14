@@ -527,7 +527,7 @@ Up to four concentric progress rings read off the last row — use for tracking 
 
 ### `gauge.goal`
 
-A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range; `size` (small/medium/large) sets its footprint so several can share a row.
+One ring per goal comparing the last row's value to a goal or target band — use for numbers with a defined good range; within the band reads success-green, under amber, over danger-red. `size` sets the shared ring footprint so several share a row.
 
 **Minimum span:** 2
 
@@ -537,12 +537,8 @@ A single ring comparing the last row's value to a goal or target band — use fo
 | `title` | `string` | no |  |
 | `span` | `number` | no |  |
 | `dataset` | `string` | yes |  |
-| `value` | `string` | yes | field holding the current value |
-| `goal` | `object` | yes | at least one bound; both = a target band |
-| `label` | `string` | no |  |
-| `unit` | `string` | no |  |
-| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
-| `size` | `"small" \| "medium" \| "large"` | no | ring footprint: `small` packs several goals into a row, `large` emphasizes a single one |
+| `goals` | `array of object` | yes | one ring per goal, side by side in a row that wraps; each reads the last row (max 6 to stay legible) |
+| `size` | `"small" \| "medium" \| "large"` | no | footprint shared by every ring: `small` packs several goals into a row, `large` emphasizes one or two |
 
 ### `gauge.meter`
 

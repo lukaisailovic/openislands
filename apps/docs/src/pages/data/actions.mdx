@@ -1,11 +1,17 @@
-import { Callout } from "vocs";
-
 # Actions
 
 An action is a typed write into a `source` dataset. It's how new rows reach your data through
 the same checkpointed path the agent edit loop uses: validated before anything touches disk,
 snapshotted before the write, reversible after. You declare an action in the manifest; an agent
 runs it over [MCP](/mcp).
+
+```mermaid
+flowchart LR
+  A[Agent: run_action] --> V{Validate rows}
+  V -- bad row --> X[Reject, nothing written]
+  V -- ok --> S[Snapshot + write file]
+  S --> L[Live refresh]
+```
 
 ## What an action can write
 
@@ -92,11 +98,11 @@ Actions belong to the agent edit loop, not to a CLI command. An agent:
 2. Calls **`run_action(name, rows)`**, which validates and inserts as above, returning the
    count `inserted` and a `checkpoint_id`.
 
-<Callout variant="note">
-  Because the only mutation is a schema-checked insert, diffed against the live data and
-  snapshotted before it runs, data that tries to talk an agent into a bad write still can't get
-  past validation or escape `rollback`.
-</Callout>
+:::note
+Because the only mutation is a schema-checked insert, diffed against the live data and
+snapshotted before it runs, data that tries to talk an agent into a bad write still can't get
+past validation or escape `rollback`.
+:::
 
 See [MCP Server](/mcp) for the full tool surface, and [Connectors](/data/connectors) for syncing
 a provider's data into `source` datasets on a schedule, through this same write path.

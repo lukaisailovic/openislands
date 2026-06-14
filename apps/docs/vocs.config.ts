@@ -18,6 +18,7 @@ export default defineConfig({
       items: [
         { text: "Introduction", link: "/introduction" },
         { text: "Getting Started", link: "/getting-started" },
+        { text: "MCP Server", link: "/mcp" },
       ],
     },
     {
@@ -55,7 +56,6 @@ export default defineConfig({
       items: [
         { text: "Manifest Reference", link: "/reference/manifest" },
         { text: "Value Formats", link: "/reference/value-formats" },
-        { text: "MCP Server", link: "/mcp" },
       ],
     },
   ],

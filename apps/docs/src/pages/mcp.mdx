@@ -1,10 +1,8 @@
-import { Callout } from "vocs";
-
 # MCP Server
 
-The CLI is how *you* maintain a dashboard. The MCP server is how an **agent** does it: safely,
-for months, without it rotting. It exposes the same typed, validated path as a set of tools
-over the Model Context Protocol, built on one principle:
+The MCP server is how an **agent** maintains a dashboard: safely, for months, without it
+rotting. It's the primary way to run OpenIslands. It exposes the same typed, validated path the
+CLI uses as a set of tools over the Model Context Protocol, built on one principle:
 
 > **Read many, write one.** An agent can read everything (the manifest, the schemas, the live
 > data), but every change funnels through a single proposal-and-apply pipeline that validates
@@ -12,6 +10,18 @@ over the Model Context Protocol, built on one principle:
 
 This is the moat. An agent can't hand-edit your files, can't ship a broken binding, and can't
 make a change you can't undo.
+
+```mermaid
+sequenceDiagram
+  participant A as Agent
+  participant S as MCP server
+  A->>S: read manifest + data
+  A->>S: propose_edit(full manifest)
+  S-->>A: diff (or named errors)
+  A->>S: apply_edit(proposal_id)
+  S-->>A: checkpoint_id
+  A->>S: rollback(checkpoint_id?)
+```
 
 ## Wiring it up
 
@@ -102,12 +112,12 @@ same checkpointed write path. The agent's two tools:
   the write mode (`insert` / `replace`), and a `checkpoint_id`, so a sync is reversible with
   `rollback`.
 
-<Callout variant="warning">
-  **Authorization is human-only.** OAuth runs in the dashboard browser, not from the agent. If
-  `list_connectors` shows a connector isn't `connected` (OAuth not completed, or secrets
-  missing), the agent must tell you to open the dashboard (`openislands serve`) and click
-  **Connect**. It must never attempt to authorize on its own.
-</Callout>
+:::warning[Authorization is human-only]
+OAuth runs in the dashboard browser, not from the agent. If `list_connectors` shows a connector
+isn't `connected` (OAuth not completed, or secrets missing), the agent must tell you to open the
+dashboard (`openislands serve`) and click **Connect**. It must never attempt to authorize on its
+own.
+:::
 
 ## Safety posture
 

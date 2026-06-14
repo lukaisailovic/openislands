@@ -175,28 +175,32 @@ fixed number); the center shows the outermost ring's percentage.
 
 ## gauge.goal
 
-A single ring comparing the last row's value to a goal or a target band. Use it for one
-number with a defined good range: within the band reads success-green, under it amber,
-over it danger-red.
+One ring per goal, each comparing the last row's value to a goal or a target band. Reach for it
+when a number has a defined good range: within the band reads success-green, under it amber, over
+it danger-red. The three rings below hit all three tones at once — heart rate over its band, sleep
+clear of its floor, activity short of it.
 
 <LiveIsland
   type="gauge.goal"
   config={{
-    title: "Resting heart rate",
-    value: "rhr",
-    goal: { min: 50, max: 60 },
-    unit: "bpm",
-    format: "int",
+    title: "Today vs goals",
+    size: "small",
+    goals: [
+      { value: "rhr", goal: { min: 50, max: 60 }, label: "Resting HR", unit: "bpm", format: "int" },
+      { value: "sleep_h", goal: { min: 7 }, label: "Sleep", unit: "h", format: "int" },
+      { value: "active_min", goal: { min: 30 }, label: "Active", unit: "min", format: "int" },
+    ],
   }}
   data={sampleData(
     [
       { name: "day", type: "date" },
       { name: "rhr", type: "bigint" },
+      { name: "sleep_h", type: "double" },
+      { name: "active_min", type: "bigint" },
     ],
     [
-      { day: "2026-06-11", rhr: 58 },
-      { day: "2026-06-12", rhr: 55 },
-      { day: "2026-06-13", rhr: 54 },
+      { day: "2026-06-12", rhr: 55, sleep_h: 7.5, active_min: 42 },
+      { day: "2026-06-13", rhr: 66, sleep_h: 8, active_min: 18 },
     ],
     "vitals",
   )}
@@ -205,27 +209,30 @@ over it danger-red.
 ```jsonc
 {
   "type": "gauge.goal",
-  "title": "Resting heart rate",
+  "title": "Today vs goals",
   "dataset": "vitals",
-  "value": "rhr",
-  "goal": { "min": 50, "max": 60 },
-  "unit": "bpm",
-  "format": "int"
+  "size": "small",
+  "goals": [
+    { "value": "rhr", "goal": { "min": 50, "max": 60 }, "label": "Resting HR", "unit": "bpm", "format": "int" },
+    { "value": "sleep_h", "goal": { "min": 7 }, "label": "Sleep", "unit": "h", "format": "int" },
+    { "value": "active_min", "goal": { "min": 30 }, "label": "Active", "unit": "min", "format": "int" }
+  ]
 }
 ```
 
-- `value`: the field holding the current number (required).
-- `goal`: at least one of `min` / `max`, each a column or a number; supplying both makes
-  a target band.
-- `format`: any [value format](/reference/value-formats); `unit`/`label` annotate the ring.
-- `size`: the ring's footprint — `small`, `medium` (the default), or `large`. Use `small` to
-  pack several goals side by side across a row (it shrinks the ring and swaps the status badge
-  for a compact colored status dot); use `large` to emphasize a single goal on its own.
+- `goals`: one to six goals, each its own ring side by side in a row that wraps (required).
+  Each is `{ value, goal, label?, unit?, format? }`, read off the last row.
+- `goal`: at least one of `min` / `max`, each a column or a number; supplying both makes a
+  target band, the value reads green inside it, amber below, red above.
+- `value`: the field holding the ring's current number; `format` is any
+  [value format](/reference/value-formats), `unit`/`label` annotate the ring.
+- `size`: the footprint shared by every ring — `small`, `medium` (the default), or `large`.
+  `small` packs several rings across a row and swaps each badge for a compact status dot;
+  `large` emphasizes one or two.
 
 <Callout variant="note">
-  `gauge.goal` needs at least one bound: declaring `goal` with neither `min` nor `max` is
-  a named validation error, so a misconfigured goal fails the build rather than rendering
-  blank.
+  Each goal needs at least one bound: a `goal` with neither `min` nor `max` is a named
+  validation error, so a misconfigured ring fails the build rather than rendering blank.
 </Callout>
 
 ## gauge.meter
@@ -300,6 +307,7 @@ tone comes from the state value.
     state: "status",
     value: "p95_ms",
     format: "int",
+    tones: { maintenance: "warning" },
   }}
   data={sampleData(
     [
@@ -310,7 +318,7 @@ tone comes from the state value.
     [
       { service: "gateway", status: "degraded", p95_ms: 340 },
       { service: "auth", status: "healthy", p95_ms: 90 },
-      { service: "payments", status: "healthy", p95_ms: 150 },
+      { service: "payments", status: "maintenance", p95_ms: 150 },
       { service: "search", status: "down", p95_ms: 0 },
     ],
     "services",
@@ -326,7 +334,8 @@ tone comes from the state value.
   "label": "service",
   "state": "status",
   "value": "p95_ms",
-  "format": "int"
+  "format": "int",
+  "tones": { "maintenance": "warning" }
 }
 ```
 

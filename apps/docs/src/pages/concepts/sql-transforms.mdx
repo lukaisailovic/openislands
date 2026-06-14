@@ -1,11 +1,16 @@
-import { Callout } from "vocs";
-
 # SQL Transforms
 
 A `sql` dataset is a saved DuckDB query over your other datasets. It's where data shaping
 lives: the sums, joins, and filters an island must never carry. The manifest stays
 declarative because the arithmetic happens here, in a file you own, and the island only ever
 names columns that already exist.
+
+```mermaid
+flowchart LR
+  F[Source files] --> T[SQL transform<br/>DuckDB SELECT]
+  T --> C[Typed contract]
+  C --> I[Island]
+```
 
 ## Why shaping belongs in SQL
 
@@ -62,10 +67,10 @@ has to be declared after everything it reads:
 }
 ```
 
-<Callout variant="warning">
-  A transform that references a dataset declared later in `datasets` fails to register: the
-  view it needs doesn't exist yet. Put upstream datasets first.
-</Callout>
+:::warning
+A transform that references a dataset declared later in `datasets` fails to register: the view
+it needs doesn't exist yet. Put upstream datasets first.
+:::
 
 ## Derived and read-only
 
