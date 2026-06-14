@@ -184,19 +184,25 @@ export async function startWatcher(
     const changed = [...pending];
     pending.clear();
     const rels = changed.map((abs) => normRel(relative(projectDir, abs)));
-    const seen = new Set<string>();
-    const events: RuntimeEvent[] = [];
-    for (const rel of rels) {
-      for (const event of await eventsForChange(projectDir, rel)) {
-        const key = JSON.stringify(event);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        events.push(event);
+    try {
+      const seen = new Set<string>();
+      const events: RuntimeEvent[] = [];
+      for (const rel of rels) {
+        for (const event of await eventsForChange(projectDir, rel)) {
+          const key = JSON.stringify(event);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          events.push(event);
+        }
       }
+      for (const event of mergeEvents(events)) opts.broadcaster.publish(event);
+      const fc = filesChangedEvent(projectDir, rels);
+      if (fc) opts.broadcaster.publish(fc);
+    } catch (err) {
+      // A recompile can throw on a transient bad state (half-written file, I/O error);
+      // the watcher must keep running so the next save can recover.
+      console.error(`[openislands] watch recompile failed: ${(err as Error).message}`);
     }
-    for (const event of mergeEvents(events)) opts.broadcaster.publish(event);
-    const fc = filesChangedEvent(projectDir, rels);
-    if (fc) opts.broadcaster.publish(fc);
   };
 
   const onChange = (abs: string) => {

@@ -10,7 +10,7 @@
  *   openislands sync [dir] [connector]  # one-shot connector pull (cron-able)
  */
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync, mkdirSync, cpSync, readdirSync } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -459,11 +459,54 @@ async function bootRuntime(
     })();
   });
 
-  server.listen(port, host, () => {
-    console.log(
-      `${c.green("●")} OpenIslands runtime → ${c.bold(origin)}  ${c.dim("live SSR · Ctrl-C to stop")}`,
-    );
+  await new Promise<void>((listening, failed) => {
+    server.once("error", failed);
+    server.listen(port, host, () => {
+      server.removeListener("error", failed);
+      listening();
+    });
   });
+  server.on("error", (err) => console.error(c.red(`runtime server error: ${friendlyMessage(err)}`)));
+  installGracefulShutdown(server);
+
+  console.log(
+    `${c.green("●")} OpenIslands runtime → ${c.bold(origin)}  ${c.dim("live SSR · Ctrl-C to stop")}`,
+  );
+}
+
+/** On Ctrl-C / SIGTERM, stop accepting connections and exit cleanly instead of being killed mid-request. */
+function installGracefulShutdown(server: Server): void {
+  let closing = false;
+  const shutdown = (signal: NodeJS.Signals) => {
+    if (closing) return;
+    closing = true;
+    console.log(c.dim(`\n${signal} — shutting down.`));
+    server.close(() => process.exit(0));
+    // Long-lived SSE streams keep close() from ever completing — don't hang on them.
+    setTimeout(() => process.exit(0), 2000).unref();
+  };
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+}
+
+/** A one-line human message for an error — names the cause for known Node listen failures. */
+function friendlyMessage(err: unknown): string {
+  if (err && typeof err === "object" && "code" in err) {
+    const e = err as NodeJS.ErrnoException & { address?: string; port?: number };
+    if (e.code === "EADDRINUSE")
+      return `port ${e.port} is already in use — stop whatever is using it, or serve with a different --port.`;
+    if (e.code === "EACCES")
+      return `not allowed to bind ${e.address ?? "the host"}:${e.port ?? ""} — ports below 1024 need elevated privileges; pick a higher --port.`;
+    if (e.code === "EADDRNOTAVAIL")
+      return `can't bind to host '${e.address ?? ""}' — it isn't an address on this machine; check --host.`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** Last resort for any unhandled failure: print a clean message and exit non-zero — never dump a raw stack. */
+function die(err: unknown): never {
+  console.error(`\n${c.red("✗")} ${friendlyMessage(err)}`);
+  process.exit(1);
 }
 
 function printErrors(errors: string[]): void {
@@ -474,4 +517,6 @@ function printWarnings(warnings: string[]): void {
   for (const w of warnings) console.log(`  ${c.yellow("!")} ${c.dim(w)}`);
 }
 
-program.parseAsync();
+process.on("uncaughtException", die);
+process.on("unhandledRejection", die);
+program.parseAsync().catch(die);
