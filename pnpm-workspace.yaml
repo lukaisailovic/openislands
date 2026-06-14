@@ -9,3 +9,6 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - vocs@2.0.13
+
+patchedDependencies:
+  vocs: patches/vocs.patch
