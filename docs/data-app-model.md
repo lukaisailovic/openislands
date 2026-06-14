@@ -43,7 +43,7 @@ this lives in the docs site under `apps/docs/src/pages/`.
 has a minimum span below which it stops being legible (`ISLAND_MIN_SPAN` in
 `packages/schema/src/index.ts`): `metric.kpi`/`source.doc`/`gauge.goal` 2,
 `note.card`/`gauge.meter`/`search.box`/`category.pie`/`funnel.steps`/`metric.scorecard` 3,
-`table.grid`/`map.choropleth` 5, `activity.calendar` 6, everything else 4. An explicit `span` below its type's minimum is a named validation error
+`table.grid`/`map.choropleth` 5, `activity.calendar`/`content.editor` 6, everything else 4. An explicit `span` below its type's minimum is a named validation error
 (e.g. "span 1 is below the minimum 4 for timeseries.line"). The runtime additionally floors
 spans responsively — below ~640px every tile goes full-width, and in a middle band spans render
 at `max(span, 6)` — so a tile never renders narrower than its minimum usable width.
@@ -107,7 +107,32 @@ Get any island's exact config schema with `get_island_schema(type)` (MCP) or rea
 | `search.box` | `dataset`, `fields`, `titleField` | a search input over a dataset — typing matches rows case-insensitively across `fields` (client-side substring), results drop down as an autocomplete showing `titleField` (+ optional `detail` secondary line); selecting a result opens the full row in a details dialog; `placeholder?`, `limit?` (default 10) caps visible results |
 | `note.card` | `markdown` | no dataset; `tone: info\|success\|warning\|danger` renders it as a colored callout with a matching icon, omit for plain prose |
 | `source.doc` | — | `file` or `href`; `kind: pdf\|markdown\|image\|link`; renders as a document card (type icon, name, open action); `label?` overrides the displayed name (defaults to the file basename or link host), `description?` adds a caption |
+| `content.editor` | — | a full-page, data-free content workspace — browse and edit a tree of markdown files (and view CSVs) Obsidian-style; exactly one of `file` (one doc under `data/docs/`) or `dir` (a directory, recursed) — both or neither is a named error; with `dir`: `include?` globs (default markdown), `csv: true` also surfaces `.csv` files read-only as a table, `groups: [{id, label?, icon?, match}]` are virtual folders (globs relative to `dir`; unmatched files fall into Ungrouped); `readOnly?` makes it a viewer; edits save to the file, each save records a restorable version under `.openislands/editor.sqlite`; renders full-bleed and binds no dataset |
 | `layout.row` | `islands` | a full-width structural row holding other islands — children render on their own 12-column grid row; no `span`/`title`, no nesting, no data binding |
+
+### `content.editor` (the content workspace)
+
+`content.editor` is the one full-page island: an Obsidian-style workspace for browsing and editing
+a directory of markdown files in the browser. Unlike every other island it binds **no dataset and
+runs no SQL** — it reads and writes files on disk directly. It renders full-bleed (no card chrome,
+no title bar) and wants a full-width `span` of 12 (minimum 6). Give it exactly **one** of:
+
+- `file` — a single document under `data/docs/`. Both `file` and `dir`, or neither, is a named
+  validation error.
+- `dir` — a directory under `data/docs/`, recursed. Three options apply only with `dir` (setting
+  any of them with `file` is a named error):
+  - `include` — globs of files to surface; defaults to markdown (`**/*.md`, `**/*.markdown`).
+  - `csv: true` — also surface `.csv` files, shown **read-only** as a table.
+  - `groups: [{ id, label?, icon?, match }]` — **virtual folders** that gather scattered files into
+    tidy sidebar buckets regardless of where they sit on disk. `match` is an array of globs relative
+    to `dir`; `icon` is a Phosphor name (e.g. `files`, `folder`), falling back to a folder icon.
+    Files matching no group fall into an **Ungrouped** bucket.
+
+`readOnly: true` turns the whole island into a viewer (no editing or saving). Otherwise edits save
+straight back to the file, and **every save records a restorable version** in a per-app SQLite store
+at `.openislands/editor.sqlite` — the UI offers history and one-click rollback. See
+`apps/examples/knowledge` for a live workspace bound to a whole `data/` tree with CSV view and
+virtual folders.
 
 ## Custom islands
 

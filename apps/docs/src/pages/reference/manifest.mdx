@@ -193,7 +193,7 @@ A `layout.row` is a structural wrapper: it holds other islands and forces them o
 their own full-width grid row. It carries no `span`, `title`, or data binding, and it
 cannot nest another `layout.row`.
 
-**Built-in islands:** [`metric.kpi`](#metrickpi) · [`metric.scorecard`](#metricscorecard) · [`timeseries.line`](#timeseriesline) · [`category.bar`](#categorybar) · [`category.combo`](#categorycombo) · [`waterfall.bars`](#waterfallbars) · [`breakdown.treemap`](#breakdowntreemap) · [`distribution.heatmap`](#distributionheatmap) · [`activity.calendar`](#activitycalendar) · [`funnel.steps`](#funnelsteps) · [`rank.list`](#ranklist) · [`compare.radar`](#compareradar) · [`map.choropleth`](#mapchoropleth) · [`correlation.scatter`](#correlationscatter) · [`category.pie`](#categorypie) · [`table.grid`](#tablegrid) · [`timeline.feed`](#timelinefeed) · [`gauge.rings`](#gaugerings) · [`gauge.goal`](#gaugegoal) · [`gauge.meter`](#gaugemeter) · [`status.grid`](#statusgrid) · [`search.box`](#searchbox) · [`note.card`](#notecard) · [`source.doc`](#sourcedoc)
+**Built-in islands:** [`metric.kpi`](#metrickpi) · [`metric.scorecard`](#metricscorecard) · [`timeseries.line`](#timeseriesline) · [`category.bar`](#categorybar) · [`category.combo`](#categorycombo) · [`waterfall.bars`](#waterfallbars) · [`breakdown.treemap`](#breakdowntreemap) · [`distribution.heatmap`](#distributionheatmap) · [`activity.calendar`](#activitycalendar) · [`funnel.steps`](#funnelsteps) · [`rank.list`](#ranklist) · [`compare.radar`](#compareradar) · [`map.choropleth`](#mapchoropleth) · [`correlation.scatter`](#correlationscatter) · [`category.pie`](#categorypie) · [`table.grid`](#tablegrid) · [`timeline.feed`](#timelinefeed) · [`gauge.rings`](#gaugerings) · [`gauge.goal`](#gaugegoal) · [`gauge.meter`](#gaugemeter) · [`status.grid`](#statusgrid) · [`search.box`](#searchbox) · [`note.card`](#notecard) · [`source.doc`](#sourcedoc) · [`content.editor`](#contenteditor)
 
 ### `metric.kpi`
 
@@ -624,6 +624,24 @@ An embedded file or external link (pdf, markdown, image, link) — use to surfac
 | `kind` | `"pdf" \| "markdown" \| "image" \| "link"` | no |  |
 | `label` | `string` | no | human-readable name shown on the card; defaults to the file name or the link's host |
 | `description` | `string` | no | a short caption shown under the document |
+
+### `content.editor`
+
+A full-page content workspace — browse and edit a directory of markdown files (and view CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.
+
+**Minimum span:** 6
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `file` | `string` | no | path to a single document under data/docs/ — mutually exclusive with `dir` |
+| `dir` | `string` | no | path to a directory under data/docs/ whose files are browsable and editable — mutually exclusive with `file` |
+| `include` | `array of string` | no | globs of files to surface when `dir` is set; defaults to markdown (**/*.md, **/*.markdown) |
+| `csv` | `boolean` | no | also surface .csv files (shown read-only as a table) when `dir` is set |
+| `readOnly` | `boolean` | no | disable editing/saving — a viewer only |
+| `groups` | `array of object` | no | virtual folders grouping scattered files; only meaningful with `dir` |
 
 ## Custom islands
 
