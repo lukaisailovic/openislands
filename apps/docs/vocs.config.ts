@@ -19,6 +19,7 @@ export default defineConfig({
         { text: "Introduction", link: "/introduction" },
         { text: "Getting Started", link: "/getting-started" },
         { text: "MCP Server", link: "/mcp" },
+        { text: "CLI", link: "/cli" },
       ],
     },
     {
