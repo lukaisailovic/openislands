@@ -122,5 +122,8 @@ export function markdownToEditor(markdown: string, root: ElementNode): void {
 }
 
 export function editorToMarkdown(): string {
-  return $convertToMarkdownString(EDITOR_TRANSFORMERS);
+  // End with a single trailing newline (POSIX/git convention); Lexical's serializer omits it,
+  // which would otherwise strip the final newline from every file on save.
+  const markdown = $convertToMarkdownString(EDITOR_TRANSFORMERS);
+  return markdown.endsWith("\n") ? markdown : `${markdown}\n`;
 }
