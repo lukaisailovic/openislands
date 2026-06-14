@@ -35,13 +35,20 @@ so a typo'd output name or a bad config is a named error before anything runs.
 
 ### Authorize it
 
-A connector that talks to an OAuth provider needs its client credentials in `.env` (the
-connector declares which keys, e.g. `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`), then a
-one-time sign-in. Authorization is human-only: run `openislands serve`, open the dashboard, and
-click **Connect**. The runtime walks the OAuth flow in the browser and stores the resulting
-tokens at `.openislands/connectors/<name>.json` (gitignored). An agent never authorizes on its
-own; if a sync reports a connector isn't connected, it asks you to. A keyless connector, the
-kind that uses a plain API key, just reads its key from `.env` with nothing to click.
+How a connector authorizes depends on the auth mode its code declares:
+
+- **Keyless.** A connector that uses a plain API key declares its key env vars in `secrets` and
+  reads them from `.env`. Nothing to click — it's connected once every secret is set.
+- **OAuth2.** A connector that talks to an OAuth provider needs its client credentials in `.env`
+  (the connector declares which keys, e.g. `WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`), then a
+  one-time sign-in. Authorization is human-only: run `openislands serve`, open the dashboard, and
+  click **Connect**. The runtime walks the OAuth flow in the browser and stores the resulting
+  tokens at `.openislands/connectors/<name>.json` (gitignored). An agent never authorizes on its
+  own; if a sync reports a connector isn't connected, it asks you to.
+- **Bearer.** A connector that takes a static long-lived API token or JWT declares the `.env` key
+  holding it (`tokenEnv`). You paste the token into `.env` and that's it — there's no Connect
+  click, like a keyless connector. It's connected once the env var is set, and the token is handed
+  to `sync` as `ctx.tokens.accessToken`, identical to an OAuth access token.
 
 ### Sync it
 
@@ -113,11 +120,33 @@ the result to `sync` as `ctx.config`, fully typed. A config that fails the schem
 
 ### auth
 
-Omit `auth` for a keyless connector and list its API-key env vars in `secrets: ["SOME_API_KEY"]`;
-they arrive as `ctx.secrets`. For OAuth2, set `auth.type` to `"oauth2"` and give it the
-provider's `authorizeUrl`, `tokenUrl`, the `scopes` to request, and the `.env` keys holding the
-client id and secret. The runtime owns the rest: the Connect flow, token storage, and refreshing
-an access token that's about to expire before each sync.
+A connector picks one of three auth modes:
+
+- **Keyless.** Omit `auth` and list its API-key env vars in `secrets: ["SOME_API_KEY"]`; they
+  arrive as `ctx.secrets`. Connected once every secret is set.
+- **OAuth2.** Set `auth.type` to `"oauth2"` and give it the provider's `authorizeUrl`, `tokenUrl`,
+  the `scopes` to request, and the `.env` keys holding the client id and secret. The runtime owns
+  the rest: the Connect flow, token storage, and refreshing an access token that's about to expire
+  before each sync.
+- **Bearer.** Set `auth.type` to `"bearer"` and name the `.env` key holding a static long-lived
+  API token or JWT in `data.tokenEnv`. There's no Connect flow: the runtime reads the env token
+  and hands it to `sync` as `ctx.tokens.accessToken`, exactly like an OAuth access token, so your
+  request code (`Authorization: Bearer …`) is the same either way. Connected once the env var is
+  set.
+
+```ts
+export default defineConnector({
+  description: "Reads a service behind a static API token",
+  auth: { type: "bearer", data: { tokenEnv: "ACME_API_TOKEN" } },
+  outputs: { events: { description: "appended events" } },
+  async sync(ctx) {
+    const res = await fetch("https://api.acme.dev/events", {
+      headers: { authorization: `Bearer ${ctx.tokens!.accessToken}` },
+    });
+    await ctx.insert("events", await res.json());
+  },
+});
+```
 
 ### sync(ctx)
 
@@ -127,7 +156,8 @@ gives you:
 - `ctx.config`: the parsed config.
 - `ctx.secrets`: the declared `.env` secrets, keyed by name.
 - `ctx.tokens`: for an OAuth connector, `{ accessToken, refreshToken?, expiresAt? }`, refreshed
-  automatically when it's near expiry.
+  automatically when it's near expiry; for a bearer connector, `{ accessToken }` carrying the
+  static token from `.env`. Absent for keyless connectors.
 - `ctx.state`: a mutable object that persists between syncs. Keep a cursor here (the timestamp
   or id you last pulled) so the next run fetches only what's new. It's saved after a successful
   sync.
@@ -162,7 +192,8 @@ own copies.
 `list_connectors` over MCP, `openislands sync`, and the dashboard all read the same status per
 connector:
 
-- `connected`: OAuth is complete, or for a keyless connector, every secret is present.
+- `connected`: OAuth is complete, the bearer token env var is set, or for a keyless connector,
+  every secret is present.
 - `missingSecrets`: env keys the connector needs that aren't set.
 - `lastSync` / `lastError`: when it last ran, and why it failed if it did.
 - `schedule`: the effective interval, the manifest's value falling back to the connector's

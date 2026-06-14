@@ -33,8 +33,21 @@ describe("defineConnector", () => {
         ctx.log(ctx.config.unit);
       },
     });
-    expect(def.auth!.data.tokenUrl).toBe("https://example.com/token");
+    const auth = def.auth;
+    expect(auth?.type).toBe("oauth2");
+    if (auth?.type === "oauth2") expect(auth.data.tokenUrl).toBe("https://example.com/token");
     expect(def.config!.safeParse({ unit: "metric" }).success).toBe(true);
+  });
+
+  it("carries bearer auth config through", () => {
+    const def = defineConnector({
+      auth: { type: "bearer", data: { tokenEnv: "API_TOKEN" } },
+      outputs: { readings: {} },
+      async sync() {},
+    });
+    const auth = def.auth;
+    expect(auth?.type).toBe("bearer");
+    if (auth?.type === "bearer") expect(auth.data.tokenEnv).toBe("API_TOKEN");
   });
 
   it("infers config, output names, and secret keys onto ctx", () => {

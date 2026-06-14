@@ -24,6 +24,7 @@ afterEach(() => {
   delete process.env.DEMO_TOKEN;
   delete process.env.DEMO_CLIENT_ID;
   delete process.env.DEMO_CLIENT_SECRET;
+  delete process.env.DEMO_BEARER;
 });
 
 const DEMO_CONNECTOR = `
@@ -62,6 +63,18 @@ export default defineConnector({
       clientSecretEnv: "DEMO_CLIENT_SECRET",
     },
   },
+  outputs: { logs: {} },
+  async sync(ctx) {
+    await ctx.insert("logs", [{ token: ctx.tokens.accessToken }]);
+  },
+});
+`;
+
+const BEARER_CONNECTOR = `
+import { defineConnector } from "@openislands/connector-kit";
+
+export default defineConnector({
+  auth: { type: "bearer", data: { tokenEnv: "DEMO_BEARER" } },
   outputs: { logs: {} },
   async sync(ctx) {
     await ctx.insert("logs", [{ token: ctx.tokens.accessToken }]);
@@ -232,6 +245,45 @@ describe("status without secrets", () => {
     expect(demo.auth).toBe("none");
     expect(demo.connected).toBe(false);
     expect(demo.missingSecrets).toContain("DEMO_TOKEN");
+  });
+});
+
+// --- Bearer auth ----------------------------------------------------------------
+// A static long-lived token from .env, delivered to sync as ctx.tokens.accessToken
+// exactly like an OAuth access token — no interactive Connect, connected = env set.
+
+describe("bearer auth", () => {
+  function bearerProject(): string {
+    const m = demoManifest();
+    m.connectors.demo.datasets = { logs: "logs" };
+    delete (m.datasets as Record<string, unknown>).snapshot;
+    return project(m, { "connectors/demo/index.ts": BEARER_CONNECTOR });
+  }
+
+  it("reports auth bearer, not connected, and the token env as missing when unset", async () => {
+    const dir = bearerProject();
+    const demo = (await listConnectorStatuses(dir)).find((s) => s.name === "demo")!;
+    expect(demo.auth).toBe("bearer");
+    expect(demo.connected).toBe(false);
+    expect(demo.missingSecrets).toContain("DEMO_BEARER");
+  });
+
+  it("reports connected and hands the env token to sync once the token is set", async () => {
+    process.env.DEMO_BEARER = "jwt-123";
+    const dir = bearerProject();
+
+    const demo = (await listConnectorStatuses(dir)).find((s) => s.name === "demo")!;
+    expect(demo.connected).toBe(true);
+    expect(demo.missingSecrets).toEqual([]);
+
+    await runConnectorSync(dir, "demo");
+    const logs = await query(dir, "logs");
+    expect(logs.rows[0]!.token).toBe("jwt-123");
+  });
+
+  it("throws naming the token env when syncing while the token is unset", async () => {
+    const dir = bearerProject();
+    await expect(runConnectorSync(dir, "demo")).rejects.toThrow(/DEMO_BEARER|not connected/);
   });
 });
 

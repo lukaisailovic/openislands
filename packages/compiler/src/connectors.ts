@@ -6,9 +6,11 @@
  * its `sync` a context wired to the checkpointed write path, and persists tokens
  * + cursor state at `.openislands/connectors/<name>.json`.
  *
- * Auth is plain OAuth2 authorization-code, no provider special-casing. Writes
- * reuse the actions insert/replace core, so `rollback` covers connector data
- * exactly like manifest edits and action writes.
+ * Auth is per-scheme (see the auth-scheme helpers below): keyless (declared
+ * `secrets` only), OAuth2 authorization-code, or a static bearer token read from
+ * `.env`. No provider special-casing. Writes reuse the actions insert/replace
+ * core, so `rollback` covers connector data exactly like manifest edits and
+ * action writes.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -20,6 +22,7 @@ import { createRequire } from "node:module";
 import { build } from "esbuild";
 import ms from "ms";
 import type {
+  ConnectorAuth,
   ConnectorContext,
   ConnectorDefinition,
   ConnectorTokens,
@@ -193,25 +196,39 @@ export function parseSchedule(schedule: string): number {
   return parsed;
 }
 
-function authKind(def: ConnectorDefinition | undefined): "none" | "oauth2" {
-  return def?.auth?.type === "oauth2" ? "oauth2" : "none";
+// --- Auth schemes ---------------------------------------------------------------
+// One small surface per auth kind so the engine never branches on `auth.type`
+// inline: keyless reads only declared `secrets`, oauth2 persists tokens, bearer
+// reads a static token from `.env` and hands it to sync exactly like an OAuth one.
+
+type AuthKind = "none" | "oauth2" | "bearer";
+
+function authKind(def: ConnectorDefinition | undefined): AuthKind {
+  return def?.auth?.type ?? "none";
+}
+
+/** Env keys that must be present for this scheme to be usable, besides declared `secrets`. */
+function authEnvKeys(auth: ConnectorAuth | undefined): string[] {
+  if (!auth) return [];
+  if (auth.type === "oauth2") return [auth.data.clientIdEnv, auth.data.clientSecretEnv];
+  return [auth.data.tokenEnv]; // bearer
+}
+
+/** Is the connector connected right now, given persisted state + env? (Caller handles the keyless case.) */
+function isAuthConnected(auth: ConnectorAuth, persisted: ConnectorState): boolean {
+  if (auth.type === "oauth2") return !!persisted.tokens?.accessToken;
+  return !!process.env[auth.data.tokenEnv]; // bearer
 }
 
 function readSecrets(def: ConnectorDefinition | undefined): { secrets: Record<string, string>; missing: string[] } {
   const secrets: Record<string, string> = {};
   const missing: string[] = [];
-  for (const key of def?.secrets ?? []) {
+  const keys = [...(def?.secrets ?? []), ...authEnvKeys(def?.auth)];
+  for (const key of keys) {
     const value = process.env[key];
-    if (value === undefined || value === "") missing.push(key);
-    else secrets[key] = value;
-  }
-  if (def?.auth) {
-    for (const key of [def.auth.data.clientIdEnv, def.auth.data.clientSecretEnv]) {
-      const value = process.env[key];
-      if (value === undefined || value === "") {
-        if (!missing.includes(key)) missing.push(key);
-      } else secrets[key] = value;
-    }
+    if (value === undefined || value === "") {
+      if (!missing.includes(key)) missing.push(key);
+    } else secrets[key] = value;
   }
   return { secrets, missing };
 }
@@ -224,7 +241,7 @@ export interface ConnectorStatus {
   description?: string;
   schedule?: string;
   datasets: Record<string, string>;
-  auth: "none" | "oauth2";
+  auth: "none" | "oauth2" | "bearer";
   connected: boolean;
   missingSecrets: string[];
   lastSync?: string;
@@ -248,7 +265,7 @@ export async function listConnectorStatuses(projectDir: string): Promise<Connect
     }
     const { missing } = readSecrets(def);
     const auth = authKind(def);
-    const connected = auth === "oauth2" ? !!persisted.tokens?.accessToken : missing.length === 0;
+    const connected = auth === "none" ? missing.length === 0 : isAuthConnected(def!.auth!, persisted);
     statuses.push({
       name,
       module: spec.module,
@@ -390,6 +407,26 @@ export interface SyncResult {
 
 const inFlight = new Map<string, Promise<SyncResult>>();
 
+/** Resolve the tokens handed to `sync` per auth scheme: oauth2 refreshes its persisted token, bearer reads it from env, keyless gets none. */
+async function resolveTokensForSync(
+  projectDir: string,
+  name: string,
+  def: ConnectorDefinition,
+  persisted: ConnectorState,
+): Promise<ConnectorTokens | undefined> {
+  const auth = def.auth;
+  if (!auth) return undefined;
+  if (auth.type === "bearer") {
+    const token = process.env[auth.data.tokenEnv];
+    if (!token) throw new Error(`connector '${name}' is not connected — set ${auth.data.tokenEnv} in .env`);
+    return { accessToken: token };
+  }
+  let tokens = persisted.tokens;
+  if (tokens) tokens = await refreshIfExpiring(projectDir, name, auth.data, tokens);
+  if (!tokens?.accessToken) throw new Error(`connector '${name}' is not connected — open the dashboard and click Connect`);
+  return tokens;
+}
+
 function resolveOutputDataset(spec: ConnectorSpec, def: ConnectorDefinition, output: string): string {
   if (!(output in def.outputs)) {
     throw new Error(`connector output '${output}' is not declared in the connector's outputs`);
@@ -419,11 +456,7 @@ async function doSync(projectDir: string, name: string, opts: RetentionOpts): Pr
   const { secrets } = readSecrets(def);
   const persisted = readState(projectDir, name);
 
-  let tokens = persisted.tokens;
-  if (def.auth && tokens) tokens = await refreshIfExpiring(projectDir, name, def.auth.data, tokens);
-  if (def.auth && !tokens?.accessToken) {
-    throw new Error(`connector '${name}' is not connected — open the dashboard and click Connect`);
-  }
+  const tokens = await resolveTokensForSync(projectDir, name, def, persisted);
 
   const datasets: SyncResult["datasets"] = {};
   const cursorState: Record<string, unknown> = { ...persisted.state };
