@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="OpenIslands">
-  <rect x="3" y="3" width="10" height="10" rx="2.6" fill="#FFFFFF"/>
-  <rect x="14.8" y="3" width="6.2" height="10" rx="2.2" fill="#FFFFFF"/>
-  <rect x="3" y="14.8" width="10" height="6.2" rx="2.2" fill="#FFFFFF"/>
-  <rect x="14.8" y="14.8" width="6.2" height="6.2" rx="2" fill="#2DD4BF"/>
+  <rect x="1.4" y="14.2" width="21.2" height="1.7" rx="0.85" fill="#2DD4BF"/>
+  <rect x="5.6" y="17.9" width="12.8" height="1.7" rx="0.85" fill="#2DD4BF"/>
+  <path d="M2 14.8C2 10.6 3.6 4.6 7 4.6C8.7 4.6 9.7 6.2 10.8 8.6C11.9 11 13.3 14.8 15 14.8Z" fill="#FFFFFF"/>
+  <path d="M16 14.8C16 12.1 17.1 9.8 18.7 9.8C20.1 9.8 21.4 11.9 21.4 14.8Z" fill="#FFFFFF"/>
 </svg>
