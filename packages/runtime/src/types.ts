@@ -42,7 +42,8 @@ export type RuntimeEvent =
   | { type: "datasets-changed"; datasets: string[] }
   | { type: "validation"; islandErrors: IslandValidationError[] }
   | { type: "components-changed" }
-  | { type: "connectors-changed" };
+  | { type: "connectors-changed" }
+  | { type: "files-changed"; paths: string[] };
 
 export interface IslandValidationError {
   page: string;
