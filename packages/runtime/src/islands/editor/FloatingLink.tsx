@@ -1,8 +1,8 @@
 import { $isLinkNode } from "@lexical/link";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $findMatchingParent } from "@lexical/utils";
-import { Button, Input, Popover } from "@cloudflare/kumo";
-import { ArrowSquareOut, LinkBreak } from "@phosphor-icons/react";
+import { Button, Input, Popover, Tooltip } from "@cloudflare/kumo";
+import { ArrowSquareOut, Link as LinkIcon, LinkBreak, PencilSimple } from "@phosphor-icons/react";
 import { $getNearestNodeFromDOMNode, $getNodeByKey, type LexicalEditor } from "lexical";
 import { useEffect, useState } from "react";
 
@@ -14,6 +14,11 @@ interface LinkRef {
 
 function closestLink(target: EventTarget | null): HTMLAnchorElement | null {
   return target instanceof HTMLElement ? target.closest("a") : null;
+}
+
+/** A link with no real destination yet — open it straight into edit mode. */
+function isBlankUrl(url: string): boolean {
+  return url === "" || url === "https://" || url === "http://";
 }
 
 /** Resolve the LinkNode behind an `<a>` element to its node key and current URL. */
@@ -39,6 +44,7 @@ export function FloatingLinkPlugin({ editable }: { editable: boolean }) {
   const [editor] = useLexicalComposerContext();
   const [hover, setHover] = useState<{ left: number; top: number; url: string } | null>(null);
   const [edit, setEdit] = useState<LinkRef | null>(null);
+  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
   useEffect(() => {
@@ -63,6 +69,7 @@ export function FloatingLinkPlugin({ editable }: { editable: boolean }) {
       event.preventDefault();
       setHover(null);
       setDraft(ref.url);
+      setEditing(isBlankUrl(ref.url));
       setEdit(ref);
     };
 
@@ -129,47 +136,74 @@ export function FloatingLinkPlugin({ editable }: { editable: boolean }) {
       ) : null}
 
       {edit ? (
-        <Popover open onOpenChange={(open) => !open && setEdit(null)}>
-          <Popover.Content
-            anchor={edit.el}
-            align="start"
-            className="flex w-[min(90vw,22rem)] items-center gap-1.5 p-2"
-          >
-            <Input
-              size="sm"
-              aria-label="Link URL"
-              placeholder="https://"
-              value={draft}
-              autoFocus
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commit();
-                }
-              }}
-              className="min-w-0 flex-1"
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              shape="square"
-              aria-label="Open link"
-              title="Open link"
-              onClick={() => window.open(draft.trim() || edit.url, "_blank", "noopener,noreferrer")}
-            >
-              <ArrowSquareOut size={15} />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              shape="square"
-              aria-label="Remove link"
-              title="Remove link"
-              onClick={removeLink}
-            >
-              <LinkBreak size={15} />
-            </Button>
+        <Popover
+          open
+          onOpenChange={(open, details) => {
+            // Switching view→edit unmounts the focused button; ignore that focus-out
+            // so the popover stays open, while outside-press / Escape still dismiss it.
+            if (!open && details.reason !== "focus-out") setEdit(null);
+          }}
+        >
+          <Popover.Content anchor={edit.el} align="start" sideOffset={6} className="w-[min(92vw,24rem)] p-1.5">
+            {editing ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  size="sm"
+                  aria-label="Link URL"
+                  placeholder="Paste or type a link"
+                  value={draft}
+                  autoFocus
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      commit();
+                    }
+                  }}
+                  className="min-w-0 flex-1"
+                />
+                <Button size="sm" variant="primary" onClick={commit}>
+                  Apply
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-0.5">
+                <LinkIcon size={15} className="ml-1 mr-0.5 flex-none text-kumo-subtle" />
+                <span className="min-w-0 flex-1 truncate text-sm text-kumo-default" title={edit.url}>
+                  {edit.url}
+                </span>
+                <Tooltip
+                  content="Open in new tab"
+                  render={
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      shape="square"
+                      aria-label="Open in new tab"
+                      onClick={() => window.open(edit.url, "_blank", "noopener,noreferrer")}
+                    >
+                      <ArrowSquareOut size={16} />
+                    </Button>
+                  }
+                />
+                <Tooltip
+                  content="Edit link"
+                  render={
+                    <Button size="sm" variant="ghost" shape="square" aria-label="Edit link" onClick={() => setEditing(true)}>
+                      <PencilSimple size={16} />
+                    </Button>
+                  }
+                />
+                <Tooltip
+                  content="Remove link"
+                  render={
+                    <Button size="sm" variant="ghost" shape="square" aria-label="Remove link" onClick={removeLink}>
+                      <LinkBreak size={16} />
+                    </Button>
+                  }
+                />
+              </div>
+            )}
           </Popover.Content>
         </Popover>
       ) : null}
