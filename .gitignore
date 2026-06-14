@@ -43,6 +43,9 @@ apps/examples/*/data/**
 !apps/examples/*/data/incidents.csv
 !apps/examples/*/data/incident_updates.csv
 !apps/examples/*/data/oncall.csv
+# knowledge example — its data/ is entirely curated showcase docs (markdown in
+# specs/, runbooks/, notes/ subfolders + a glossary), so re-include the subtree.
+!apps/examples/knowledge/data/**
 .openislands/
 
 # Connector secrets — never commit; .env.example documents the keys.

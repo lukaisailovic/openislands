@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "title": "Knowledge Base",
+  "icon": "files",
+  "datasets": {},
+  "pages": [
+    {
+      "id": "workspace",
+      "title": "Workspace",
+      "icon": "files",
+      "islands": [
+        {
+          "type": "content.editor",
+          "title": "Docs",
+          "span": 12,
+          "dir": "data",
+          "csv": true,
+          "groups": [
+            { "id": "specs", "label": "Specs", "icon": "files", "match": ["specs/**", "architecture.md"] },
+            { "id": "runbooks", "label": "Runbooks", "icon": "list-bullets", "match": ["runbooks/**", "incident-*.md"] },
+            { "id": "notes", "label": "Notes", "icon": "folder", "match": ["notes/**", "roadmap.md"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

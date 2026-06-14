@@ -1,0 +1,13 @@
+term,definition,category
+Idempotency key,A client-supplied token that lets the server detect and ignore duplicate requests so a retry is safe,API
+Expand/contract,A migration pattern that adds the new schema before removing the old so deploys roll back safely,Database
+Backfill,A background job that migrates existing rows to a new schema shape after an expand step,Database
+SLO,Service Level Objective; the target reliability a service commits to, e.g. 99.9% success rate,Reliability
+Error budget,The allowed amount of failure under an SLO; spending it gates risky deploys,Reliability
+Blast radius,The scope of users or systems a change or failure can affect,Reliability
+Rolling deploy,Releasing to a fraction of instances at a time with a soak between batches,Deploy
+Soak,A short wait after a deploy batch to confirm health before continuing,Deploy
+Refresh token,A long-lived single-use token exchanged for a new short-lived session token,Auth
+Argon2id,A memory-hard password hashing algorithm used to store credentials safely,Auth
+Tenant,An isolated customer account; all data and limits are scoped per tenant,Platform
+Dead letter queue,A holding queue for messages that failed processing after all retries,Messaging
