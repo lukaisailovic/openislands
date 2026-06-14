@@ -83,27 +83,57 @@ export function scanWorkspaceApps(root: string): { id: string; dir: string }[] {
   });
 }
 
+/**
+ * The app-catalog seam: how this process resolves which apps it serves. The
+ * default is the local disk scan below; a different deployment can swap in a
+ * registry that resolves apps from elsewhere via {@link configureWorkspace}.
+ * Kept synchronous — `listApps`/`appDir` are called from every route and the
+ * local scan is cheap behind its TTL.
+ */
+export interface WorkspaceRegistry {
+  listApps(): WorkspaceApp[];
+  appDir(appId: string): string;
+}
+
 let scanCache: { key: string; at: number; apps: WorkspaceApp[] } | undefined;
 
+/** The default registry: a live disk scan of the workspace root, behind a short TTL. */
+const localRegistry: WorkspaceRegistry = {
+  listApps(): WorkspaceApp[] {
+    const { mode, dir } = workspaceRoot();
+    const key = `${mode}:${dir}`;
+    if (scanCache && scanCache.key === key && Date.now() - scanCache.at < SCAN_TTL_MS) {
+      return scanCache.apps;
+    }
+    const apps =
+      mode === "single"
+        ? [appFrom(sanitizeAppId(basename(dir)), dir)]
+        : scanWorkspaceApps(dir).map((found) => appFrom(found.id, found.dir));
+    scanCache = { key, at: Date.now(), apps };
+    return apps;
+  },
+
+  appDir(appId: string): string {
+    const app = this.listApps().find((a) => a.id === appId);
+    if (!app) throw new Error(`unknown app '${appId}'`);
+    return app.dir;
+  },
+};
+
+let activeRegistry: WorkspaceRegistry = localRegistry;
+
+/** Swap the workspace registry — resolve apps from a different source (e.g. a database). */
+export function configureWorkspace(registry: WorkspaceRegistry): void {
+  activeRegistry = registry;
+}
+
 export function listApps(): WorkspaceApp[] {
-  const { mode, dir } = workspaceRoot();
-  const key = `${mode}:${dir}`;
-  if (scanCache && scanCache.key === key && Date.now() - scanCache.at < SCAN_TTL_MS) {
-    return scanCache.apps;
-  }
-  const apps =
-    mode === "single"
-      ? [appFrom(sanitizeAppId(basename(dir)), dir)]
-      : scanWorkspaceApps(dir).map((found) => appFrom(found.id, found.dir));
-  scanCache = { key, at: Date.now(), apps };
-  return apps;
+  return activeRegistry.listApps();
 }
 
 /** Resolve an app id to its project directory. Throws on unknown ids (404-able). */
 export function appDir(appId: string): string {
-  const app = listApps().find((a) => a.id === appId);
-  if (!app) throw new Error(`unknown app '${appId}'`);
-  return app.dir;
+  return activeRegistry.appDir(appId);
 }
 
 export function resetWorkspaceCache(): void {

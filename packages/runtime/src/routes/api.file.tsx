@@ -2,11 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { readProjectFile } from "../server/file.js";
 import { appDirFromParams } from "../server/workspace.js";
 
-function handle(request: Request): Response {
+async function handle(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const app = appDirFromParams(url.searchParams);
   if (!app.ok) return new Response(app.error, { status: app.status });
-  const result = readProjectFile(app.dir, url.searchParams.get("path") ?? "");
+  const result = await readProjectFile(app.dir, url.searchParams.get("path") ?? "");
   return new Response(result.body as BodyInit, {
     status: result.status,
     headers: { "content-type": result.contentType },

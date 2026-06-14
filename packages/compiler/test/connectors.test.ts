@@ -122,19 +122,19 @@ describe("module loading errors", () => {
     const m = demoManifest();
     m.connectors.demo.module = "connectors/ghost";
     const dir = project(m, {});
-    const errors = await checkConnectors(dir, readManifest(dir));
+    const errors = await checkConnectors(dir, await readManifest(dir));
     expect(errors.some((e) => /not found/.test(e.message))).toBe(true);
   });
 
   it("reports a directory with no index file", async () => {
     const dir = project(demoManifest(), {});
-    const errors = await checkConnectors(dir, readManifest(dir));
+    const errors = await checkConnectors(dir, await readManifest(dir));
     expect(errors.some((e) => /no index/.test(e.message))).toBe(true);
   });
 
   it("reports a bundle error", async () => {
     const dir = project(demoManifest(), { "connectors/demo/index.ts": "this is not valid typescript ((" });
-    const errors = await checkConnectors(dir, readManifest(dir));
+    const errors = await checkConnectors(dir, await readManifest(dir));
     expect(errors.some((e) => /bundle/.test(e.message))).toBe(true);
   });
 });
@@ -144,7 +144,7 @@ describe("connector validation", () => {
     const m = demoManifest();
     m.connectors.demo.config = { count: "lots" } as never;
     const dir = project(m, { "connectors/demo/index.ts": DEMO_CONNECTOR });
-    const errors = await checkConnectors(dir, readManifest(dir));
+    const errors = await checkConnectors(dir, await readManifest(dir));
     expect(errors.some((e) => e.field?.startsWith("config."))).toBe(true);
   });
 
@@ -152,20 +152,20 @@ describe("connector validation", () => {
     const m = demoManifest();
     m.connectors.demo.datasets = { logs: "logs", ghost: "snapshot" };
     const dir = project(m, { "connectors/demo/index.ts": DEMO_CONNECTOR });
-    const errors = await checkConnectors(dir, readManifest(dir));
+    const errors = await checkConnectors(dir, await readManifest(dir));
     expect(errors.some((e) => /not declared/.test(e.message))).toBe(true);
   });
 
   it("rejects an invalid schedule", async () => {
     const m = demoManifest({ schedule: "soon" });
     const dir = project(m, { "connectors/demo/index.ts": DEMO_CONNECTOR });
-    const errors = await checkConnectors(dir, readManifest(dir));
+    const errors = await checkConnectors(dir, await readManifest(dir));
     expect(errors.some((e) => e.field === "schedule")).toBe(true);
   });
 
   it("accepts a valid connector", async () => {
     const dir = project(demoManifest(), { "connectors/demo/index.ts": DEMO_CONNECTOR });
-    const errors = await checkConnectors(dir, readManifest(dir));
+    const errors = await checkConnectors(dir, await readManifest(dir));
     expect(errors, JSON.stringify(errors)).toEqual([]);
   });
 });

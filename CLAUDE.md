@@ -18,6 +18,7 @@ change. No static export, no `generated/` snapshots.
 
 ```
 packages/schema      # the contract — Zod → types + JSON Schema. The keystone; everything depends on it.
+packages/storage     # swappable storage ports (ContentStore / AppStateStore / VersionStore) + local-disk adapters; configureStorage() swaps the backend
 packages/compiler    # DuckDB query core: files → typed contracts; runs transforms/queries live
 packages/runtime     # TanStack Start SSR app: island registry + React renderers
 packages/cli         # the `openislands` command (init / validate / serve / add / infer)
@@ -33,6 +34,10 @@ apps/docs/           # the docs site (Vocs)
   follow. Adding an island touches three places — see `CONTRIBUTING.md`.
 - **Never hand-edit build output** (`dist/`); the build owns it. There are no `generated/`
   snapshots — the runtime queries files live.
+- **Server-side I/O goes through `@openislands/storage` ports, not raw `node:fs`.** App content →
+  `getContentStore`, our `.openislands/` state → `getAppStateStore`, editor history →
+  `getVersionStore`. Keep these stores keyed by the project dir (the opaque app key). The CLI's
+  local scaffolding (init/add/infer) is exempt — it's local-only dev tooling.
 - **The manifest stays declarative** — no transforms inside island configs; data shaping lives in
   the data/SQL layer.
 - **Bind islands only to fields that exist; run `validate` after every manifest edit.** A missing

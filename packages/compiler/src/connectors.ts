@@ -12,11 +12,10 @@
  * core, so `rollback` covers connector data exactly like manifest edits and
  * action writes.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
@@ -29,6 +28,7 @@ import type {
   OAuth2AuthData,
 } from "@openislands/connector-kit";
 import type { ConnectorSpec, Manifest } from "@openislands/schema";
+import { getAppStateStore } from "@openislands/storage";
 import { readManifest, resolveSourcePath, type WriteTarget } from "./index.js";
 import {
   insertValidatedRows,
@@ -133,25 +133,22 @@ interface ConnectorState {
   pendingOAuth?: PendingOAuth;
 }
 
-function stateFile(projectDir: string, name: string): string {
-  return join(projectDir, ".openislands", "connectors", `${name}.json`);
+function stateKey(name: string): string {
+  return `connectors/${name}.json`;
 }
 
-function readState(projectDir: string, name: string): ConnectorState {
-  const path = stateFile(projectDir, name);
-  if (!existsSync(path)) return {};
-  return JSON.parse(readFileSync(path, "utf8")) as ConnectorState;
+async function readState(projectDir: string, name: string): Promise<ConnectorState> {
+  const raw = await getAppStateStore(projectDir).getText(stateKey(name));
+  return raw === null ? {} : (JSON.parse(raw) as ConnectorState);
 }
 
-function writeState(projectDir: string, name: string, state: ConnectorState): void {
-  const path = stateFile(projectDir, name);
-  mkdirSync(join(projectDir, ".openislands", "connectors"), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`);
+async function writeState(projectDir: string, name: string, state: ConnectorState): Promise<void> {
+  await getAppStateStore(projectDir).put(stateKey(name), `${JSON.stringify(state, null, 2)}\n`);
 }
 
 /** Whether this project has a pending OAuth flow for the connector matching `state` — lets a shared callback route find which workspace app started the flow. */
-export function hasPendingOAuthState(projectDir: string, name: string, state: string): boolean {
-  return readState(projectDir, name).pendingOAuth?.state === state;
+export async function hasPendingOAuthState(projectDir: string, name: string, state: string): Promise<boolean> {
+  return (await readState(projectDir, name)).pendingOAuth?.state === state;
 }
 
 // --- Manifest lookup + schedule -------------------------------------------------
@@ -165,7 +162,7 @@ function lookupConnector(manifest: Manifest, name: string): ConnectorSpec {
 /** Load .env, find the named connector's spec, and load its module — the shared prelude of every connector operation. */
 async function resolveConnector(projectDir: string, name: string): Promise<{ spec: ConnectorSpec; def: ConnectorDefinition }> {
   loadEnv(projectDir);
-  const spec = lookupConnector(readManifest(projectDir), name);
+  const spec = lookupConnector(await readManifest(projectDir), name);
   const def = await loadConnector(projectDir, spec);
   return { spec, def };
 }
@@ -251,11 +248,11 @@ export interface ConnectorStatus {
 
 export async function listConnectorStatuses(projectDir: string): Promise<ConnectorStatus[]> {
   loadEnv(projectDir);
-  const manifest = readManifest(projectDir);
+  const manifest = await readManifest(projectDir);
   const entries = Object.entries(manifest.connectors ?? {});
   const statuses: ConnectorStatus[] = [];
   for (const [name, spec] of entries) {
-    const persisted = readState(projectDir, name);
+    const persisted = await readState(projectDir, name);
     let def: ConnectorDefinition | undefined;
     let loadError: string | undefined;
     try {
@@ -322,9 +319,9 @@ export async function getConnectorAuthorizeUrl(projectDir: string, name: string,
   if (!clientId) throw new Error(`missing ${auth.clientIdEnv} in env — set it in .env`);
 
   const oauthState = randomBytes(16).toString("hex");
-  const persisted = readState(projectDir, name);
+  const persisted = await readState(projectDir, name);
   persisted.pendingOAuth = { state: oauthState, redirectUri };
-  writeState(projectDir, name, persisted);
+  await writeState(projectDir, name, persisted);
 
   const url = new URL(auth.authorizeUrl);
   url.searchParams.set("client_id", clientId);
@@ -343,7 +340,7 @@ export async function completeConnectorOAuth(
   const { def } = await resolveConnector(projectDir, name);
   const auth = requireOAuth(name, def);
 
-  const persisted = readState(projectDir, name);
+  const persisted = await readState(projectDir, name);
   const pending = persisted.pendingOAuth;
   if (!pending || pending.state !== params.state) {
     throw new Error("oauth state mismatch — restart the connect flow");
@@ -360,16 +357,16 @@ export async function completeConnectorOAuth(
   persisted.tokens = tokensFromResponse(body);
   delete persisted.pendingOAuth;
   delete persisted.lastError;
-  writeState(projectDir, name, persisted);
+  await writeState(projectDir, name, persisted);
 }
 
 export async function disconnectConnector(projectDir: string, name: string): Promise<void> {
-  const manifest = readManifest(projectDir);
+  const manifest = await readManifest(projectDir);
   lookupConnector(manifest, name);
-  const persisted = readState(projectDir, name);
+  const persisted = await readState(projectDir, name);
   delete persisted.tokens;
   delete persisted.pendingOAuth;
-  writeState(projectDir, name, persisted);
+  await writeState(projectDir, name, persisted);
 }
 
 const TOKEN_REFRESH_WINDOW_MS = 60_000;
@@ -391,9 +388,9 @@ async function refreshIfExpiring(
     client_secret: clientSecret,
   });
   const refreshed = tokensFromResponse(body, tokens);
-  const persisted = readState(projectDir, name);
+  const persisted = await readState(projectDir, name);
   persisted.tokens = refreshed;
-  writeState(projectDir, name, persisted);
+  await writeState(projectDir, name, persisted);
   return refreshed;
 }
 
@@ -448,13 +445,13 @@ export function runConnectorSync(projectDir: string, name: string, opts: Retenti
 async function doSync(projectDir: string, name: string, opts: RetentionOpts): Promise<SyncResult> {
   loadEnv(projectDir);
   const startedAt = Date.now();
-  const manifest = readManifest(projectDir);
+  const manifest = await readManifest(projectDir);
   const spec = lookupConnector(manifest, name);
   const def = await loadConnector(projectDir, spec);
 
   const config = def.config ? def.config.parse(spec.config ?? {}) : (spec.config ?? {});
   const { secrets } = readSecrets(def);
-  const persisted = readState(projectDir, name);
+  const persisted = await readState(projectDir, name);
 
   const tokens = await resolveTokensForSync(projectDir, name, def, persisted);
 
@@ -465,7 +462,7 @@ async function doSync(projectDir: string, name: string, opts: RetentionOpts): Pr
     const dataset = resolveOutputDataset(spec, def, output);
     const datasetSpec = manifest.datasets[dataset];
     if (!datasetSpec?.source) throw new Error(`dataset '${dataset}' has no writable source`);
-    return { dataset, target: { sourcePath: resolveSourcePath(projectDir, datasetSpec.source), table: datasetSpec.table } };
+    return { dataset, target: { source: datasetSpec.source, table: datasetSpec.table } };
   };
 
   const ctx: ConnectorContext = {
@@ -495,17 +492,17 @@ async function doSync(projectDir: string, name: string, opts: RetentionOpts): Pr
   try {
     await def.sync(ctx);
   } catch (e) {
-    const failed = readState(projectDir, name);
+    const failed = await readState(projectDir, name);
     failed.lastError = (e as Error).message;
-    writeState(projectDir, name, failed);
+    await writeState(projectDir, name, failed);
     throw e;
   }
 
-  const after = readState(projectDir, name);
+  const after = await readState(projectDir, name);
   after.state = cursorState;
   after.lastSync = new Date().toISOString();
   delete after.lastError;
-  writeState(projectDir, name, after);
+  await writeState(projectDir, name, after);
 
   return { connector: name, datasets, durationMs: Date.now() - startedAt };
 }
@@ -563,8 +560,7 @@ export async function checkConnectors(projectDir: string, manifest: Manifest): P
   return errors;
 }
 
-/** Removes a connector's persisted state file entirely — used by tests/teardown. */
-export function clearConnectorState(projectDir: string, name: string): void {
-  const path = stateFile(projectDir, name);
-  if (existsSync(path)) rmSync(path);
+/** Removes a connector's persisted state entirely — used by tests/teardown. */
+export async function clearConnectorState(projectDir: string, name: string): Promise<void> {
+  await getAppStateStore(projectDir).delete(stateKey(name));
 }

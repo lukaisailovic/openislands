@@ -6,23 +6,25 @@
  * the compiler already uses, so the runtime gains no new dependency. Each call
  * attaches the file on a dedicated in-memory connection and detaches when done;
  * saves are human-paced, so per-call open/close costs nothing that matters.
+ *
+ * This is the DuckDB-backed `VersionStore` implementation that lives in the
+ * runtime (the storage package stays engine-free). It registers itself as the
+ * default version factory at import; the exported functions are thin wrappers
+ * that resolve the configured store per app, so a different implementation can
+ * be swapped in via `configureStorage({ versions })`.
  */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import duckdb from "@duckdb/node-api";
+import { type VersionMeta, type VersionStore, configureStorage, getVersionStore } from "@openislands/storage";
+
+export type { VersionMeta };
 
 const { DuckDBInstance } = duckdb;
 
 const STORE_DIR = ".openislands";
 const STORE_FILE = "editor.sqlite";
 const DEFAULT_KEEP = 50;
-
-export interface VersionMeta {
-  id: number;
-  createdAt: number;
-  byteSize: number;
-  label?: string;
-}
 
 function storePath(projectDir: string): string {
   const dir = join(projectDir, STORE_DIR);
@@ -60,66 +62,93 @@ async function withStore<T>(
   }
 }
 
-/** Snapshot `content` for `path`, then prune that path's history to the newest `DEFAULT_KEEP`. */
-export async function recordVersion(
-  projectDir: string,
-  path: string,
-  content: string,
-  label?: string,
-): Promise<void> {
-  await withStore(projectDir, async (run, all) => {
-    const rows = await all("SELECT COALESCE(MAX(id), 0) + 1 AS next FROM _store.versions WHERE path = ?", [path]);
-    const nextId = Number(rows[0]?.next ?? 1);
-    await run(
-      "INSERT INTO _store.versions (id, path, content, byte_size, created_at, label) VALUES (?, ?, ?, ?, ?, ?)",
-      [nextId, path, content, Buffer.byteLength(content), Date.now(), label ?? null],
-    );
-    await prune(run, all, path, DEFAULT_KEEP);
-  });
+/**
+ * The DuckDB-backed VersionStore for one app, bound to its `<projectDir>/
+ * .openislands/editor.sqlite`. Each method opens a fresh attached connection
+ * through `withStore`.
+ */
+export function createDuckDbVersionStore(projectDir: string): VersionStore {
+  return {
+    async record(path: string, content: string, label?: string): Promise<void> {
+      await withStore(projectDir, async (run, all) => {
+        const rows = await all("SELECT COALESCE(MAX(id), 0) + 1 AS next FROM _store.versions WHERE path = ?", [path]);
+        const nextId = Number(rows[0]?.next ?? 1);
+        await run(
+          "INSERT INTO _store.versions (id, path, content, byte_size, created_at, label) VALUES (?, ?, ?, ?, ?, ?)",
+          [nextId, path, content, Buffer.byteLength(content), Date.now(), label ?? null],
+        );
+        await prune(run, all, path, DEFAULT_KEEP);
+      });
+    },
+
+    async list(path: string): Promise<VersionMeta[]> {
+      return withStore(projectDir, async (_run, all) => {
+        const rows = await all(
+          "SELECT id, created_at, byte_size, label FROM _store.versions WHERE path = ? ORDER BY created_at DESC, id DESC",
+          [path],
+        );
+        return rows.map((r) => ({
+          id: Number(r.id),
+          createdAt: Number(r.created_at),
+          byteSize: Number(r.byte_size),
+          label: r.label == null ? undefined : String(r.label),
+        }));
+      });
+    },
+
+    async get(path: string, id: number): Promise<string | null> {
+      return withStore(projectDir, async (_run, all) => {
+        const rows = await all("SELECT content FROM _store.versions WHERE path = ? AND id = ?", [path, id]);
+        const content = rows[0]?.content;
+        return content == null ? null : String(content);
+      });
+    },
+
+    /**
+     * Re-key a path's version rows from `from` to `to` so history follows a moved
+     * or renamed file. Ids are shifted past any history already under `to` (a path
+     * reused after a delete), keeping them unique within the destination.
+     */
+    async move(from: string, to: string): Promise<void> {
+      if (from === to) return;
+      await withStore(projectDir, async (run, all) => {
+        const rows = await all("SELECT COALESCE(MAX(id), 0) AS max FROM _store.versions WHERE path = ?", [to]);
+        const offset = Number(rows[0]?.max ?? 0);
+        await run("UPDATE _store.versions SET id = id + ?, path = ? WHERE path = ?", [offset, to, from]);
+      });
+    },
+
+    async prune(path: string, keep = DEFAULT_KEEP): Promise<void> {
+      await withStore(projectDir, (run, all) => prune(run, all, path, keep));
+    },
+  };
 }
 
-/**
- * Re-key a path's version rows from `from` to `to` so history follows a moved
- * or renamed file. Ids are shifted past any history already under `to` (a path
- * reused after a delete), keeping them unique within the destination.
- */
+configureStorage({ versions: (projectDir) => createDuckDbVersionStore(projectDir) });
+
+/** Snapshot `content` for `path`, then prune that path's history to the newest `DEFAULT_KEEP`. */
+export async function recordVersion(projectDir: string, path: string, content: string, label?: string): Promise<void> {
+  await getVersionStore(projectDir).record(path, content, label);
+}
+
+/** Re-key a path's version rows from `from` to `to` so history follows a moved/renamed file. */
 export async function moveVersions(projectDir: string, from: string, to: string): Promise<void> {
-  if (from === to) return;
-  await withStore(projectDir, async (run, all) => {
-    const rows = await all("SELECT COALESCE(MAX(id), 0) AS max FROM _store.versions WHERE path = ?", [to]);
-    const offset = Number(rows[0]?.max ?? 0);
-    await run("UPDATE _store.versions SET id = id + ?, path = ? WHERE path = ?", [offset, to, from]);
-  });
+  await getVersionStore(projectDir).move(from, to);
 }
 
 /** This path's versions, newest first. */
 export async function listVersions(projectDir: string, path: string): Promise<VersionMeta[]> {
-  return withStore(projectDir, async (_run, all) => {
-    const rows = await all(
-      "SELECT id, created_at, byte_size, label FROM _store.versions WHERE path = ? ORDER BY created_at DESC, id DESC",
-      [path],
-    );
-    return rows.map((r) => ({
-      id: Number(r.id),
-      createdAt: Number(r.created_at),
-      byteSize: Number(r.byte_size),
-      label: r.label == null ? undefined : String(r.label),
-    }));
-  });
+  return getVersionStore(projectDir).list(path);
 }
 
 /** The stored content for one version, or null if it no longer exists. */
 export async function getVersion(projectDir: string, path: string, id: number): Promise<string | null> {
-  return withStore(projectDir, async (_run, all) => {
-    const rows = await all("SELECT content FROM _store.versions WHERE path = ? AND id = ?", [path, id]);
-    const content = rows[0]?.content;
-    return content == null ? null : String(content);
-  });
+  return getVersionStore(projectDir).get(path, id);
 }
 
 /** Delete a path's oldest versions beyond the newest `keep`. */
 export async function pruneVersions(projectDir: string, path: string, keep = DEFAULT_KEEP): Promise<void> {
-  await withStore(projectDir, (run, all) => prune(run, all, path, keep));
+  await getVersionStore(projectDir).prune(path, keep);
 }
 
 async function prune(

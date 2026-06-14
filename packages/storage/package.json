@@ -1,14 +1,14 @@
 {
-  "name": "@openislands/compiler",
+  "name": "@openislands/storage",
   "version": "0.1.0",
-  "description": "OpenIslands compiler — turns local files into typed data contracts and build-time snapshots.",
+  "description": "OpenIslands storage ports — swappable ContentStore / AppStateStore / VersionStore so the runtime can be backed by local disk or another backend.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",
   "repository": {
     "type": "git",
     "url": "https://github.com/lukaisailovic/openislands.git",
-    "directory": "packages/compiler"
+    "directory": "packages/storage"
   },
   "exports": {
     ".": {
@@ -32,18 +32,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@duckdb/node-api": "1.5.3-r.3",
-    "@openislands/connector-kit": "workspace:*",
-    "@openislands/schema": "workspace:*",
-    "@openislands/storage": "workspace:*",
-    "apache-arrow": "^21.1.0",
-    "esbuild": "^0.28.0",
-    "ms": "^2.1.3",
-    "zod": "^4.4.3"
-  },
   "devDependencies": {
-    "@types/ms": "^2.1.0",
     "@types/node": "^22.10.0",
     "vitest": "^3.2.4"
   }

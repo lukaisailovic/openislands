@@ -6,32 +6,35 @@
  * Derived `sql` datasets have no writer (no physical row sink) and are rejected
  * upstream in the manifest contract.
  *
+ * All file I/O goes through a `ContentStore` (writers never touch `node:fs`), so
+ * the same rows land wherever the configured adapter keeps them. Flat-file
+ * appends are pure string transforms over the
+ * current content; SQLite writes materialize a local file (`localPath`), write
+ * through DuckDB's sqlite extension, then push the file back (`persistLocal`).
+ *
  * Row validation and rollback snapshots live one layer up (actions.ts) and wrap
- * these writers; a writer only performs the physical mutation. SQLite writes go
- * through DuckDB's sqlite extension (`ATTACH … (TYPE sqlite)`) — the same engine
- * that reads `sqlite_scan` views — so there is one storage engine and no extra
- * runtime dependency.
+ * these writers; a writer only performs the physical mutation.
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import duckdb from "@duckdb/node-api";
 import { SQLITE_SOURCE_EXTENSIONS } from "@openislands/schema";
+import type { ContentStore } from "@openislands/storage";
 
 const { DuckDBInstance } = duckdb;
 
-/** Where a dataset's rows physically live: a file, plus the table name when that file is a SQLite database. */
+/** Where a dataset's rows physically live: its content source, plus the table name when that source is a SQLite database. */
 export interface WriteTarget {
-  /** absolute path to the backing file (flat file or `.sqlite` / `.db`) */
-  sourcePath: string;
+  /** the dataset's source within the content store (relative or absolute) */
+  source: string;
   /** the SQLite table to write into — required for a sqlite source, ignored otherwise */
   table?: string;
 }
 
 /** A row sink for one dataset. `insert` adds rows; `replace` overwrites every row. */
 export interface DatasetWriter {
-  /** the file whose bytes are snapshotted before a mutation (the rollback unit) */
+  /** the source whose bytes are snapshotted before a mutation (the rollback unit) */
   readonly path: string;
-  /** whether a writable target already exists on disk */
-  exists(): boolean;
+  /** whether a writable target already exists */
+  exists(): Promise<boolean>;
   insert(rows: Record<string, unknown>[]): Promise<void>;
   replace(rows: Record<string, unknown>[]): Promise<void>;
 }
@@ -45,13 +48,13 @@ export function extensionOf(path: string): string {
 }
 
 /** Picks the writer for a target by its source extension; throws for a format with no sink. */
-export function resolveWriter(target: WriteTarget): DatasetWriter {
-  const ext = extensionOf(target.sourcePath);
+export function resolveWriter(store: ContentStore, target: WriteTarget): DatasetWriter {
+  const ext = extensionOf(target.source);
   if (SQLITE_SOURCE_EXTENSIONS.includes(ext)) {
-    if (!target.table) throw new Error(`sqlite source ${target.sourcePath} needs a 'table' to write into`);
-    return new SqliteWriter(target.sourcePath, target.table);
+    if (!target.table) throw new Error(`sqlite source ${target.source} needs a 'table' to write into`);
+    return new SqliteWriter(store, target.source, target.table);
   }
-  if (WRITABLE_FILE_EXTENSIONS.includes(ext)) return new FileWriter(target.sourcePath, ext);
+  if (WRITABLE_FILE_EXTENSIONS.includes(ext)) return new FileWriter(store, target.source, ext);
   throw new Error(`cannot write '${ext}' — writable: ${[...WRITABLE_FILE_EXTENSIONS, ...SQLITE_SOURCE_EXTENSIONS].join(", ")}`);
 }
 
@@ -59,24 +62,26 @@ export function resolveWriter(target: WriteTarget): DatasetWriter {
 
 class FileWriter implements DatasetWriter {
   constructor(
+    private readonly store: ContentStore,
     readonly path: string,
     private readonly ext: string,
   ) {}
 
-  exists(): boolean {
-    return existsSync(this.path);
+  async exists(): Promise<boolean> {
+    return this.store.exists(this.path);
   }
 
   async insert(rows: Record<string, unknown>[]): Promise<void> {
-    if (!this.exists()) {
-      writeNewFile(this.path, this.ext, rows);
+    const existing = await this.store.readText(this.path);
+    if (existing === null) {
+      await this.store.writeText(this.path, renderNewFile(this.ext, rows));
       return;
     }
-    appendToFile(this.path, this.ext, rows);
+    await this.store.writeText(this.path, appendContent(existing, this.ext, rows));
   }
 
   async replace(rows: Record<string, unknown>[]): Promise<void> {
-    writeNewFile(this.path, this.ext, rows);
+    await this.store.writeText(this.path, renderNewFile(this.ext, rows));
   }
 }
 
@@ -130,58 +135,38 @@ function parseCsvLine(line: string): string[] {
   return fields;
 }
 
-function appendLines(sourcePath: string, lines: string[]): void {
-  const existing = readFileSync(sourcePath, "utf8");
-  const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
-  writeFileSync(sourcePath, `${existing}${separator}${lines.join("\n")}\n`);
-}
-
-function appendCsv(sourcePath: string, header: string[], rows: Record<string, unknown>[]): void {
-  appendLines(sourcePath, rows.map((row) => header.map((col) => csvQuote(cellToString(row[col]))).join(",")));
-}
-
-function appendNdjson(sourcePath: string, rows: Record<string, unknown>[]): void {
-  appendLines(sourcePath, rows.map((row) => JSON.stringify(row)));
-}
-
-function appendJsonArray(sourcePath: string, rows: Record<string, unknown>[]): void {
-  const parsed = JSON.parse(readFileSync(sourcePath, "utf8"));
-  if (!Array.isArray(parsed)) throw new Error(`cannot append: ${sourcePath} is not a JSON array`);
+/** The full new content after appending `rows` to `existing`, in the format `ext` implies. */
+function appendContent(existing: string, ext: string, rows: Record<string, unknown>[]): string {
+  if (ext === ".csv") {
+    const header = parseCsvHeader(existing);
+    return appendLines(existing, rows.map((row) => header.map((col) => csvQuote(cellToString(row[col]))).join(",")));
+  }
+  if (ext === ".ndjson" || ext === ".jsonl") {
+    return appendLines(existing, rows.map((row) => JSON.stringify(row)));
+  }
+  const parsed = JSON.parse(existing);
+  if (!Array.isArray(parsed)) throw new Error("cannot append: source is not a JSON array");
   parsed.push(...rows);
-  writeFileSync(sourcePath, `${JSON.stringify(parsed, null, 2)}\n`);
+  return `${JSON.stringify(parsed, null, 2)}\n`;
+}
+
+function appendLines(existing: string, lines: string[]): string {
+  const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
+  return `${existing}${separator}${lines.join("\n")}\n`;
 }
 
 /**
- * Writes rows to a fresh file in the format its extension implies — CSV header
- * from the first row's keys, .json as an array, .ndjson/.jsonl as lines. Used
- * to create a dataset file that doesn't exist yet (e.g. a connector's first sync).
+ * Renders rows as a fresh file in the format its extension implies — CSV header
+ * from the first row's keys, .json as an array, .ndjson/.jsonl as lines. Used to
+ * create a dataset file that doesn't exist yet (e.g. a connector's first sync).
  */
-function writeNewFile(sourcePath: string, ext: string, rows: Record<string, unknown>[]): void {
-  if (ext === ".json") {
-    writeFileSync(sourcePath, `${JSON.stringify(rows, null, 2)}\n`);
-    return;
-  }
-  if (ext === ".ndjson" || ext === ".jsonl") {
-    writeFileSync(sourcePath, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""));
-    return;
-  }
+function renderNewFile(ext: string, rows: Record<string, unknown>[]): string {
+  if (ext === ".json") return `${JSON.stringify(rows, null, 2)}\n`;
+  if (ext === ".ndjson" || ext === ".jsonl") return rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : "");
   const header = Object.keys(rows[0] ?? {});
   const lines = [header.map(csvQuote).join(",")];
   for (const row of rows) lines.push(header.map((col) => csvQuote(cellToString(row[col]))).join(","));
-  writeFileSync(sourcePath, `${lines.join("\n")}\n`);
-}
-
-function appendToFile(sourcePath: string, ext: string, rows: Record<string, unknown>[]): void {
-  if (ext === ".csv") {
-    const header = parseCsvHeader(readFileSync(sourcePath, "utf8"));
-    appendCsv(sourcePath, header, rows);
-    return;
-  }
-  if (ext === ".ndjson" || ext === ".jsonl") {
-    appendNdjson(sourcePath, rows);
-    return;
-  }
-  appendJsonArray(sourcePath, rows);
+  return `${lines.join("\n")}\n`;
 }
 
 // --- SQLite backend -------------------------------------------------------------
@@ -189,18 +174,21 @@ function appendToFile(sourcePath: string, ext: string, rows: Record<string, unkn
 /**
  * Inserts into / replaces a SQLite table through DuckDB's sqlite extension. The
  * database file must already exist with the target table (its schema is the
- * dataset's contract); a write never creates one. Each call runs on a dedicated
- * in-memory DuckDB connection that attaches the file read-write, so it never
+ * dataset's contract); a write never creates one. The store hands back a real
+ * on-disk path to attach (downloaded first when the store is remote), and the
+ * mutated file is pushed back afterwards via `persistLocal`. Each call runs on a
+ * dedicated in-memory DuckDB connection that attaches read-write, so it never
  * contends with the cached read engine's `sqlite_scan` views.
  */
 class SqliteWriter implements DatasetWriter {
   constructor(
+    private readonly store: ContentStore,
     readonly path: string,
     private readonly table: string,
   ) {}
 
-  exists(): boolean {
-    return existsSync(this.path);
+  async exists(): Promise<boolean> {
+    return this.store.exists(this.path);
   }
 
   async insert(rows: Record<string, unknown>[]): Promise<void> {
@@ -212,15 +200,16 @@ class SqliteWriter implements DatasetWriter {
   }
 
   private async write(rows: Record<string, unknown>[], { clear }: { clear: boolean }): Promise<void> {
-    if (!this.exists()) {
+    if (!(await this.exists())) {
       throw new Error(`sqlite database not found: ${this.path} — provide the file with table "${this.table}"`);
     }
+    const localFile = await this.store.localPath(this.path);
     const instance = await DuckDBInstance.create(":memory:");
     const conn = await instance.connect();
     const table = `_w.${quoteIdent(this.table)}`;
     try {
       await conn.run("INSTALL sqlite; LOAD sqlite;");
-      await conn.run(`ATTACH ${quoteLiteral(this.path)} AS _w (TYPE sqlite)`);
+      await conn.run(`ATTACH ${quoteLiteral(localFile)} AS _w (TYPE sqlite)`);
       await conn.run("BEGIN");
       if (clear) await conn.run(`DELETE FROM ${table}`);
       if (rows.length > 0) {
@@ -238,6 +227,7 @@ class SqliteWriter implements DatasetWriter {
       conn.closeSync();
       instance.closeSync();
     }
+    await this.store.persistLocal(this.path, localFile);
   }
 }
 

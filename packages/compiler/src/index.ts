@@ -10,10 +10,10 @@
  * datasets via a pre-parsed JSON view). The runtime queries these views live;
  * `compile` reuses them for the contract check.
  */
-import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, extname, basename, isAbsolute } from "node:path";
 import duckdb from "@duckdb/node-api";
+import { type ContentStore, getContentStore } from "@openislands/storage";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
 import { queryResultToArrowIPC } from "./arrow.js";
 import { checkCustomIsland } from "./customSchema.js";
@@ -126,15 +126,16 @@ interface Engine {
 
 const engines = new Map<string, Promise<Engine>>();
 
+const MANIFEST_REL = join("app", "manifest.json");
+
 function manifestPathFor(projectDir: string): string {
-  return join(projectDir, "app", "manifest.json");
+  return join(projectDir, MANIFEST_REL);
 }
 
-export function readManifest(projectDir: string): Manifest {
-  const path = manifestPathFor(projectDir);
-  if (!existsSync(path)) throw new Error(`no manifest at ${path}`);
-  const raw = JSON.parse(readFileSync(path, "utf8"));
-  const validation = validateManifest(raw);
+export async function readManifest(projectDir: string): Promise<Manifest> {
+  const raw = await getContentStore(projectDir).readText(MANIFEST_REL);
+  if (raw === null) throw new Error(`no manifest at ${manifestPathFor(projectDir)}`);
+  const validation = validateManifest(JSON.parse(raw));
   if (!validation.ok || !validation.manifest) {
     const first = validation.errors[0];
     throw new Error(`invalid manifest: ${first ? first.message : "unknown error"}`);
@@ -143,17 +144,18 @@ export function readManifest(projectDir: string): Manifest {
 }
 
 async function buildEngine(projectDir: string): Promise<Engine> {
-  const manifest = readManifest(projectDir);
+  const store = getContentStore(projectDir);
+  const manifest = await readManifest(projectDir);
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
-  await conn.run(`SET file_search_path=${quoteLiteral(projectDir)}`);
+  await store.configureEngine(conn);
   const specs = Object.values(manifest.datasets);
   if (specs.some((spec) => spec.source && isSqliteSource(spec.source))) {
     await conn.run("INSTALL sqlite; LOAD sqlite;");
   }
   const registered = new Set<string>();
   for (const [name, spec] of Object.entries(manifest.datasets)) {
-    await registerDataset(conn, projectDir, name, spec);
+    await registerDataset(conn, store, name, spec);
     registered.add(name);
   }
   return { conn, manifest, registered };
@@ -188,9 +190,9 @@ function sourceExtension(source: string): string {
   return extname(source.split("*")[0] ?? source).toLowerCase();
 }
 
-function fileReaderExpr(absPath: string): string {
-  const lit = quoteLiteral(absPath);
-  const ext = sourceExtension(absPath);
+function fileReaderExpr(source: string, uri: string): string {
+  const lit = quoteLiteral(uri);
+  const ext = sourceExtension(source);
   switch (ext) {
     case ".csv":
       return `read_csv_auto(${lit})`;
@@ -201,36 +203,35 @@ function fileReaderExpr(absPath: string): string {
       return `read_parquet(${lit})`;
     case ".sqlite":
     case ".db":
-      throw new Error(`sqlite source ${absPath} can only be read through a dataset declaring its 'table'`);
+      throw new Error(`sqlite source ${source} can only be read through a dataset declaring its 'table'`);
     default:
-      throw new Error(`unsupported source type '${ext}' for ${absPath}`);
+      throw new Error(`unsupported source type '${ext}' for ${source}`);
   }
 }
 
-async function registerDataset(conn: DuckDBConnection, projectDir: string, name: string, spec: DatasetSpec): Promise<void> {
+async function registerDataset(conn: DuckDBConnection, store: ContentStore, name: string, spec: DatasetSpec): Promise<void> {
   const view = quoteIdent(name);
   if (spec.sql) {
-    const sqlPath = resolveSourcePath(projectDir, spec.sql);
-    if (!existsSync(sqlPath)) throw new Error(`dataset '${name}': sql transform not found: ${spec.sql}`);
-    const body = readFileSync(sqlPath, "utf8").trim().replace(/;\s*$/, "");
-    await conn.run(`CREATE VIEW ${view} AS ${body}`);
+    const body = await store.readText(spec.sql);
+    if (body === null) throw new Error(`dataset '${name}': sql transform not found: ${spec.sql}`);
+    await conn.run(`CREATE VIEW ${view} AS ${body.trim().replace(/;\s*$/, "")}`);
     return;
   }
   if (!spec.source) throw new Error(`dataset '${name}': no source`);
-  const absPath = resolveSourcePath(projectDir, spec.source);
   const ext = sourceExtension(spec.source);
   if (ext === ".md" || ext === ".markdown") {
-    await registerMarkdownDataset(conn, name, absPath);
+    await registerMarkdownDataset(conn, store, name, spec.source);
     return;
   }
   if (isSqliteSource(spec.source)) {
     if (!spec.table) throw new Error(`dataset '${name}': a sqlite source needs a 'table'`);
-    if (!existsSync(absPath)) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
-    await conn.run(`CREATE VIEW ${view} AS SELECT * FROM sqlite_scan(${quoteLiteral(absPath)}, ${quoteLiteral(spec.table)})`);
+    if (!(await store.exists(spec.source))) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
+    const path = await store.localPath(spec.source);
+    await conn.run(`CREATE VIEW ${view} AS SELECT * FROM sqlite_scan(${quoteLiteral(path)}, ${quoteLiteral(spec.table)})`);
     return;
   }
-  if (!absPath.includes("*") && !existsSync(absPath)) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
-  await conn.run(`CREATE VIEW ${view} AS SELECT * FROM ${fileReaderExpr(absPath)}`);
+  if (!spec.source.includes("*") && !(await store.exists(spec.source))) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
+  await conn.run(`CREATE VIEW ${view} AS SELECT * FROM ${fileReaderExpr(spec.source, store.sourceUri(spec.source))}`);
 }
 
 // --- Markdown datasets ----------------------------------------------------------
@@ -271,10 +272,11 @@ function scalarToSql(value: Scalar): string {
   return quoteLiteral(value);
 }
 
-async function registerMarkdownDataset(conn: DuckDBConnection, name: string, absPath: string): Promise<void> {
-  if (!existsSync(absPath)) throw new Error(`dataset '${name}': markdown source not found: ${absPath}`);
-  const { data, body } = parseFrontMatter(readFileSync(absPath, "utf8"));
-  const row: MarkdownRow = { file: basename(absPath), body, ...data };
+async function registerMarkdownDataset(conn: DuckDBConnection, store: ContentStore, name: string, source: string): Promise<void> {
+  const text = await store.readText(source);
+  if (text === null) throw new Error(`dataset '${name}': markdown source not found: ${source}`);
+  const { data, body } = parseFrontMatter(text);
+  const row: MarkdownRow = { file: basename(source), body, ...data };
   const keys = Object.keys(row);
   const cols = keys.map(quoteIdent).join(", ");
   const values = keys.map((k) => scalarToSql(row[k]!)).join(", ");
@@ -517,8 +519,8 @@ export async function inferSchema(projectDir: string, datasetOrFile: string): Pr
     const reader = await engine.conn.runAndReadAll(`SELECT * FROM ${quoteIdent(datasetOrFile)} LIMIT 0`);
     return { dataset: datasetOrFile, columns: columnsFromReader(reader) };
   }
-  const absPath = resolveSourcePath(projectDir, datasetOrFile);
-  const reader = await engine.conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(absPath)} LIMIT 0`);
+  const uri = getContentStore(projectDir).sourceUri(datasetOrFile);
+  const reader = await engine.conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(datasetOrFile, uri)} LIMIT 0`);
   return { dataset: datasetOrFile, columns: columnsFromReader(reader) };
 }
 
@@ -537,7 +539,7 @@ export async function inferFile(absPath: string): Promise<SourceSchema> {
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
   try {
-    const reader = await conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(absPath)} LIMIT 0`);
+    const reader = await conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(absPath, absPath)} LIMIT 0`);
     return { dataset: basename(absPath, extname(absPath)), columns: columnsFromReader(reader) };
   } finally {
     conn.closeSync();
@@ -859,21 +861,21 @@ export async function compile(projectDir: string): Promise<CompileReport> {
     manifestErrors: [],
   };
 
-  const manifestPath = manifestPathFor(projectDir);
-  if (!existsSync(manifestPath)) {
-    report.errors.push(`no manifest at ${manifestPath}`);
+  const raw = await getContentStore(projectDir).readText(MANIFEST_REL);
+  if (raw === null) {
+    report.errors.push(`no manifest at ${manifestPathFor(projectDir)}`);
     return report;
   }
 
-  let raw: unknown;
+  let parsed: unknown;
   try {
-    raw = JSON.parse(readFileSync(manifestPath, "utf8"));
+    parsed = JSON.parse(raw);
   } catch (e) {
     report.errors.push(`manifest is not valid JSON: ${(e as Error).message}`);
     return report;
   }
 
-  const validation = validateManifest(raw);
+  const validation = validateManifest(parsed);
   if (!validation.ok || !validation.manifest) {
     report.manifestErrors = validation.errors;
     report.errors.push(...validation.errors.map((e) => `[${e.page}#${e.index} ${e.type}] ${e.message}`));
@@ -926,9 +928,7 @@ export async function materialize(projectDir: string, dataset: string): Promise<
   if (!engine.registered.has(dataset)) throw new Error(`unknown dataset '${dataset}'`);
   const spec = engine.manifest.datasets[dataset]!;
   const hash = createHash("sha256").update(JSON.stringify({ dataset, spec })).digest("hex").slice(0, 16);
-  const dir = join(projectDir, "data", "cache");
-  mkdirSync(dir, { recursive: true });
-  const path = join(dir, `${dataset}-${hash}.parquet`);
+  const path = await getContentStore(projectDir).cacheTarget(`${dataset}-${hash}.parquet`);
   await engine.conn.run(`COPY (SELECT * FROM ${quoteIdent(dataset)}) TO ${quoteLiteral(path)} (FORMAT parquet)`);
   return { dataset, path, hash };
 }

@@ -119,14 +119,14 @@ describe("treeResponse", () => {
     mkdirSync(join(projectDir, "docs", "sub"), { recursive: true });
     writeFileSync(join(projectDir, "docs", "sub", "c.markdown"), "c");
 
-    const res = treeResponse(get("tree", { dir: "docs" }));
+    const res = await treeResponse(get("tree", { dir: "docs" }));
     expect(res.status).toBe(200);
     const files = (await jsonOf(res)).files as { path: string }[];
     expect(files.map((f) => f.path)).toEqual(["docs/a.txt", "docs/b.md", "docs/sub/c.markdown"]);
   });
 
   it("returns an empty list for a missing dir", async () => {
-    const res = treeResponse(get("tree", { dir: "data" }));
+    const res = await treeResponse(get("tree", { dir: "data" }));
     expect(await jsonOf(res)).toEqual({ files: [] });
   });
 });

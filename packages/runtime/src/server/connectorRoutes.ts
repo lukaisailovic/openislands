@@ -14,7 +14,7 @@ import {
   listConnectorStatuses,
   runConnectorSync,
 } from "@openislands/compiler";
-import { appDirFromParams, listApps } from "./workspace.js";
+import { type WorkspaceApp, appDirFromParams, listApps } from "./workspace.js";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -69,7 +69,13 @@ export async function authCallbackResponse(request: Request, name: string): Prom
   const state = url.searchParams.get("state");
   if (!code || !state) return new Response("missing code or state", { status: 400 });
 
-  const app = listApps().find((a) => hasPendingOAuthState(a.dir, name, state));
+  let app: WorkspaceApp | undefined;
+  for (const candidate of listApps()) {
+    if (await hasPendingOAuthState(candidate.dir, name, state)) {
+      app = candidate;
+      break;
+    }
+  }
   if (!app) return new Response("no pending connection matches this callback", { status: 400 });
 
   try {

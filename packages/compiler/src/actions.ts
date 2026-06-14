@@ -10,11 +10,10 @@
  * row, snapshot the target file to `.openislands/history/`, then write. No git
  * — rollback safety is the snapshot, full stop.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, unlinkSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { z } from "zod";
 import type { ActionSpec, FieldSpec, Manifest } from "@openislands/schema";
-import { inferSchema, readManifest, resolveSourcePath, resetEngine, type ColumnType } from "./index.js";
+import { getAppStateStore, getContentStore } from "@openislands/storage";
+import { inferSchema, readManifest, resetEngine, type ColumnType } from "./index.js";
 import { resolveWriter, type WriteTarget } from "./writers.js";
 
 export const MAX_SNAPSHOTS_PER_FILE = 20;
@@ -57,11 +56,11 @@ function lookupAction(manifest: Manifest, actionName: string): ActionSpec {
 }
 
 /** Where an action's dataset physically writes: its source file, plus the table when that source is a SQLite database. Throws for a derived (`sql`) dataset, which has no row sink. */
-function actionWriteTarget(projectDir: string, manifest: Manifest, action: ActionSpec): WriteTarget {
+function actionWriteTarget(manifest: Manifest, action: ActionSpec): WriteTarget {
   const spec = manifest.datasets[action.dataset];
   if (!spec) throw new Error(`action targets unknown dataset '${action.dataset}'`);
   if (!spec.source) throw new Error(`action dataset '${action.dataset}' has no source — derived datasets are not writable`);
-  return { sourcePath: resolveSourcePath(projectDir, spec.source), table: spec.table };
+  return { source: spec.source, table: spec.table };
 }
 
 function baseTypeSchema(type: ColumnType): z.ZodType {
@@ -99,7 +98,7 @@ function withBounds(schema: z.ZodType, spec: FieldSpec): z.ZodType {
  * island binding checks.
  */
 export async function actionRowSchema(projectDir: string, actionName: string): Promise<z.ZodObject> {
-  const manifest = readManifest(projectDir);
+  const manifest = await readManifest(projectDir);
   const action = lookupAction(manifest, actionName);
   const schema = await inferSchema(projectDir, action.dataset);
   const columnNames = new Set(schema.columns.map((c) => c.name));
@@ -126,10 +125,10 @@ export async function actionRowSchema(projectDir: string, actionName: string): P
  * is returned.
  */
 export async function datasetRowSchema(projectDir: string, dataset: string): Promise<z.ZodObject> {
-  const manifest = readManifest(projectDir);
+  const manifest = await readManifest(projectDir);
   const spec = manifest.datasets[dataset];
   const source = spec?.source;
-  if (source && !existsSync(resolveSourcePath(projectDir, source))) {
+  if (source && !(await getContentStore(projectDir).exists(source))) {
     return z.object({}).catchall(z.unknown());
   }
   const schema = await inferSchema(projectDir, dataset);
@@ -159,43 +158,41 @@ export function validateRows(schema: z.ZodObject, rows: unknown[]): ValidatedRow
   return { rows: out, errors };
 }
 
-function historyDir(projectDir: string): string {
-  return join(projectDir, ".openislands", "history");
-}
+const HISTORY_PREFIX = "history";
 
-function snapshotFile(projectDir: string, sourcePath: string): string {
-  const encoded = encodeURIComponent(relativeSource(projectDir, sourcePath));
-  const dir = historyDir(projectDir);
-  mkdirSync(dir, { recursive: true });
+/**
+ * Snapshot a dataset source's current bytes into the app state store before a
+ * mutation. The id encodes the restore target (`ckpt-<ts>!<encoded source>`) and
+ * is made unique by bumping the timestamp past any collision.
+ */
+async function snapshotFile(projectDir: string, source: string): Promise<string> {
+  const bytes = await getContentStore(projectDir).readBytes(source);
+  if (bytes === null) throw new Error(`cannot snapshot missing source: ${source}`);
+  const state = getAppStateStore(projectDir);
+  const encoded = encodeURIComponent(source);
   let ts = Date.now();
-  while (existsSync(join(dir, `ckpt-${ts}!${encoded}`))) ts += 1;
+  while (await state.exists(`${HISTORY_PREFIX}/ckpt-${ts}!${encoded}`)) ts += 1;
   const id = `ckpt-${ts}!${encoded}`;
-  writeFileSync(join(dir, id), readFileSync(sourcePath));
+  await state.put(`${HISTORY_PREFIX}/${id}`, bytes);
   return id;
 }
 
-function relativeSource(projectDir: string, sourcePath: string): string {
-  const prefix = projectDir.endsWith("/") ? projectDir : `${projectDir}/`;
-  return sourcePath.startsWith(prefix) ? sourcePath.slice(prefix.length) : sourcePath;
-}
-
-function pruneSnapshots(projectDir: string, sourcePath: string, opts: RetentionOpts): void {
-  const dir = historyDir(projectDir);
-  if (!existsSync(dir)) return;
+async function pruneSnapshots(projectDir: string, source: string, opts: RetentionOpts): Promise<void> {
+  const state = getAppStateStore(projectDir);
   const maxCount = opts.maxSnapshots ?? MAX_SNAPSHOTS_PER_FILE;
   const maxBytes = opts.maxSnapshotBytes ?? MAX_SNAPSHOT_BYTES_PER_FILE;
-  const target = encodeURIComponent(relativeSource(projectDir, sourcePath));
+  const target = encodeURIComponent(source);
 
-  const snapshots = readdirSync(dir)
-    .filter((name) => name.includes("!") && name.slice(name.indexOf("!") + 1) === target)
-    .map((name) => ({ name, path: join(dir, name), size: statSync(join(dir, name)).size, ts: parseTimestamp(name) }))
+  const snapshots = (await state.list(HISTORY_PREFIX))
+    .filter((e) => e.name.includes("!") && e.name.slice(e.name.indexOf("!") + 1) === target)
+    .map((e) => ({ key: e.key, size: e.size, ts: parseTimestamp(e.name) }))
     .toSorted((a, b) => a.ts - b.ts);
 
   let count = snapshots.length;
   let totalBytes = snapshots.reduce((sum, s) => sum + s.size, 0);
   for (const snapshot of snapshots) {
     if (count <= maxCount && totalBytes <= maxBytes) break;
-    unlinkSync(snapshot.path);
+    await state.delete(snapshot.key);
     count -= 1;
     totalBytes -= snapshot.size;
   }
@@ -206,9 +203,9 @@ function parseTimestamp(checkpointId: string): number {
   return match ? Number(match[1]) : 0;
 }
 
-export function snapshotIfExists(projectDir: string, sourcePath: string): string | undefined {
-  if (!existsSync(sourcePath)) return undefined;
-  return snapshotFile(projectDir, sourcePath);
+export async function snapshotIfExists(projectDir: string, source: string): Promise<string | undefined> {
+  if (!(await getContentStore(projectDir).exists(source))) return undefined;
+  return snapshotFile(projectDir, source);
 }
 
 export { snapshotFile, pruneSnapshots };
@@ -230,10 +227,10 @@ export async function insertValidatedRows(
   const { rows: validated, errors } = validateRows(schema, rows);
   if (errors.length > 0) throw new ActionValidationError(errors);
 
-  const writer = resolveWriter(target);
-  const checkpoint_id = writer.exists() ? snapshotFile(projectDir, writer.path) : "";
+  const writer = resolveWriter(getContentStore(projectDir), target);
+  const checkpoint_id = (await writer.exists()) ? await snapshotFile(projectDir, writer.path) : "";
   await writer.insert(validated);
-  if (checkpoint_id) pruneSnapshots(projectDir, writer.path, opts);
+  if (checkpoint_id) await pruneSnapshots(projectDir, writer.path, opts);
   resetEngine(projectDir);
   return { inserted: rows.length, checkpoint_id };
 }
@@ -254,10 +251,10 @@ export async function replaceValidatedRows(
   const { rows: validated, errors } = validateRows(schema, rows);
   if (errors.length > 0) throw new ActionValidationError(errors);
 
-  const writer = resolveWriter(target);
-  const checkpoint_id = snapshotIfExists(projectDir, writer.path);
+  const writer = resolveWriter(getContentStore(projectDir), target);
+  const checkpoint_id = await snapshotIfExists(projectDir, writer.path);
   await writer.replace(validated);
-  if (checkpoint_id) pruneSnapshots(projectDir, writer.path, opts);
+  if (checkpoint_id) await pruneSnapshots(projectDir, writer.path, opts);
   resetEngine(projectDir);
   return { replaced: rows.length, checkpoint_id };
 }
@@ -273,9 +270,9 @@ export async function insertRows(
   rows: unknown[],
   opts: RetentionOpts = {},
 ): Promise<InsertResult> {
-  const manifest = readManifest(projectDir);
+  const manifest = await readManifest(projectDir);
   const action = lookupAction(manifest, actionName);
-  const target = actionWriteTarget(projectDir, manifest, action);
+  const target = actionWriteTarget(manifest, action);
   const schema = await actionRowSchema(projectDir, actionName);
   return insertValidatedRows(projectDir, target, schema, rows, opts);
 }

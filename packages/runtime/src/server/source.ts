@@ -1,5 +1,6 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import { getContentStore } from "@openislands/storage";
 import { loadManifest } from "./project.js";
 
 export interface DatasetSqlResult {
@@ -12,7 +13,7 @@ export interface DatasetSqlResult {
  * never from a client-supplied path. The dataset must exist and declare a
  * `sql` transform, and the resolved file must stay under the project root.
  */
-export function readDatasetSql(projectDir: string, dataset: string): DatasetSqlResult {
+export async function readDatasetSql(projectDir: string, dataset: string): Promise<DatasetSqlResult> {
   if (!dataset) return { status: 400, body: { error: "missing 'dataset'" } };
 
   const spec = loadManifest(projectDir).manifest.datasets[dataset];
@@ -31,9 +32,7 @@ export function readDatasetSql(projectDir: string, dataset: string): DatasetSqlR
     return { status: 403, body: { error: "transform path escapes the project root" } };
   }
 
-  try {
-    return { status: 200, body: { sql: readFileSync(abs, "utf8") } };
-  } catch {
-    return { status: 404, body: { error: `transform file not found for '${dataset}'` } };
-  }
+  const sql = await getContentStore(projectDir).readText(abs);
+  if (sql === null) return { status: 404, body: { error: `transform file not found for '${dataset}'` } };
+  return { status: 200, body: { sql } };
 }

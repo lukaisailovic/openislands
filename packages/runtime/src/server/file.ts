@@ -1,5 +1,6 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import { getContentStore } from "@openislands/storage";
 
 /**
  * Confined, read-only project-file access for the `source.doc` island. Untrusted
@@ -80,11 +81,12 @@ export interface FileResult {
   contentType: string;
 }
 
-export function readProjectFile(projectRoot: string, candidate: string): FileResult {
+export async function readProjectFile(projectRoot: string, candidate: string): Promise<FileResult> {
   try {
     const abs = confineProjectFile(projectRoot, candidate);
-    const buffer = readFileSync(abs);
-    return { status: 200, body: buffer, contentType: contentType(abs) };
+    const bytes = await getContentStore(projectRoot).readBytes(abs);
+    if (bytes === null) return { status: 404, body: "not found", contentType: "text/plain; charset=utf-8" };
+    return { status: 200, body: bytes, contentType: contentType(abs) };
   } catch (err) {
     if (err instanceof FileAccessError) {
       return { status: err.status, body: err.message, contentType: "text/plain; charset=utf-8" };

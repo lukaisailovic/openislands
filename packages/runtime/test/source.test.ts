@@ -29,31 +29,31 @@ beforeAll(() => {
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe("readDatasetSql", () => {
-  it("returns the SQL for a transform dataset, resolved by name", () => {
-    const result = readDatasetSql(root, "allocation");
+  it("returns the SQL for a transform dataset, resolved by name", async () => {
+    const result = await readDatasetSql(root, "allocation");
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ sql: SQL });
   });
 
-  it("rejects a missing dataset name", () => {
-    expect(readDatasetSql(root, "").status).toBe(400);
+  it("rejects a missing dataset name", async () => {
+    expect((await readDatasetSql(root, "")).status).toBe(400);
   });
 
-  it("404s an unknown dataset", () => {
-    expect(readDatasetSql(root, "nope").status).toBe(404);
+  it("404s an unknown dataset", async () => {
+    expect((await readDatasetSql(root, "nope")).status).toBe(404);
   });
 
-  it("404s a file-backed dataset that is not a transform", () => {
-    const result = readDatasetSql(root, "holdings");
+  it("404s a file-backed dataset that is not a transform", async () => {
+    const result = await readDatasetSql(root, "holdings");
     expect(result.status).toBe(404);
     expect(result.body).toEqual({ error: "'holdings' is not a transform" });
   });
 
-  it("404s when the declared transform file is absent", () => {
-    expect(readDatasetSql(root, "gone").status).toBe(404);
+  it("404s when the declared transform file is absent", async () => {
+    expect((await readDatasetSql(root, "gone")).status).toBe(404);
   });
 
-  it("refuses a transform path that escapes the project root", () => {
-    expect(readDatasetSql(root, "escape").status).toBe(403);
+  it("refuses a transform path that escapes the project root", async () => {
+    expect((await readDatasetSql(root, "escape")).status).toBe(403);
   });
 });

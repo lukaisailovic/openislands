@@ -8,13 +8,13 @@
  * and checked against the data before a diff is even shown; nothing is written
  * until apply_edit, and the prior state is always snapshotted for rollback.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createTwoFilesPatch } from "diff";
 import { z } from "zod";
 import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, inferSchema, listConnectorStatuses, query, queryRaw, readManifest as readProjectManifest, resetEngine, runConnectorSync } from "@openislands/compiler";
 import { BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, LayoutRow, jsonSchemaFor, validateManifest, type IslandError, type IslandType } from "@openislands/schema";
+import { getAppStateStore, getContentStore } from "@openislands/storage";
 import { createCheckpointStore, isCheckpointId } from "./checkpoints.js";
 import { confineDatasetSource } from "./paths.js";
 import { createProposalStore, hashManifest, type StoredProposal } from "./proposals.js";
@@ -53,10 +53,12 @@ function manifestDiff(base: string, proposed: string): string {
 
 export function createServer(projectRoot: string): McpServer {
   const manifestPath = join(projectRoot, "app", "manifest.json");
-  const proposals = createProposalStore(join(projectRoot, ".openislands", "proposals"));
-  const checkpoints = createCheckpointStore(projectRoot, manifestPath);
+  const content = getContentStore(projectRoot);
+  const appState = getAppStateStore(projectRoot);
+  const proposals = createProposalStore(appState);
+  const checkpoints = createCheckpointStore(projectRoot, appState, content);
 
-  const readManifest = (): string => (existsSync(manifestPath) ? readFileSync(manifestPath, "utf8") : "{}");
+  const readManifest = async (): Promise<string> => (await content.readText("app/manifest.json")) ?? "{}";
 
   /** Dry contract check: validate a proposed manifest and check islands against the live data. */
   async function dryCheck(proposedRaw: unknown): Promise<{ ok: boolean; errors: (IslandError | string)[]; custom: string[] }> {
@@ -108,7 +110,7 @@ export function createServer(projectRoot: string): McpServer {
     },
   );
 
-  server.registerTool("get_manifest", { description: "Return the current app manifest." }, async () => text(readManifest()));
+  server.registerTool("get_manifest", { description: "Return the current app manifest." }, async () => text(await readManifest()));
 
   server.registerTool(
     "get_data_schema",
@@ -151,7 +153,7 @@ export function createServer(projectRoot: string): McpServer {
     "validate_manifest",
     { description: "Dry-run validate a manifest (or the current one) and check island bindings against the data.", inputSchema: { manifest: z.string().optional() } },
     async ({ manifest }) => {
-      const parsed = parseManifest(manifest ?? readManifest());
+      const parsed = parseManifest(manifest ?? (await readManifest()));
       if ("error" in parsed) return text(`Invalid JSON: ${parsed.error}`);
       return json(await dryCheck(parsed.raw));
     },
@@ -160,7 +162,7 @@ export function createServer(projectRoot: string): McpServer {
   server.registerTool(
     "list_checkpoints",
     { description: "List rollback checkpoints (prior manifests), newest last." },
-    async () => json(checkpoints.list()),
+    async () => json(await checkpoints.list()),
   );
 
   // --- the one write pipeline ------------------------------------------------------
@@ -174,14 +176,14 @@ export function createServer(projectRoot: string): McpServer {
     async ({ manifest }) => {
       const parsed = parseManifest(manifest);
       if ("error" in parsed) return json({ ok: false, errors: [`Invalid JSON: ${parsed.error}`] });
-      const base = readManifest();
+      const base = await readManifest();
       const proposed = JSON.stringify(parsed.raw, null, 2) + "\n";
       const diff = manifestDiff(base, proposed);
       const check = await dryCheck(parsed.raw);
       if (!check.ok) return json({ ok: false, errors: check.errors, diff });
 
       const stored: StoredProposal = { manifest: proposed, diff, baseHash: hashManifest(base) };
-      return json({ ok: true, proposal_id: proposals.save(stored), custom_islands: check.custom, diff });
+      return json({ ok: true, proposal_id: await proposals.save(stored), custom_islands: check.custom, diff });
     },
   );
 
@@ -189,19 +191,18 @@ export function createServer(projectRoot: string): McpServer {
     "apply_edit",
     { description: "Write a previously-proposed edit. Rejects stale/unknown proposals. Snapshots the current manifest first for rollback.", inputSchema: { proposal_id: z.string() } },
     async ({ proposal_id }) => {
-      const proposal = proposals.load(proposal_id);
+      const proposal = await proposals.load(proposal_id);
       if (!proposal) return json({ ok: false, error: `Unknown proposal '${proposal_id}'. Call propose_edit first.` });
 
-      const base = readManifest();
+      const base = await readManifest();
       if (hashManifest(base) !== proposal.baseHash) {
-        proposals.remove(proposal_id);
+        await proposals.remove(proposal_id);
         return json({ ok: false, error: "stale proposal: the manifest changed since this edit was proposed. Re-run propose_edit." });
       }
 
-      const checkpoint = existsSync(manifestPath) ? checkpoints.snapshotManifest(base) : null;
-      mkdirSync(join(projectRoot, "app"), { recursive: true });
-      writeFileSync(manifestPath, proposal.manifest);
-      proposals.remove(proposal_id);
+      const checkpoint = (await content.exists("app/manifest.json")) ? await checkpoints.snapshotManifest(base) : null;
+      await content.writeText("app/manifest.json", proposal.manifest);
+      await proposals.remove(proposal_id);
 
       return json({ ok: true, checkpoint_id: checkpoint, applied: manifestPath });
     },
@@ -211,13 +212,13 @@ export function createServer(projectRoot: string): McpServer {
     "rollback",
     { description: "Restore a prior checkpoint byte-for-byte — a manifest edit or a data-action append (latest if none given).", inputSchema: { checkpoint_id: z.string().optional() } },
     async ({ checkpoint_id }) => {
-      const available = checkpoints.list();
+      const available = await checkpoints.list();
       if (available.length === 0) return json({ ok: false, error: "no history yet", available });
       if (checkpoint_id && !isCheckpointId(checkpoint_id)) return json({ ok: false, error: "invalid checkpoint id", available });
       const target = checkpoint_id ?? available.at(-1)!;
       if (!available.includes(target)) return json({ ok: false, error: "checkpoint not found", available });
 
-      const { restoredData } = checkpoints.restore(target);
+      const { restoredData } = await checkpoints.restore(target);
       if (restoredData) resetEngine(projectRoot);
       return json({ ok: true, restored: target });
     },
@@ -229,7 +230,7 @@ export function createServer(projectRoot: string): McpServer {
     "list_actions",
     { description: "List the manifest's declared data actions with their resolved row JSON Schema — the agent's grounding for run_action." },
     async () => {
-      const manifest = readProjectManifest(projectRoot);
+      const manifest = await readProjectManifest(projectRoot);
       const actions = manifest.actions ?? {};
       resetEngine(projectRoot);
       const out = [];
@@ -253,7 +254,7 @@ export function createServer(projectRoot: string): McpServer {
       inputSchema: { name: z.string(), rows: z.array(z.record(z.string(), z.unknown())) },
     },
     async ({ name, rows }) => {
-      const manifest = readProjectManifest(projectRoot);
+      const manifest = await readProjectManifest(projectRoot);
       const action = manifest.actions?.[name];
       if (!action) {
         const declared = Object.keys(manifest.actions ?? {});

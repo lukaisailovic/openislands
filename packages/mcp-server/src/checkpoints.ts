@@ -1,11 +1,11 @@
 /**
- * Rollback checkpoints under `.openislands/history/`. Two kinds share one id
- * space: `ckpt-<ts>` snapshots the manifest (stored as `<id>.json`);
- * `ckpt-<ts>!<encoded-path>` snapshots a data file written by an action
- * (stored under the id verbatim — the id encodes the restore target).
+ * Rollback checkpoints under the AppStateStore `history/` prefix. Two kinds share
+ * one id space: `ckpt-<ts>` snapshots the manifest (stored as `<id>.json`);
+ * `ckpt-<ts>!<encoded-path>` snapshots a data file written by an action (stored
+ * under the id verbatim — the id encodes the restore target). The compiler writes
+ * data checkpoints to the same keys, so the byte format stays compatible.
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import type { AppStateStore, ContentStore } from "@openislands/storage";
 import { confineDatasetSource } from "./paths.js";
 
 const MANIFEST_CHECKPOINT_FILE = /^ckpt-\d+\.json$/;
@@ -16,38 +16,39 @@ export const isCheckpointId = (id: string): boolean => MANIFEST_CHECKPOINT.test(
 
 export interface CheckpointStore {
   /** Checkpoint ids, oldest first. */
-  list(): string[];
+  list(): Promise<string[]>;
   /** Snapshot the current manifest content; returns the checkpoint id. */
-  snapshotManifest(content: string): string;
+  snapshotManifest(manifest: string): Promise<string>;
   /** Restore a checkpoint byte-for-byte; returns whether a data file was touched. */
-  restore(id: string): { restoredData: boolean };
+  restore(id: string): Promise<{ restoredData: boolean }>;
 }
 
-export function createCheckpointStore(projectRoot: string, manifestPath: string): CheckpointStore {
-  const historyDir = join(projectRoot, ".openislands", "history");
-
+export function createCheckpointStore(projectRoot: string, appState: AppStateStore, content: ContentStore): CheckpointStore {
   return {
-    list() {
-      if (!existsSync(historyDir)) return [];
-      return readdirSync(historyDir)
-        .map((file) => (MANIFEST_CHECKPOINT_FILE.test(file) ? file.slice(0, -".json".length) : file))
+    async list() {
+      const entries = await appState.list("history");
+      return entries
+        .map((entry) => (MANIFEST_CHECKPOINT_FILE.test(entry.name) ? entry.name.slice(0, -".json".length) : entry.name))
         .filter(isCheckpointId)
         .toSorted();
     },
-    snapshotManifest(content) {
-      mkdirSync(historyDir, { recursive: true });
+    async snapshotManifest(manifest) {
       const id = `ckpt-${Date.now()}`;
-      writeFileSync(join(historyDir, `${id}.json`), content);
+      await appState.put(`history/${id}.json`, manifest);
       return id;
     },
-    restore(id) {
+    async restore(id) {
       if (DATA_CHECKPOINT.test(id)) {
         const encodedTarget = id.slice(id.indexOf("!") + 1);
         const targetAbs = confineDatasetSource(projectRoot, decodeURIComponent(encodedTarget));
-        writeFileSync(targetAbs, readFileSync(join(historyDir, id)));
+        const bytes = await appState.get(`history/${id}`);
+        if (bytes === null) throw new Error(`checkpoint '${id}' has no stored data`);
+        await content.writeBytes(targetAbs, bytes);
         return { restoredData: true };
       }
-      writeFileSync(manifestPath, readFileSync(join(historyDir, `${id}.json`), "utf8"));
+      const text = await appState.getText(`history/${id}.json`);
+      if (text === null) throw new Error(`checkpoint '${id}' has no stored manifest`);
+      await content.writeText("app/manifest.json", text);
       return { restoredData: false };
     },
   };

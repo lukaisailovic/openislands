@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { readDatasetSql } from "../server/source.js";
 import { appDirFromParams } from "../server/workspace.js";
 
-function handle(request: Request): Response {
+async function handle(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const app = appDirFromParams(url.searchParams);
   if (!app.ok) {
@@ -11,7 +11,7 @@ function handle(request: Request): Response {
       headers: { "content-type": "application/json" },
     });
   }
-  const result = readDatasetSql(app.dir, url.searchParams.get("dataset") ?? "");
+  const result = await readDatasetSql(app.dir, url.searchParams.get("dataset") ?? "");
   return new Response(JSON.stringify(result.body), {
     status: result.status,
     headers: { "content-type": "application/json" },

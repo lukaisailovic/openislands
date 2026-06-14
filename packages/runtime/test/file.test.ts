@@ -43,19 +43,19 @@ describe("confineProjectFile", () => {
 });
 
 describe("readProjectFile", () => {
-  it("returns file bytes and a markdown content type", () => {
-    const result = readProjectFile(root, "docs/note.md");
+  it("returns file bytes and a markdown content type", async () => {
+    const result = await readProjectFile(root, "docs/note.md");
     expect(result.status).toBe(200);
     expect(result.contentType).toContain("text/markdown");
     expect(result.body.toString()).toContain("Hello");
   });
 
-  it("turns a confinement failure into the matching HTTP status", () => {
-    expect(readProjectFile(root, ".env").status).toBe(403);
-    expect(readProjectFile(root, "../escape").status).toBe(403);
+  it("turns a confinement failure into the matching HTTP status", async () => {
+    expect((await readProjectFile(root, ".env")).status).toBe(403);
+    expect((await readProjectFile(root, "../escape")).status).toBe(403);
   });
 
-  it("returns 404 for a missing but allowed path", () => {
-    expect(readProjectFile(root, "data/missing.csv").status).toBe(404);
+  it("returns 404 for a missing but allowed path", async () => {
+    expect((await readProjectFile(root, "data/missing.csv")).status).toBe(404);
   });
 });
