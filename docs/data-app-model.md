@@ -107,7 +107,7 @@ Get any island's exact config schema with `get_island_schema(type)` (MCP) or rea
 | `search.box` | `dataset`, `fields`, `titleField` | a search input over a dataset — typing matches rows case-insensitively across `fields` (client-side substring), results drop down as an autocomplete showing `titleField` (+ optional `detail` secondary line); selecting a result opens the full row in a details dialog; `placeholder?`, `limit?` (default 10) caps visible results |
 | `note.card` | `markdown` | no dataset; `tone: info\|success\|warning\|danger` renders it as a colored callout with a matching icon, omit for plain prose |
 | `source.doc` | — | `file` or `href`; `kind: pdf\|markdown\|image\|link`; renders as a document card (type icon, name, open action); `label?` overrides the displayed name (defaults to the file basename or link host), `description?` adds a caption |
-| `content.editor` | — | a full-page, data-free content workspace — browse and edit a tree of markdown files (and view CSVs) Obsidian-style; exactly one of `file` (one doc under `data/docs/`) or `dir` (a directory, recursed) — both or neither is a named error; with `dir`: `include?` globs (default markdown), `csv: true` also surfaces `.csv` files read-only as a table, `groups: [{id, label?, icon?, match}]` are virtual folders (globs relative to `dir`; unmatched files fall into Ungrouped); `readOnly?` makes it a viewer; edits save to the file, each save records a restorable version under `.openislands/editor.sqlite`; renders full-bleed and binds no dataset |
+| `content.editor` | — | a full-page, data-free content workspace — browse and edit a tree of markdown files (and view CSVs) Obsidian-style; exactly one of `file` (one doc under `data/` or `docs/`) or `dir` (a directory, recursed) — both or neither is a named error; with `dir`: `include?` globs (default markdown), `csv: true` also surfaces `.csv` files read-only as a table, `groups: [{id, label?, icon?, match}]` are virtual folders (globs relative to `dir`; unmatched files fall into Ungrouped); `readOnly?` makes it a viewer; edits save to the file, each save records a restorable version under `.openislands/editor.sqlite`; renders full-bleed and binds no dataset |
 | `layout.row` | `islands` | a full-width structural row holding other islands — children render on their own 12-column grid row; no `span`/`title`, no nesting, no data binding |
 
 ### `content.editor` (the content workspace)
@@ -117,9 +117,9 @@ a directory of markdown files in the browser. Unlike every other island it binds
 runs no SQL** — it reads and writes files on disk directly. It renders full-bleed (no card chrome,
 no title bar) and wants a full-width `span` of 12 (minimum 6). Give it exactly **one** of:
 
-- `file` — a single document under `data/docs/`. Both `file` and `dir`, or neither, is a named
+- `file` — a single document under `data/` or `docs/`. Both `file` and `dir`, or neither, is a named
   validation error.
-- `dir` — a directory under `data/docs/`, recursed. Three options apply only with `dir` (setting
+- `dir` — a directory under `data/` or `docs/`, recursed. Three options apply only with `dir` (setting
   any of them with `file` is a named error):
   - `include` — globs of files to surface; defaults to markdown (`**/*.md`, `**/*.markdown`).
   - `csv: true` — also surface `.csv` files, shown **read-only** as a table.

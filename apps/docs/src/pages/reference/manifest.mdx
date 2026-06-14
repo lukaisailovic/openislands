@@ -636,8 +636,8 @@ A full-page content workspace — browse and edit a directory of markdown files 
 | `id` | `string` | no |  |
 | `title` | `string` | no |  |
 | `span` | `number` | no |  |
-| `file` | `string` | no | path to a single document under data/docs/ — mutually exclusive with `dir` |
-| `dir` | `string` | no | path to a directory under data/docs/ whose files are browsable and editable — mutually exclusive with `file` |
+| `file` | `string` | no | path to a single document under data/ or docs/ — mutually exclusive with `dir` |
+| `dir` | `string` | no | path to a directory under data/ or docs/ whose files are browsable and editable — mutually exclusive with `file` |
 | `include` | `array of string` | no | globs of files to surface when `dir` is set; defaults to markdown (**/*.md, **/*.markdown) |
 | `csv` | `boolean` | no | also surface .csv files (shown read-only as a table) when `dir` is set |
 | `readOnly` | `boolean` | no | disable editing/saving — a viewer only |

@@ -487,8 +487,8 @@ export type ContentEditorGroup = z.infer<typeof ContentEditorGroup>;
 export const ContentEditor = z.object({
   type: z.literal("content.editor"),
   ...baseFields,
-  file: z.string().optional().describe("path to a single document under data/docs/ — mutually exclusive with `dir`"),
-  dir: z.string().optional().describe("path to a directory under data/docs/ whose files are browsable and editable — mutually exclusive with `file`"),
+  file: z.string().optional().describe("path to a single document under data/ or docs/ — mutually exclusive with `dir`"),
+  dir: z.string().optional().describe("path to a directory under data/ or docs/ whose files are browsable and editable — mutually exclusive with `file`"),
   include: z.array(z.string()).optional().describe("globs of files to surface when `dir` is set; defaults to markdown (**/*.md, **/*.markdown)"),
   csv: z.boolean().default(false).describe("also surface .csv files (shown read-only as a table) when `dir` is set"),
   readOnly: z.boolean().default(false).describe("disable editing/saving — a viewer only"),
