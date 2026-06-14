@@ -527,7 +527,7 @@ Up to four concentric progress rings read off the last row — use for tracking 
 
 ### `gauge.goal`
 
-A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range.
+A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range; `size` (small/medium/large) sets its footprint so several can share a row.
 
 **Minimum span:** 2
 
@@ -542,6 +542,7 @@ A single ring comparing the last row's value to a goal or target band — use fo
 | `label` | `string` | no |  |
 | `unit` | `string` | no |  |
 | `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats). |
+| `size` | `"small" \| "medium" \| "large"` | no | ring footprint: `small` packs several goals into a row, `large` emphasizes a single one |
 
 ### `gauge.meter`
 
@@ -595,7 +596,7 @@ A search box over a dataset — typing matches rows case-insensitively across `f
 
 ### `note.card`
 
-A static markdown card with no data binding — use for commentary, instructions, or context between islands.
+A static markdown card with no data binding — use for commentary, instructions, or context between islands; set `tone` to render it as an info/success/warning/danger callout.
 
 **Minimum span:** 3
 
@@ -604,11 +605,12 @@ A static markdown card with no data binding — use for commentary, instructions
 | `id` | `string` | no |  |
 | `title` | `string` | no |  |
 | `span` | `number` | no |  |
+| `tone` | `"info" \| "success" \| "warning" \| "danger"` | no | renders the card as a colored callout with a matching icon; omit for plain prose |
 | `markdown` | `string` | yes |  |
 
 ### `source.doc`
 
-An embedded file or external link (pdf, markdown, image, link) — use to surface source documents alongside the data.
+An embedded file or external link (pdf, markdown, image, link) — use to surface source documents alongside the data; renders as a document card with a type icon, name, and open affordance.
 
 **Minimum span:** 2
 
@@ -620,6 +622,8 @@ An embedded file or external link (pdf, markdown, image, link) — use to surfac
 | `file` | `string` | no |  |
 | `href` | `string` | no |  |
 | `kind` | `"pdf" \| "markdown" \| "image" \| "link"` | no |  |
+| `label` | `string` | no | human-readable name shown on the card; defaults to the file name or the link's host |
+| `description` | `string` | no | a short caption shown under the document |
 
 ## Custom islands
 

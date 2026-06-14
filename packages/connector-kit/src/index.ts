@@ -19,8 +19,21 @@ export interface OAuth2AuthData {
   clientSecretEnv: string;
 }
 
+/**
+ * A static bearer token — a long-lived API token or JWT the user pastes into
+ * `.env`. No interactive sign-in: the runtime reads the token and hands it to
+ * `sync` as `ctx.tokens.accessToken`, exactly like an OAuth access token, so a
+ * connector's request code (`Authorization: Bearer …`) is identical either way.
+ */
+export interface BearerAuthData {
+  /** .env key holding the bearer token; surfaced as a missing secret when unset. */
+  tokenEnv: string;
+}
+
 /** Discriminated by `type`; type-specific config lives under `data` so new auth kinds stay additive. */
-export type ConnectorAuth = { type: "oauth2"; data: OAuth2AuthData };
+export type ConnectorAuth =
+  | { type: "oauth2"; data: OAuth2AuthData }
+  | { type: "bearer"; data: BearerAuthData };
 
 export interface ConnectorTokens {
   accessToken: string;

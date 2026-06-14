@@ -405,7 +405,11 @@ export const GaugeGoal = z.object({
   label: z.string().optional(),
   unit: z.string().optional(),
   format: ValueFormat.optional(),
-}).describe("A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range.");
+  size: z
+    .enum(["small", "medium", "large"])
+    .default("medium")
+    .describe("ring footprint: `small` packs several goals into a row, `large` emphasizes a single one"),
+}).describe("A single ring comparing the last row's value to a goal or target band — use for one number with a defined good range; `size` (small/medium/large) sets its footprint so several can share a row.");
 
 const MeterSpec = z.object({
   value: z.string().describe("field holding the meter's current value"),
@@ -452,8 +456,12 @@ export const SearchBox = z.object({
 export const NoteCard = z.object({
   type: z.literal("note.card"),
   ...baseFields,
+  tone: z
+    .enum(["info", "success", "warning", "danger"])
+    .optional()
+    .describe("renders the card as a colored callout with a matching icon; omit for plain prose"),
   markdown: z.string(),
-}).describe("A static markdown card with no data binding — use for commentary, instructions, or context between islands.");
+}).describe("A static markdown card with no data binding — use for commentary, instructions, or context between islands; set `tone` to render it as an info/success/warning/danger callout.");
 
 export const SourceDoc = z.object({
   type: z.literal("source.doc"),
@@ -461,7 +469,12 @@ export const SourceDoc = z.object({
   file: z.string().optional(),
   href: z.string().optional(),
   kind: z.enum(["pdf", "markdown", "image", "link"]).default("link"),
-}).describe("An embedded file or external link (pdf, markdown, image, link) — use to surface source documents alongside the data.");
+  label: z
+    .string()
+    .optional()
+    .describe("human-readable name shown on the card; defaults to the file name or the link's host"),
+  description: z.string().optional().describe("a short caption shown under the document"),
+}).describe("An embedded file or external link (pdf, markdown, image, link) — use to surface source documents alongside the data; renders as a document card with a type icon, name, and open affordance.");
 
 /**
  * The set of islands a drilldown may embed: every built-in except the two that

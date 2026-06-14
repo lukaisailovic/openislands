@@ -799,6 +799,34 @@ describe("gauge.goal bounds", () => {
   });
 });
 
+describe("new island config fields", () => {
+  it("gauge.goal accepts a size and defaults it to medium", () => {
+    const base = { type: "gauge.goal", dataset: "d", value: "v", goal: { max: 1 } };
+    expect(BUILTIN_ISLAND_SCHEMAS["gauge.goal"].safeParse({ ...base, size: "small" }).success).toBe(true);
+    const parsed = BUILTIN_ISLAND_SCHEMAS["gauge.goal"].safeParse(base);
+    expect(parsed.success && parsed.data.size).toBe("medium");
+  });
+
+  it("gauge.goal rejects an unknown size", () => {
+    const r = BUILTIN_ISLAND_SCHEMAS["gauge.goal"].safeParse({
+      type: "gauge.goal", dataset: "d", value: "v", goal: { max: 1 }, size: "huge",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("note.card accepts a tone and rejects an unknown one", () => {
+    expect(BUILTIN_ISLAND_SCHEMAS["note.card"].safeParse({ type: "note.card", markdown: "x", tone: "warning" }).success).toBe(true);
+    expect(BUILTIN_ISLAND_SCHEMAS["note.card"].safeParse({ type: "note.card", markdown: "x", tone: "neon" }).success).toBe(false);
+  });
+
+  it("source.doc accepts label and description", () => {
+    const r = BUILTIN_ISLAND_SCHEMAS["source.doc"].safeParse({
+      type: "source.doc", kind: "link", href: "https://x.dev", label: "Runbook", description: "the on-call guide",
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
 describe("validateManifest — per-island minimum span", () => {
   it("rejects a span below the type minimum, naming page/index/type", () => {
     const m = structuredClone(goodManifest);
