@@ -18,11 +18,11 @@ import {
 } from "./editor/api.js";
 import { CsvTable } from "./editor/CsvTable.js";
 import { DeleteFileDialog, NewFileDialog } from "./editor/dialogs.js";
-import { EditorPane, type EditorHandle } from "./editor/EditorPane.js";
+import { EditorPane } from "./editor/EditorPane.js";
 import { FileTree } from "./editor/FileTree.js";
 import { HistoryPanel } from "./editor/HistoryPanel.js";
 import { includeFilter } from "./editor/grouping.js";
-import type { ContentEditorConfig, EditorFile } from "./editor/types.js";
+import type { ContentEditorConfig, EditorFile, EditorHandle } from "./editor/types.js";
 
 function basename(path: string): string {
   return path.split("/").at(-1) ?? path;
@@ -87,10 +87,6 @@ export function ContentEditor({ config }: IslandRenderProps) {
   const openFile = useCallback(
     async (path: string) => {
       setActivePath(path);
-      if (isCsv(path)) {
-        setDoc(null);
-        return;
-      }
       const content = await readFile(appId, path);
       setDoc({ path, content });
     },
@@ -119,7 +115,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
       const paths = (JSON.parse(event.data) as { paths?: string[] }).paths ?? [];
       if (!singleFile) void refreshTree();
       const current = activePathRef.current;
-      if (current && paths.includes(current) && !dirtyRef.current && !isCsv(current)) {
+      if (current && paths.includes(current) && !dirtyRef.current) {
         void readFile(appId, current).then((content) => setDoc({ path: current, content }));
       }
     };
@@ -129,12 +125,12 @@ export function ContentEditor({ config }: IslandRenderProps) {
 
   const handleSave = useCallback(async () => {
     const handle = editorRef.current;
-    if (!handle || !activePath || readOnly || isCsv(activePath)) return;
+    if (!handle || !activePath || readOnly) return;
     setSaving(true);
     try {
-      const markdown = handle.serialize();
-      await writeFile(appId, activePath, markdown);
-      setDoc({ path: activePath, content: markdown });
+      const content = handle.serialize();
+      await writeFile(appId, activePath, content);
+      setDoc({ path: activePath, content });
       setDirty(false);
     } finally {
       setSaving(false);
@@ -160,8 +156,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
 
   if (!mounted) return <Placeholder />;
 
-  const editingCsv = activePath !== null && isCsv(activePath);
-  const canEdit = !readOnly && activePath !== null && !editingCsv;
+  const canEdit = !readOnly && activePath !== null;
 
   return (
     <div className="flex h-[calc(100vh-9rem)] min-h-[32rem] overflow-hidden rounded-lg border border-kumo-hairline bg-kumo-base">
@@ -219,7 +214,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
               History
             </Button>
           ) : null}
-          {readOnly || editingCsv ? null : (
+          {readOnly ? null : (
             <Button
               variant="ghost"
               size="sm"
@@ -247,18 +242,28 @@ export function ContentEditor({ config }: IslandRenderProps) {
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto">
-          {editingCsv ? (
-            <CsvTable path={activePath} />
-          ) : doc ? (
-            <EditorPane
-              key={doc.path}
-              path={doc.path}
-              content={doc.content}
-              readOnly={readOnly}
-              onSave={() => void handleSave()}
-              onDirtyChange={setDirty}
-              handleRef={editorRef}
-            />
+          {doc ? (
+            isCsv(doc.path) ? (
+              <CsvTable
+                key={doc.path}
+                path={doc.path}
+                content={doc.content}
+                readOnly={readOnly}
+                onSave={() => void handleSave()}
+                onDirtyChange={setDirty}
+                handleRef={editorRef}
+              />
+            ) : (
+              <EditorPane
+                key={doc.path}
+                path={doc.path}
+                content={doc.content}
+                readOnly={readOnly}
+                onSave={() => void handleSave()}
+                onDirtyChange={setDirty}
+                handleRef={editorRef}
+              />
+            )
           ) : (
             <div className="flex h-full items-center justify-center">
               <Text variant="secondary" size="sm">
@@ -271,7 +276,7 @@ export function ContentEditor({ config }: IslandRenderProps) {
         </main>
       </div>
 
-      {activePath && !editingCsv ? (
+      {activePath ? (
         <HistoryPanel
           open={historyOpen}
           onOpenChange={setHistoryOpen}

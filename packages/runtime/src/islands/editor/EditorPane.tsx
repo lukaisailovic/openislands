@@ -18,6 +18,7 @@ import { $getRoot, type EditorState } from "lexical";
 import { useEffect, useImperativeHandle, useRef, type RefObject } from "react";
 import { EDITOR_TRANSFORMERS, editorToMarkdown, markdownToEditor } from "./markdown.js";
 import { Toolbar } from "./Toolbar.js";
+import type { EditorHandle } from "./types.js";
 
 const EDITOR_NODES = [
   HeadingNode,
@@ -64,15 +65,12 @@ const THEME = {
   tableCellHeader: "bg-kumo-recessed font-semibold text-kumo-strong",
 };
 
-export interface EditorHandle {
-  /** Serialize the current document to markdown for saving. */
-  serialize: () => string;
-}
-
 /**
- * Replace the document whenever the open file changes, and report the serialized
- * baseline. Keyed on `path` alone — `content` is fetched fresh per path, so
- * reloading on every render would wipe in-flight edits.
+ * Load the document on mount and whenever the file changes underneath us — an
+ * external edit or a restore. The echo of our own save is a no-op: when the
+ * incoming content already matches the editor there's nothing to reload, so the
+ * cursor never jumps. In-flight edits are safe because the parent only feeds new
+ * content when the editor isn't dirty.
  */
 function LoadFilePlugin({
   path,
@@ -84,13 +82,18 @@ function LoadFilePlugin({
   onLoaded: (markdown: string) => void;
 }) {
   const [editor] = useLexicalComposerContext();
-  const latest = useRef({ content, onLoaded });
-  latest.current = { content, onLoaded };
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
   useEffect(() => {
+    let current = "";
+    editor.getEditorState().read(() => {
+      current = editorToMarkdown();
+    });
+    if (content === current) return;
     editor.update(
       () => {
         $getRoot().clear();
-        markdownToEditor(latest.current.content, $getRoot());
+        markdownToEditor(content, $getRoot());
       },
       { discrete: true },
     );
@@ -98,8 +101,8 @@ function LoadFilePlugin({
     editor.getEditorState().read(() => {
       serialized = editorToMarkdown();
     });
-    latest.current.onLoaded(serialized);
-  }, [editor, path]);
+    onLoadedRef.current(serialized);
+  }, [editor, path, content]);
   return null;
 }
 

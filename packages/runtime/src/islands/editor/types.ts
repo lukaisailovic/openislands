@@ -21,6 +21,11 @@ export interface EditorGroup {
   match: string[];
 }
 
+export interface EditorHandle {
+  /** Serialize the current document for saving. */
+  serialize: () => string;
+}
+
 export interface ContentEditorConfig {
   type: "content.editor";
   title?: string;

@@ -3,14 +3,16 @@ import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { ListItemNode, ListNode } from "@lexical/list";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { $getRoot, createEditor } from "lexical";
+import type { RefObject } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { AppIdContext } from "../src/client/useAppId.js";
-import { parseCsv } from "../src/islands/editor/csv.js";
+import { CsvTable } from "../src/islands/editor/CsvTable.js";
+import { parseCsv, serializeCsv } from "../src/islands/editor/csv.js";
 import { groupFiles, includeFilter, matchGlob, relativeToDir } from "../src/islands/editor/grouping.js";
 import { editorToMarkdown, markdownToEditor } from "../src/islands/editor/markdown.js";
-import type { EditorFile } from "../src/islands/editor/types.js";
+import type { EditorFile, EditorHandle } from "../src/islands/editor/types.js";
 import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
 import { ContentEditor } from "../src/islands/ContentEditor.js";
 
@@ -129,6 +131,101 @@ describe("parseCsv", () => {
     const { header, rows } = parseCsv("a,b\r\n1,2\r\n");
     expect(header).toEqual(["a", "b"]);
     expect(rows).toEqual([["1", "2"]]);
+  });
+});
+
+describe("serializeCsv", () => {
+  it("serializes a simple table with a trailing newline", () => {
+    const csv = serializeCsv({ header: ["a", "b", "c"], rows: [["1", "2", "3"], ["4", "5", "6"]] });
+    expect(csv).toBe("a,b,c\n1,2,3\n4,5,6\n");
+  });
+
+  it("quotes fields with commas, embedded quotes, or newlines and doubles inner quotes", () => {
+    const csv = serializeCsv({
+      header: ["name", "note"],
+      rows: [["Doe, Jane", "line1\nline2"], ['a "quoted" b', "x"]],
+    });
+    expect(csv).toBe('name,note\n"Doe, Jane","line1\nline2"\n"a ""quoted"" b",x\n');
+  });
+
+  it("leaves empty fields unquoted", () => {
+    expect(serializeCsv({ header: ["a", "b"], rows: [["", ""]] })).toBe("a,b\n,\n");
+  });
+
+  it("returns an empty string for empty input", () => {
+    expect(serializeCsv({ header: [], rows: [] })).toBe("");
+  });
+
+  it("round-trips parse → serialize → parse and is idempotent under a second pass", () => {
+    const texts = [
+      "a,b,c\n1,2,3\n4,5,6",
+      'name,note\n"Doe, Jane","line1\nline2"\n"a ""quoted"" b",x',
+      "a,b\r\n1,2\r\n",
+      "single\n",
+      "x,y\n,\n",
+    ];
+    for (const text of texts) {
+      const parsed = parseCsv(text);
+      expect(parseCsv(serializeCsv(parsed))).toEqual(parsed);
+      const normalized = serializeCsv(parsed);
+      expect(serializeCsv(parseCsv(normalized))).toBe(normalized);
+    }
+  });
+});
+
+function renderGrid(props: {
+  content: string;
+  readOnly?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
+  handleRef?: RefObject<EditorHandle | null>;
+}) {
+  const handleRef = props.handleRef ?? ({ current: null } as RefObject<EditorHandle | null>);
+  render(
+    <CsvTable
+      path="data/table.csv"
+      content={props.content}
+      readOnly={props.readOnly ?? false}
+      onSave={() => {}}
+      onDirtyChange={props.onDirtyChange ?? (() => {})}
+      handleRef={handleRef}
+    />,
+  );
+  return handleRef;
+}
+
+describe("CsvTable grid", () => {
+  it("reflects a cell edit in serialize() and reports the document dirty", () => {
+    const onDirtyChange = vi.fn();
+    const ref = renderGrid({ content: "a,b\n1,2\n", onDirtyChange });
+
+    const cell = screen.getByRole("textbox", { name: "a, row 1" });
+    fireEvent.change(cell, { target: { value: "99" } });
+
+    expect(ref.current!.serialize()).toBe("a,b\n99,2\n");
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("appends an empty row when Add row is clicked", () => {
+    const ref = renderGrid({ content: "a,b\n1,2\n" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add row" }));
+
+    expect(ref.current!.serialize()).toBe("a,b\n1,2\n,\n");
+  });
+
+  it("drops a row when its delete button is clicked", () => {
+    const ref = renderGrid({ content: "a,b\n1,2\n3,4\n" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete row 1" }));
+
+    expect(ref.current!.serialize()).toBe("a,b\n3,4\n");
+  });
+
+  it("renders no inputs when readOnly", () => {
+    renderGrid({ content: "a,b\n1,2\n", readOnly: true });
+
+    expect(screen.queryAllByRole("textbox")).toHaveLength(0);
+    expect(screen.getByText("1")).toBeInTheDocument();
   });
 });
 
