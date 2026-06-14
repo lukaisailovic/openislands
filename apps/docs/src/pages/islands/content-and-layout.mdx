@@ -154,7 +154,9 @@ Point it at **either** a single `file` or a whole `dir` — exactly one, never b
 - `include` (`dir` only): globs of files to surface; defaults to markdown (`**/*.md`,
   `**/*.markdown`).
 - `csv` (`dir` only, default `false`): also surface `.csv` files alongside the markdown. CSVs open
-  **read-only** as a table — the editor edits markdown, not spreadsheets.
+  as an **editable table** — edit cells, add and delete rows, and Save writes valid CSV back to the
+  file. They're read-only only when `readOnly` is set. (Adding or removing columns is out of scope;
+  edit the header in your own editor.)
 - `groups` (`dir` only): virtual folders, each `{ id, label?, icon?, match }`. See below.
 - `readOnly` (default `false`): make the whole workspace a viewer — no editing, no saving.
 
@@ -162,8 +164,9 @@ Setting `include`, `csv`, or `groups` together with `file` (rather than `dir`) i
 validation error.
 
 **Editing and version history.** Unless `readOnly` is set, edits save straight back to the file on
-disk, and the file is the source of truth — change it in your own editor and the workspace reflects
-it. Every save also records a restorable snapshot in a per-app SQLite store at
+disk, and the file is the source of truth — change it in your own editor and the open workspace
+refreshes within a second or two (unsaved edits in the browser are never clobbered). Every save also
+records a restorable snapshot in a per-app SQLite store at
 `.openislands/editor.sqlite`; the workspace surfaces that history and lets you roll a file back to
 any earlier version, so edits are never lossy.
 
@@ -178,7 +181,7 @@ bucket, so nothing is hidden.
 There's no live preview for `content.editor` here: it reads and writes real files through the
 runtime's file routes and fills the whole page, so it only means something inside a served app. The
 [`knowledge` example](https://github.com/lukaisailovic/openislands/tree/main/apps/examples/knowledge)
-is a full workspace bound to a `data/` tree with CSV view and the three virtual folders above.
+is a full workspace bound to a `data/` tree with an editable CSV and the three virtual folders above.
 </Callout>
 
 ## `layout.row`

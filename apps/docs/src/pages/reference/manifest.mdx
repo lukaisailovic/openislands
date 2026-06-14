@@ -627,7 +627,7 @@ An embedded file or external link (pdf, markdown, image, link) — use to surfac
 
 ### `content.editor`
 
-A full-page content workspace — browse and edit a directory of markdown files (and view CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.
+A full-page content workspace — browse and edit a directory of markdown files (and CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.
 
 **Minimum span:** 6
 
@@ -639,7 +639,7 @@ A full-page content workspace — browse and edit a directory of markdown files 
 | `file` | `string` | no | path to a single document under data/ or docs/ — mutually exclusive with `dir` |
 | `dir` | `string` | no | path to a directory under data/ or docs/ whose files are browsable and editable — mutually exclusive with `file` |
 | `include` | `array of string` | no | globs of files to surface when `dir` is set; defaults to markdown (**/*.md, **/*.markdown) |
-| `csv` | `boolean` | no | also surface .csv files (shown read-only as a table) when `dir` is set |
+| `csv` | `boolean` | no | also surface .csv files (an editable table — cells and row add/delete; read-only when `readOnly`) when `dir` is set |
 | `readOnly` | `boolean` | no | disable editing/saving — a viewer only |
 | `groups` | `array of object` | no | virtual folders grouping scattered files; only meaningful with `dir` |
 

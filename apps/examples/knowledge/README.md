@@ -3,7 +3,8 @@
 A live, agent-maintained knowledge base for an engineering team, built on OpenIslands. This
 example showcases the **`content.editor`** island: a full-page, Obsidian-style workspace that
 edits the markdown and CSV files in `data/` directly — no dataset, no SQL, no rebuild. Save a
-file and the editor reflects it; the files on disk are the source of truth.
+file and the editor reflects it; edit a file in your own editor and the open workspace refreshes
+within a second or two. The files on disk are the source of truth.
 
 ## Run it
 
@@ -19,8 +20,9 @@ recursed). It is **data-free** — it binds no dataset and runs no transform; it
 the files in place.
 
 - **Markdown editing** — every `.md` file under `data/` opens in a rich editor.
-- **CSV table view** — `csv: true` also surfaces `.csv` files, shown as a read-only table
-  (`glossary.csv`).
+- **Editable CSV** — `csv: true` also surfaces `.csv` files as an **editable table** (`glossary.csv`):
+  edit cells, add or delete rows, and Save writes valid CSV back to disk, snapshotting a restorable
+  version. (Read-only only when `readOnly` is set.)
 - **Virtual folders** — `groups` collect scattered files into tidy buckets regardless of where
   they live on disk:
 
@@ -47,7 +49,8 @@ the app:
 | `data/incident-2026-05-01.md` | postmortem for the 2026-05-01 outage |
 | `data/notes/2026-06-standup.md` | running standup notes for June 2026 |
 | `data/notes/roadmap.md` | the rolling engineering roadmap |
-| `data/glossary.csv` | shared terminology (CSV table) |
+| `data/glossary.csv` | shared terminology (editable CSV table) |
 
-Edit the files to change the knowledge base; edit `app/manifest.json` to change the layout or the
-folder grouping. Never hand-edit build output.
+Edit the files to change the knowledge base — in the workspace (markdown editor or CSV grid) or in
+your own editor, where external changes live-refresh the open workspace. Edit `app/manifest.json` to
+change the layout or the folder grouping. Never hand-edit build output.

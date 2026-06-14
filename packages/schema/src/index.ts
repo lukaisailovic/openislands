@@ -490,10 +490,10 @@ export const ContentEditor = z.object({
   file: z.string().optional().describe("path to a single document under data/ or docs/ — mutually exclusive with `dir`"),
   dir: z.string().optional().describe("path to a directory under data/ or docs/ whose files are browsable and editable — mutually exclusive with `file`"),
   include: z.array(z.string()).optional().describe("globs of files to surface when `dir` is set; defaults to markdown (**/*.md, **/*.markdown)"),
-  csv: z.boolean().default(false).describe("also surface .csv files (shown read-only as a table) when `dir` is set"),
+  csv: z.boolean().default(false).describe("also surface .csv files (an editable table — cells and row add/delete; read-only when `readOnly`) when `dir` is set"),
   readOnly: z.boolean().default(false).describe("disable editing/saving — a viewer only"),
   groups: z.array(ContentEditorGroup).optional().describe("virtual folders grouping scattered files; only meaningful with `dir`"),
-}).describe("A full-page content workspace — browse and edit a directory of markdown files (and view CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.");
+}).describe("A full-page content workspace — browse and edit a directory of markdown files (and CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.");
 export type ContentEditor = z.infer<typeof ContentEditor>;
 
 /**
