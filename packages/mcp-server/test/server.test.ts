@@ -525,3 +525,76 @@ describe("page filter bind enforcement (propose_edit)", () => {
     expect(out.proposal_id).toBeDefined();
   });
 });
+
+describe("M7 catalog additions are discoverable + bindable", () => {
+  it("list_islands includes the new island types with their required fields", async () => {
+    const client = await connect(freshProject());
+    const islands = (await call(client, "list_islands")) as { type: string; required: string[] }[];
+    const required = (type: string) => islands.find((i) => i.type === type)?.required;
+    expect(required("category.combo")).toEqual(["dataset", "x", "bars", "lines"]);
+    expect(required("rank.list")).toEqual(["dataset", "label", "value"]);
+    expect(required("status.grid")).toEqual(["dataset", "label", "state"]);
+    expect(required("waterfall.bars")).toEqual(["dataset", "label", "value"]);
+  });
+
+  it("get_island_schema returns a JSON-Schema for a new type naming its required fields", async () => {
+    const client = await connect(freshProject());
+    const waterfall = (await call(client, "get_island_schema", { type: "waterfall.bars" })) as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(waterfall.required).toEqual(expect.arrayContaining(["label", "value"]));
+    expect(Object.keys(waterfall.properties)).toEqual(expect.arrayContaining(["label", "value"]));
+
+    const rank = (await call(client, "get_island_schema", { type: "rank.list" })) as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(rank.required).toEqual(expect.arrayContaining(["label", "value"]));
+    expect(Object.keys(rank.properties)).toEqual(expect.arrayContaining(["label", "value"]));
+  });
+
+  it("propose → apply accepts a new island plus a select filter bound to real columns", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const next = JSON.parse(validManifest(root));
+    next.pages[0].filters = [{ id: "asset", type: "select", label: "Asset class", bind: { allocation: "class" }, multiple: true }];
+    next.pages[0].islands.push({
+      type: "category.combo",
+      title: "Net worth vs target",
+      dataset: "net_worth_monthly",
+      x: "month",
+      bars: "net_worth_eur",
+      lines: "target_eur",
+      span: 12,
+    });
+    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id: string };
+    expect(proposed.ok).toBe(true);
+    expect(proposed.proposal_id).toBeTruthy();
+    const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id })) as { ok: boolean };
+    expect(applied.ok).toBe(true);
+    const written = JSON.parse(validManifest(root));
+    expect(written.pages[0].filters[0].type).toBe("select");
+    expect(written.pages[0].islands.at(-1).type).toBe("category.combo");
+  });
+
+  it("rejects a binding error inside a new island naming the page + flat index + type + field", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const next = JSON.parse(validManifest(root));
+    next.pages[0].islands.push({ type: "rank.list", title: "Top assets", dataset: "allocation", label: "class", value: "does_not_exist" });
+    const out = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as {
+      ok: boolean;
+      proposal_id?: string;
+      errors: { page: string; index: number; type: string; field?: string; message: string }[];
+    };
+    expect(out.ok).toBe(false);
+    expect(out.proposal_id).toBeUndefined();
+    const err = out.errors.find((e) => e.type === "rank.list");
+    expect(err).toBeDefined();
+    expect(err!.page).toBe("overview");
+    expect(err!.index).toBe(3);
+    expect(err!.field).toBe("does_not_exist");
+    expect(err!.message).toContain("does_not_exist");
+  });
+});
