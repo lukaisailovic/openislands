@@ -5,6 +5,7 @@ import { tableFromIPC } from "apache-arrow";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   compile,
+  distinctValues,
   inferFile,
   inferSchema,
   islandRequirements,
@@ -621,6 +622,60 @@ describe("range queries", () => {
     await expect(query(dir, "nw", { range: { field: 'x" OR 1=1 --', from: "2026-01-01" } })).rejects.toThrow(
       /range field .* not found/,
     );
+  });
+});
+
+describe("select queries", () => {
+  const csv = "category,value\nA,1\nB,2\nC,3\nA,4\n";
+
+  it("narrows on a single value with an equality match", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    const narrowed = await query(dir, "nw", { select: [{ field: "category", values: ["A"] }] });
+    expect(narrowed.rows.map((r) => r.value)).toEqual([1, 4]);
+  });
+
+  it("narrows on multiple values with an IN match", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    const narrowed = await query(dir, "nw", { select: [{ field: "category", values: ["A", "C"] }] });
+    expect(narrowed.rows.map((r) => r.value)).toEqual([1, 3, 4]);
+  });
+
+  it("ignores an all-empty selection and returns every row", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    const all = await query(dir, "nw", { select: [{ field: "category", values: [] }] });
+    expect(all.rows).toHaveLength(4);
+  });
+
+  it("binds a select value as a parameter, not interpolated SQL (injection-safe)", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    const injected = await query(dir, "nw", { select: [{ field: "category", values: ["x' OR '1'='1"] }] });
+    expect(injected.rows).toHaveLength(0);
+  });
+
+  it("rejects an unknown select field loudly via verifyField", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    await expect(query(dir, "nw", { select: [{ field: "nope", values: ["A"] }] })).rejects.toThrow(
+      /select field 'nope' not found/,
+    );
+  });
+});
+
+describe("distinctValues", () => {
+  const csv = "category,value\nB,1\nA,2\nA,3\nC,4\n";
+
+  it("returns the sorted distinct non-null values of a column", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    expect(await distinctValues(dir, "nw", "category")).toEqual(["A", "B", "C"]);
+  });
+
+  it("respects the row cap limit", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    expect(await distinctValues(dir, "nw", "category", { limit: 2 })).toEqual(["A", "B"]);
+  });
+
+  it("rejects an unknown column loudly via verifyField", async () => {
+    const dir = project(baseManifest, { "data/nw.csv": csv });
+    await expect(distinctValues(dir, "nw", "nope")).rejects.toThrow(/distinct column 'nope' not found/);
   });
 });
 

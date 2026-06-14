@@ -369,10 +369,17 @@ export interface QueryMatch {
   value: string;
 }
 
+/** An equality / set-membership narrowing from a page-level select filter. */
+export interface QuerySelect {
+  field: string;
+  values: string[];
+}
+
 export interface QueryOpts {
   limit?: number;
   range?: QueryRange;
   match?: QueryMatch[];
+  select?: QuerySelect[];
 }
 
 /**
@@ -413,7 +420,8 @@ export async function query(projectDir: string, dataset: string, opts?: QueryOpt
 
   const hasRange = !!opts?.range && (opts.range.from !== undefined || opts.range.to !== undefined);
   const hasMatch = !!opts?.match && opts.match.length > 0;
-  if (!hasRange && !hasMatch) return runSelect(engine.conn, `SELECT * FROM ${view}`, limit);
+  const hasSelect = !!opts?.select && opts.select.some((s) => s.values.length > 0);
+  if (!hasRange && !hasMatch && !hasSelect) return runSelect(engine.conn, `SELECT * FROM ${view}`, limit);
 
   const columns = await datasetColumns(engine.conn, dataset);
   const conds: string[] = [];
@@ -432,6 +440,21 @@ export async function query(projectDir: string, dataset: string, opts?: QueryOpt
       const column = verifyField(columns, dataset, field, "match field");
       conds.push(`CAST(${quoteIdent(column.name)} AS VARCHAR) = ?`);
       params.push(value);
+    }
+  }
+  if (hasSelect) {
+    for (const { field, values } of opts!.select!) {
+      const present = values.filter((v) => v.length > 0);
+      if (present.length === 0) continue;
+      const column = verifyField(columns, dataset, field, "select field");
+      const ident = `CAST(${quoteIdent(column.name)} AS VARCHAR)`;
+      if (present.length === 1) {
+        conds.push(`${ident} = ?`);
+        params.push(present[0]!);
+      } else {
+        conds.push(`${ident} IN (${present.map(() => "?").join(", ")})`);
+        params.push(...present);
+      }
     }
   }
 
@@ -471,6 +494,20 @@ async function runSelect(conn: DuckDBConnection, sql: string, limit: number): Pr
   const capped = `SELECT * FROM (${sql}) AS _capped LIMIT ${Math.max(0, Math.floor(limit))}`;
   const reader = await conn.runAndReadAll(capped);
   return { columns: columnsFromReader(reader), rows: rowsFromReader(reader) };
+}
+
+/** A column's distinct non-null values, sorted and row-capped — populates a select filter's options when the manifest omits them. The column is verified before it is interpolated. */
+export async function distinctValues(projectDir: string, dataset: string, column: string, opts?: { limit?: number }): Promise<string[]> {
+  const engine = await getEngine(projectDir);
+  if (!engine.registered.has(dataset)) throw new Error(`unknown dataset '${dataset}'`);
+  const columns = await datasetColumns(engine.conn, dataset);
+  const col = verifyField(columns, dataset, column, "distinct column");
+  const capped = Math.max(0, Math.floor(opts?.limit ?? DEFAULT_ROW_CAP));
+  const ident = quoteIdent(col.name);
+  const reader = await engine.conn.runAndReadAll(
+    `SELECT DISTINCT CAST(${ident} AS VARCHAR) AS v FROM ${quoteIdent(dataset)} WHERE ${ident} IS NOT NULL ORDER BY 1 LIMIT ${capped}`,
+  );
+  return reader.getRowObjects().map((r) => String(r.v));
 }
 
 /** Columns + types of a dataset (or raw file path) via a zero-row query. */

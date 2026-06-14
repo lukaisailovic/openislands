@@ -659,18 +659,30 @@ export const Group = z.object({
 export type Group = z.infer<typeof Group>;
 
 /**
- * A page-level shared filter. v1 supports a date range; `bind` maps each
- * affected dataset to the column the range is applied to. Islands on the page
- * whose `dataset` appears in `bind` re-query when the filter changes; the rest
- * ignore it. The explicit dataset→column map keeps every binding validated
- * against the live data, like island bindings.
+ * A page-level shared filter: a `daterange` over a date column, or a `select`
+ * narrowing on a categorical column. `bind` maps each affected dataset to the
+ * column the filter is applied to. Islands on the page whose `dataset` appears
+ * in `bind` re-query when the filter changes; the rest ignore it. The explicit
+ * dataset→column map keeps every binding validated against the live data, like
+ * island bindings.
  */
-export const PageFilter = z.object({
+const DateRangeFilter = z.object({
   id: z.string(),
   type: z.literal("daterange"),
   label: z.string().optional(),
   bind: z.record(z.string(), z.string()).describe("dataset → date column the range applies to"),
 });
+
+const SelectFilter = z.object({
+  id: z.string(),
+  type: z.literal("select"),
+  label: z.string().optional(),
+  bind: z.record(z.string(), z.string()).describe("dataset → categorical column the selection narrows"),
+  multiple: z.boolean().default(false).describe("allow selecting multiple values (an IN match); default is single (=)"),
+  options: z.array(z.string()).optional().describe("explicit choices; when omitted, the bound column's live distinct values are used"),
+});
+
+export const PageFilter = z.discriminatedUnion("type", [DateRangeFilter, SelectFilter]);
 export type PageFilter = z.infer<typeof PageFilter>;
 
 /**

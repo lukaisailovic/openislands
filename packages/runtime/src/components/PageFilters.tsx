@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { CalendarDots, X } from "@phosphor-icons/react";
-import { Button, DatePicker, Popover, type DateRange } from "@cloudflare/kumo";
+import { CalendarDots, Funnel, X } from "@phosphor-icons/react";
+import { Button, Checkbox, DatePicker, Popover, Select, type DateRange } from "@cloudflare/kumo";
 import type { PageFilter } from "@openislands/schema";
 import type { RangeBounds } from "../client/pageFilters.js";
 import { formatValue } from "../islands/format.js";
@@ -8,7 +8,10 @@ import { formatValue } from "../islands/format.js";
 interface Props {
   filters: PageFilter[];
   bounds: RangeBounds;
-  onChange: (bounds: RangeBounds) => void;
+  onChangeBounds: (bounds: RangeBounds) => void;
+  selected: Record<string, string[]>;
+  onChangeSelect: (filterId: string, values: string[]) => void;
+  options: Record<string, string[]>;
 }
 
 interface Preset {
@@ -57,7 +60,15 @@ function rangeLabel(bounds: RangeBounds): string {
   return `${boundLabel(bounds.from)} – ${boundLabel(bounds.to)}`;
 }
 
-function DateRangeControl({ filter, bounds, onChange }: { filter: PageFilter } & Omit<Props, "filters">) {
+function DateRangeControl({
+  filter,
+  bounds,
+  onChange,
+}: {
+  filter: PageFilter;
+  bounds: RangeBounds;
+  onChange: (bounds: RangeBounds) => void;
+}) {
   const [month, setMonth] = useState<Date | undefined>(() => parseDay(bounds.from));
   const presets = buildPresets(new Date());
   const selected: DateRange | undefined =
@@ -110,24 +121,113 @@ function DateRangeControl({ filter, bounds, onChange }: { filter: PageFilter } &
   );
 }
 
+const ALL_VALUE = "__all__";
+
+function selectSummary(values: string[]): string {
+  if (values.length === 0) return "All";
+  if (values.length === 1) return values[0]!;
+  return `${values.length} selected`;
+}
+
 /**
- * Page-level date-range controls. v1 renders each `daterange` filter as a
- * popover combining preset ranges with a two-month range calendar; the active
- * bounds live in the URL so the state is shared by every bound island and
- * survives reloads.
+ * A single `type:"select"` filter. A single-value filter is a Kumo `Select`
+ * with an "All" option that clears it; a `multiple` filter is a `Popover` of
+ * checkbox toggles, which keeps the chosen array fully controlled and writes it
+ * straight back through `onChange`. Either way the state lives in the URL.
  */
-export function PageFilters({ filters, bounds, onChange }: Props) {
+function SelectControl({
+  filter,
+  values,
+  options,
+  onChange,
+}: {
+  filter: PageFilter & { type: "select" };
+  values: string[];
+  options: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const label = filter.label ?? filter.id;
+
+  if (filter.multiple) {
+    const toggle = (option: string, checked: boolean) => {
+      onChange(checked ? [...values, option] : values.filter((v) => v !== option));
+    };
+    return (
+      <Popover>
+        <Popover.Trigger render={<Button variant="outline" size="sm" icon={Funnel} />}>
+          {label}: {selectSummary(values)}
+        </Popover.Trigger>
+        <Popover.Content className="flex max-h-80 min-w-44 flex-col gap-1 overflow-auto p-2">
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="rounded-md px-2 py-1.5 text-left text-sm text-kumo-subtle hover:bg-kumo-control"
+          >
+            All
+          </button>
+          {options.map((option) => (
+            <Checkbox
+              key={option}
+              label={option}
+              checked={values.includes(option)}
+              onCheckedChange={(checked) => toggle(option, checked === true)}
+            />
+          ))}
+        </Popover.Content>
+      </Popover>
+    );
+  }
+
+  const selectValue = (next: unknown) => {
+    onChange(next === ALL_VALUE || typeof next !== "string" ? [] : [next]);
+  };
+
+  return (
+    <Select
+      size="sm"
+      aria-label={label}
+      value={values[0] ?? ALL_VALUE}
+      onValueChange={selectValue}
+      renderValue={() => `${label}: ${selectSummary(values)}`}
+    >
+      <Select.Option value={ALL_VALUE}>All</Select.Option>
+      {options.map((option) => (
+        <Select.Option key={option} value={option}>
+          {option}
+        </Select.Option>
+      ))}
+    </Select>
+  );
+}
+
+/**
+ * Page-level filter controls. Each `select` filter renders a `SelectControl`
+ * and each `daterange` filter a `DateRangeControl`, side by side in the page
+ * header; all state lives in the URL so it's shared by every bound island and
+ * survives reloads. Renders nothing when the page declares no supported filter.
+ */
+export function PageFilters({ filters, bounds, onChangeBounds, selected, onChangeSelect, options }: Props) {
+  const selects = filters.filter((f) => f.type === "select");
   const dateranges = filters.filter((f) => f.type === "daterange");
-  if (dateranges.length === 0) return null;
-  const active = bounds.from !== undefined || bounds.to !== undefined;
+  if (selects.length === 0 && dateranges.length === 0) return null;
+  const rangeActive = bounds.from !== undefined || bounds.to !== undefined;
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
-      {dateranges.map((filter) => (
-        <DateRangeControl key={filter.id} filter={filter} bounds={bounds} onChange={onChange} />
+      {selects.map((filter) => (
+        <SelectControl
+          key={filter.id}
+          filter={filter}
+          values={selected[filter.id] ?? []}
+          options={options[filter.id] ?? filter.options ?? []}
+          onChange={(values) => onChangeSelect(filter.id, values)}
+        />
       ))}
-      {active ? (
-        <Button variant="ghost" size="sm" shape="square" icon={X} aria-label="Reset date range" onClick={() => onChange({})} />
+      {dateranges.map((filter) => (
+        <DateRangeControl key={filter.id} filter={filter} bounds={bounds} onChange={onChangeBounds} />
+      ))}
+      {rangeActive ? (
+        <Button variant="ghost" size="sm" shape="square" icon={X} aria-label="Reset date range" onClick={() => onChangeBounds({})} />
       ) : null}
     </div>
   );

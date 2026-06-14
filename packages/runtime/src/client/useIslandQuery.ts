@@ -9,6 +9,12 @@ export interface ActiveRange {
   to?: string;
 }
 
+/** The active select narrowing applied to an island's dataset, if any. */
+export interface ActiveSelect {
+  field: string;
+  values: string[];
+}
+
 /** Stable hash of an island config so two islands on the same dataset cache separately. */
 export function islandConfigHash(config: IslandConfig): string {
   const { id: _id, title: _title, span: _span, ...rest } = config;
@@ -20,23 +26,28 @@ export function islandQueryKey(
   appId: string,
   config: IslandConfig,
   range?: ActiveRange,
-): [string, string, string, string, string] {
+  select?: ActiveSelect,
+): [string, string, string, string, string, string] {
   const rangeKey = range ? `${range.field}:${range.from ?? ""}:${range.to ?? ""}` : "";
-  return ["island-data", appId, config.dataset ?? "", islandConfigHash(config), rangeKey];
+  const selectKey = select && select.values.length ? `${select.field}:${[...select.values].toSorted().join(",")}` : "";
+  return ["island-data", appId, config.dataset ?? "", islandConfigHash(config), rangeKey, selectKey];
 }
 
-function queryUrl(appId: string, dataset: string, range?: ActiveRange): string {
+function queryUrl(appId: string, dataset: string, range?: ActiveRange, select?: ActiveSelect): string {
   const params = new URLSearchParams({ app: appId, dataset });
   if (range) {
     params.set("filterField", range.field);
     if (range.from) params.set("from", range.from);
     if (range.to) params.set("to", range.to);
   }
+  if (select && select.values.length) {
+    params.set(`select.${select.field}`, select.values.join(","));
+  }
   return `/api/query?${params.toString()}`;
 }
 
-async function fetchJson(appId: string, dataset: string, range?: ActiveRange): Promise<QueryPayload> {
-  const res = await fetch(queryUrl(appId, dataset, range), {
+async function fetchJson(appId: string, dataset: string, range?: ActiveRange, select?: ActiveSelect): Promise<QueryPayload> {
+  const res = await fetch(queryUrl(appId, dataset, range, select), {
     headers: { accept: "application/json" },
   });
   const body = (await res.json()) as QueryPayload | { error: string; dataset?: string };
@@ -46,11 +57,11 @@ async function fetchJson(appId: string, dataset: string, range?: ActiveRange): P
   return body;
 }
 
-export function useIslandQuery(config: IslandConfig, enabled: boolean, range?: ActiveRange) {
+export function useIslandQuery(config: IslandConfig, enabled: boolean, range?: ActiveRange, select?: ActiveSelect) {
   const appId = useAppId();
   return useQuery({
-    queryKey: islandQueryKey(appId, config, range),
-    queryFn: () => fetchJson(appId, config.dataset!, range),
+    queryKey: islandQueryKey(appId, config, range, select),
+    queryFn: () => fetchJson(appId, config.dataset!, range, select),
     enabled: enabled && Boolean(config.dataset),
     staleTime: 30_000,
   });

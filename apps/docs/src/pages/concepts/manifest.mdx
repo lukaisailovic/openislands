@@ -68,9 +68,10 @@ as tabs under the page header, deep-linked via `?group=<id>`:
 }
 ```
 
-A page may also declare shared `filters`: a date range rendered in the page header that
-re-queries every island bound to the filtered column at once. See the
-[Manifest Reference](/reference/manifest) for the full shape.
+A page may also declare shared `filters` rendered in the page header — a `daterange` over a
+date column, or a `select` that narrows a categorical column (single or `multiple`, its choices
+drawn from the column's live distinct values) — each re-querying every island bound to the
+filtered column at once. See the [Manifest Reference](/reference/manifest) for the full shape.
 
 ## Spans and the grid
 

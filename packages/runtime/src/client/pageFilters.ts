@@ -1,5 +1,5 @@
 import type { Page } from "@openislands/schema";
-import type { ActiveRange } from "./useIslandQuery.js";
+import type { ActiveRange, ActiveSelect } from "./useIslandQuery.js";
 
 /** The from/to bounds a page filter is currently set to (URL search params). */
 export interface RangeBounds {
@@ -23,4 +23,23 @@ export function activeRanges(page: Page, bounds: RangeBounds): Map<string, Activ
     }
   }
   return ranges;
+}
+
+/**
+ * Resolve the active select narrowing per dataset for a page. A dataset gets a
+ * narrowing when a select filter binds it and the user has chosen values; the
+ * bound column is the filter's `bind[dataset]`. Returns an empty map when
+ * nothing is chosen, so islands query unfiltered.
+ */
+export function activeSelects(page: Page, chosen: Record<string, string[]>): Map<string, ActiveSelect> {
+  const selects = new Map<string, ActiveSelect>();
+  for (const filter of page.filters ?? []) {
+    if (filter.type !== "select") continue;
+    const values = chosen[filter.id];
+    if (!values || values.length === 0) continue;
+    for (const [dataset, field] of Object.entries(filter.bind)) {
+      selects.set(dataset, { field, values });
+    }
+  }
+  return selects;
 }

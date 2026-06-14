@@ -12,6 +12,7 @@ export interface QueryRequest {
   format?: ResponseFormat;
   range?: { field: string; from?: string; to?: string };
   match?: { field: string; value: string }[];
+  select?: { field: string; values: string[] }[];
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -45,7 +46,7 @@ export async function runQuery(
   if (!request.dataset) return { status: 400, format, body: { error: "missing 'dataset'" } };
 
   const limit = clampLimit(request.limit);
-  const opts = { limit, range: request.range, match: request.match };
+  const opts = { limit, range: request.range, match: request.match, select: request.select };
   try {
     if (format === "arrow") {
       const arrow = await queryArrow(projectDir, request.dataset, opts);
@@ -85,7 +86,7 @@ export function parseQueryParams(params: URLSearchParams, accept?: string | null
   const rawLimit = params.get("limit");
   const limit = rawLimit === null ? undefined : Number(rawLimit);
   const format = negotiateFormat(params, accept);
-  return { dataset, limit, format, range: parseRange(params), match: parseMatch(params) };
+  return { dataset, limit, format, range: parseRange(params), match: parseMatch(params), select: parseSelect(params) };
 }
 
 /** Reads every `match.<column>=<value>` param into an equality narrowing list. */
@@ -97,6 +98,18 @@ export function parseMatch(params: URLSearchParams): QueryRequest["match"] {
     if (field) match.push({ field, value });
   }
   return match.length > 0 ? match : undefined;
+}
+
+/** Reads every `select.<column>=<comma-joined>` param into a set-membership narrowing list. */
+export function parseSelect(params: URLSearchParams): QueryRequest["select"] {
+  const select: NonNullable<QueryRequest["select"]> = [];
+  for (const [key, value] of params) {
+    if (!key.startsWith("select.")) continue;
+    const field = key.slice("select.".length);
+    const values = value.split(",").map((v) => v.trim()).filter((v) => v.length > 0);
+    if (field && values.length > 0) select.push({ field, values });
+  }
+  return select.length > 0 ? select : undefined;
 }
 
 /** A range is honored only with a field and at least one valid YYYY-MM-DD bound. */

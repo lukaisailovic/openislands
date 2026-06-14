@@ -943,11 +943,28 @@ describe("page filters", () => {
     expect(filter.bind).toEqual({ nw: "month", tx: "ts" });
   });
 
-  it("round-trips the filter shape into the JSON Schema with no leaked $refs", () => {
+  it("accepts a select filter and normalizes it onto the page", () => {
+    const r = validateManifest(withFilters([{ id: "cat", type: "select", label: "Category", bind: { nw: "category" } }]));
+    expect(r.ok).toBe(true);
+    const filter = r.manifest!.pages[0]!.filters![0]!;
+    expect(filter.id).toBe("cat");
+    expect(filter.type).toBe("select");
+    expect(filter.bind).toEqual({ nw: "category" });
+    expect((filter as { multiple: boolean }).multiple).toBe(false);
+  });
+
+  it("normalizes a multiple select filter's flag", () => {
+    const r = validateManifest(withFilters([{ id: "cat", type: "select", bind: { nw: "category" }, multiple: true }]));
+    expect(r.ok).toBe(true);
+    expect((r.manifest!.pages[0]!.filters![0]! as { multiple: boolean }).multiple).toBe(true);
+  });
+
+  it("round-trips both filter shapes into the JSON Schema with no leaked $refs", () => {
     const schema = manifestJsonSchema();
     const joined = JSON.stringify(schema);
     expect(joined).toContain("filters");
     expect(joined).toContain("daterange");
+    expect(joined).toContain("select");
     const refs: string[] = [];
     collectKeys(schema, "$ref", refs);
     expect(refs).toHaveLength(0);

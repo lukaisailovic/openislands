@@ -5,6 +5,7 @@ import {
   negotiateFormat,
   parseMatch,
   parseQueryParams,
+  parseSelect,
   runQuery,
 } from "../src/server/query.js";
 
@@ -66,6 +67,11 @@ describe("parseQueryParams", () => {
       { field: "day", value: "2026-06-11" },
     ]);
   });
+
+  it("parses select.<column> params into a set-membership list", () => {
+    const req = parseQueryParams(new URLSearchParams("dataset=services&select.owner=platform,data"));
+    expect(req.select).toEqual([{ field: "owner", values: ["platform", "data"] }]);
+  });
 });
 
 describe("parseMatch", () => {
@@ -81,6 +87,28 @@ describe("parseMatch", () => {
 
   it("ignores a bare 'match.' with an empty column", () => {
     expect(parseMatch(new URLSearchParams("dataset=meals&match.=x"))).toBeUndefined();
+  });
+});
+
+describe("parseSelect", () => {
+  it("splits a comma-joined select.<column> into trimmed values", () => {
+    expect(parseSelect(new URLSearchParams("dataset=services&select.owner=platform, data ,growth"))).toEqual([
+      { field: "owner", values: ["platform", "data", "growth"] },
+    ]);
+  });
+
+  it("reads only select.<column> params", () => {
+    expect(parseSelect(new URLSearchParams("dataset=services&select.owner=platform&limit=10"))).toEqual([
+      { field: "owner", values: ["platform"] },
+    ]);
+  });
+
+  it("ignores empty values and a bare 'select.' with an empty column", () => {
+    expect(parseSelect(new URLSearchParams("dataset=services&select.owner=,,&select.=x"))).toBeUndefined();
+  });
+
+  it("is undefined when no select params are present", () => {
+    expect(parseSelect(new URLSearchParams("dataset=services"))).toBeUndefined();
   });
 });
 
@@ -181,5 +209,12 @@ describe("runQuery", () => {
     const match = [{ field: "meal_id", value: "42" }];
     await runQuery("/proj", { dataset: "meals", match });
     expect(queryMock).toHaveBeenCalledWith("/proj", "meals", { limit: DEFAULT_QUERY_LIMIT, match });
+  });
+
+  it("passes a select narrowing through to the compiler", async () => {
+    queryMock.mockResolvedValue({ columns: [], rows: [] });
+    const select = [{ field: "owner", values: ["platform", "data"] }];
+    await runQuery("/proj", { dataset: "services", select });
+    expect(queryMock).toHaveBeenCalledWith("/proj", "services", { limit: DEFAULT_QUERY_LIMIT, select });
   });
 });

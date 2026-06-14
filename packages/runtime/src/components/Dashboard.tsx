@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Text } from "@cloudflare/kumo";
 import { type BuiltinIsland, type Manifest, type Page, flattenPageIslands } from "@openislands/schema";
-import { type RangeBounds, activeRanges } from "../client/pageFilters.js";
+import { type RangeBounds, activeRanges, activeSelects } from "../client/pageFilters.js";
 import { useAppId } from "../client/useAppId.js";
 import { islandErrorKey, useLiveUpdates } from "../client/useLiveUpdates.js";
 import type { CustomIslandMap, IslandConfig } from "../types.js";
@@ -15,10 +15,12 @@ interface Props {
   page: Page;
   activeGroup?: string;
   range?: RangeBounds;
+  selected?: Record<string, string[]>;
+  filterOptions?: Record<string, string[]>;
   customIslands?: CustomIslandMap;
 }
 
-export function Dashboard({ manifest, page, activeGroup, range, customIslands }: Props) {
+export function Dashboard({ manifest, page, activeGroup, range, selected, filterOptions, customIslands }: Props) {
   const navigate = useNavigate();
   const appId = useAppId();
   const liveErrors = useLiveUpdates();
@@ -26,6 +28,8 @@ export function Dashboard({ manifest, page, activeGroup, range, customIslands }:
   const flat = flattenPageIslands(page).filter(({ groupId }) => groupId === activeGroup);
   const bounds = range ?? {};
   const ranges = activeRanges(page, bounds);
+  const chosen = selected ?? {};
+  const selects = activeSelects(page, chosen);
 
   const setBounds = (next: RangeBounds) => {
     navigate({
@@ -35,8 +39,23 @@ export function Dashboard({ manifest, page, activeGroup, range, customIslands }:
     });
   };
 
+  const setSelect = (filterId: string, values: string[]) => {
+    navigate({
+      to: "/$appId/$pageId",
+      params: { appId, pageId: page.id },
+      search: (prev) => ({ ...prev, [filterId]: values.length > 0 ? values.join(",") : undefined }),
+    });
+  };
+
   const filters = page.filters ? (
-    <PageFilters filters={page.filters} bounds={bounds} onChange={setBounds} />
+    <PageFilters
+      filters={page.filters}
+      bounds={bounds}
+      onChangeBounds={setBounds}
+      selected={chosen}
+      onChangeSelect={setSelect}
+      options={filterOptions ?? {}}
+    />
   ) : null;
 
   const renderTile = ({ island, index }: { island: BuiltinIsland; index: number }) => {
@@ -48,6 +67,7 @@ export function Dashboard({ manifest, page, activeGroup, range, customIslands }:
         config={config}
         datasetSpec={config.dataset ? manifest.datasets[config.dataset] : undefined}
         range={config.dataset ? ranges.get(config.dataset) : undefined}
+        select={config.dataset ? selects.get(config.dataset) : undefined}
         liveError={liveErrors.get(islandErrorKey(page.id, index))}
         customIslands={customIslands}
       />

@@ -54,17 +54,31 @@ groups in declared order — a `layout.row` is transparent to that indexing: the
 index, its child islands take sequential flat indices as if declared inline, and the row only
 forces them onto their own full-width grid row.
 
-### Page filters (shared date range)
+### Page filters (shared controls)
 
-A page's optional `filters` declare a shared date range, rendered as a control in the page
-header. Each filter's `bind` maps a dataset to the date column the range applies to; islands
-on the page bound to one of those datasets re-query together when the range changes (state
-lives in `?from=&to=` as `YYYY-MM-DD`), and every other island ignores it. The bound column
-is validated against the live data exactly like an island binding — a missing column fails
-`validate`/`propose_edit` naming the page, filter id, dataset, and column. The range compares
-correctly whether the column is a `DATE`/`TIMESTAMP` or a string: a `YYYY-MM` month string is
-matched against the `YYYY-MM` prefix of the bound, so a `from`/`to` inside a month still
-includes that month.
+A page's optional `filters` declare shared controls rendered in the page header. Each filter's
+`bind` maps a dataset to the column the filter applies to; islands on the page bound to one of
+those datasets re-query together when the filter changes, and every other island ignores it.
+Every bound column is validated against the live data exactly like an island binding — a
+missing column fails `validate`/`propose_edit` naming the page, filter id, dataset, and column.
+Two kinds:
+
+**`daterange`** — a shared date range. State lives in `?from=&to=` as `YYYY-MM-DD`. The range
+compares correctly whether the column is a `DATE`/`TIMESTAMP` or a string: a `YYYY-MM` month
+string is matched against the `YYYY-MM` prefix of the bound, so a `from`/`to` inside a month
+still includes that month.
+
+**`select`** — a categorical narrowing on the bound column. Fields:
+
+- `bind` — dataset → the categorical column the selection narrows.
+- `multiple` (default `false`) — `true` allows picking several values; a single pick matches
+  with `=`, several with `IN`.
+- `options` — explicit choices. When omitted, the bound column's live distinct values populate
+  the control (capped, sorted), so the options track the data with no manual upkeep.
+
+State lives in the URL under the filter id (`?<filterId>=a,b`), so a selection is shareable and
+survives reloads. A single-select renders a dropdown; a `multiple` filter a checklist; both
+include an "All" choice that clears the selection.
 
 ## Built-in islands and their required fields
 

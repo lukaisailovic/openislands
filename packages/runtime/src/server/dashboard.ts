@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { notFound } from "@tanstack/react-router";
+import { distinctValues } from "@openislands/compiler";
 import type { Manifest, PageIcon } from "@openislands/schema";
 import { scanCustomIslands } from "./custom.js";
 import { loadManifest } from "./project.js";
@@ -44,4 +45,38 @@ export const getDashboard = createServerFn({ method: "GET" })
     const { manifest, errors } = loadManifest(dir);
     const customIslands = await scanCustomIslands(dir);
     return { manifest: manifest as DashboardManifest, manifestErrors: errors, customIslands };
+  });
+
+/**
+ * Resolves a page's select-filter options server-side: explicit `options` pass
+ * through, otherwise the bound column's live distinct values populate them.
+ * Keyed by filter id so the page loader can hand each control its choices.
+ */
+export const getFilterOptions = createServerFn({ method: "GET" })
+  .validator((data: { appId: string; pageId: string }) => data)
+  .handler(async ({ data }): Promise<Record<string, string[]>> => {
+    let dir: string;
+    try {
+      dir = appDir(data.appId);
+    } catch {
+      return {};
+    }
+    const { manifest } = loadManifest(dir);
+    const page = manifest.pages.find((p) => p.id === data.pageId);
+    const out: Record<string, string[]> = {};
+    for (const filter of page?.filters ?? []) {
+      if (filter.type !== "select") continue;
+      if (filter.options) {
+        out[filter.id] = filter.options;
+        continue;
+      }
+      const [dataset, column] = Object.entries(filter.bind)[0] ?? [];
+      if (!dataset || !column) continue;
+      try {
+        out[filter.id] = await distinctValues(dir, dataset, column, { limit: 100 });
+      } catch {
+        out[filter.id] = [];
+      }
+    }
+    return out;
   });

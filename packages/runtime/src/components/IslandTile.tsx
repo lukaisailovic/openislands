@@ -2,7 +2,7 @@ import { type CSSProperties, useMemo } from "react";
 import { SkeletonLine } from "@cloudflare/kumo";
 import type { DatasetSpec } from "@openislands/schema";
 import { BUILTIN_ISLAND_TYPES, type IslandType } from "@openislands/schema";
-import { type ActiveRange, useIslandQuery } from "../client/useIslandQuery.js";
+import { type ActiveRange, type ActiveSelect, useIslandQuery } from "../client/useIslandQuery.js";
 import { useAppId } from "../client/useAppId.js";
 import { makeCustomIsland } from "../islands/CustomIsland.js";
 import { islandNeedsData, type IslandRenderer, resolveRenderer } from "../islands/registry.js";
@@ -62,17 +62,19 @@ export function IslandTile({
   config,
   datasetSpec,
   range,
+  select,
   liveError,
   customIslands,
 }: {
   config: IslandConfig;
   datasetSpec?: DatasetSpec;
   range?: ActiveRange;
+  select?: ActiveSelect;
   liveError?: IslandValidationError;
   customIslands?: CustomIslandMap;
 }) {
   const needsData = islandNeedsData(config.type);
-  const queryResult = useIslandQuery(config, needsData, range);
+  const queryResult = useIslandQuery(config, needsData, range, select);
   const Renderer = useRenderer(config.type, customIslands);
 
   const span = typeof config.span === "number" ? config.span : DEFAULT_SPAN;

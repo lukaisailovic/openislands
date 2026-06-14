@@ -256,7 +256,7 @@ Each entry in \`pages\` is a page: one sidebar entry. A page holds **either** a 
 | \`id\` | \`string\` | yes | Unique page id, used in the \`/<appId>/<pageId>\` URL. |
 | \`title\` | \`string\` | no | Sidebar label for the page. |
 | \`icon\` | \`string\` | no | One of the curated page icons (e.g. \`house\`, \`chart-line\`, \`wallet\`). |
-| \`filters\` | \`array of object\` | no | Page-level shared date-range filters. |
+| \`filters\` | \`array of object\` | no | Page-level shared filters: a date range or a categorical select. |
 | \`islands\` | \`array of object\` | no | The page's islands. Exactly one of \`islands\` or \`groups\`. |
 | \`groups\` | \`array of object\` | no | Tabbed groups of islands. Exactly one of \`islands\` or \`groups\`. |
 
@@ -266,24 +266,28 @@ A **group** is \`{ id, title?, islands }\`: a string \`id\`, an optional \`title
 
 ### Page filters
 
-A page's optional \`filters\` declare shared controls in the page header. v1 supports a
-date range; \`bind\` maps each affected dataset to the date column the range applies to.
-Islands whose \`dataset\` appears in \`bind\` re-query when the range changes; the rest
-ignore it.
+A page's optional \`filters\` declare shared controls in the page header. Each filter's \`bind\`
+maps each affected dataset to the column the filter applies to; islands whose \`dataset\` appears
+in \`bind\` re-query when the filter changes, and the rest ignore it. Two kinds are supported: a
+\`daterange\` over a date column, and a \`select\` that narrows a categorical column.
 
 \`\`\`jsonc
 "filters": [
   { "id": "period", "type": "daterange", "label": "Period",
-    "bind": { "net_worth": "month", "transactions": "ts" } }
+    "bind": { "net_worth": "month", "transactions": "ts" } },
+  { "id": "team", "type": "select", "label": "Team", "multiple": true,
+    "bind": { "services": "owner" } }
 ]
 \`\`\`
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
 | \`id\` | \`string\` | yes | Unique filter id within the page. |
-| \`type\` | \`"daterange"\` | yes | The filter kind. v1 supports \`daterange\`. |
+| \`type\` | \`string\` | yes | The filter kind: \`daterange\` or \`select\`. |
 | \`label\` | \`string\` | no | Label shown on the control. |
-| \`bind\` | \`object\` | yes | A map of dataset name to the date column the range applies to. Each column is validated against the live data. |
+| \`bind\` | \`object\` | yes | A map of dataset name to the column the filter applies to. Each column is validated against the live data. |
+| \`multiple\` | \`boolean\` | no | \`select\` only: allow several values (\`IN\`); default single (\`=\`). |
+| \`options\` | \`array of string\` | no | \`select\` only: explicit choices; when omitted, the bound column's live distinct values are used. |
 
 ## Actions
 

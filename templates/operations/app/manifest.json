@@ -47,6 +47,9 @@
       "id": "services",
       "title": "Services",
       "icon": "pulse",
+      "filters": [
+        { "id": "team", "type": "select", "label": "Team", "multiple": true, "bind": { "services": "owner", "services_health": "owner" } }
+      ],
       "groups": [
         {
           "id": "health",
