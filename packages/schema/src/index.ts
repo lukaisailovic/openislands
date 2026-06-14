@@ -476,6 +476,26 @@ export const SourceDoc = z.object({
   description: z.string().optional().describe("a short caption shown under the document"),
 }).describe("An embedded file or external link (pdf, markdown, image, link) — use to surface source documents alongside the data; renders as a document card with a type icon, name, and open affordance.");
 
+export const ContentEditorGroup = z.object({
+  id: z.string(),
+  label: z.string().optional().describe("folder name shown in the sidebar; defaults to the id"),
+  icon: z.string().optional().describe("Phosphor icon name for the folder (e.g. \"files\", \"folder\"); the renderer falls back to a folder icon"),
+  match: z.array(z.string()).min(1).describe("globs (relative to `dir`) of files that belong in this virtual folder"),
+}).describe("A virtual folder grouping scattered files in a content.editor `dir`.");
+export type ContentEditorGroup = z.infer<typeof ContentEditorGroup>;
+
+export const ContentEditor = z.object({
+  type: z.literal("content.editor"),
+  ...baseFields,
+  file: z.string().optional().describe("path to a single document under data/docs/ — mutually exclusive with `dir`"),
+  dir: z.string().optional().describe("path to a directory under data/docs/ whose files are browsable and editable — mutually exclusive with `file`"),
+  include: z.array(z.string()).optional().describe("globs of files to surface when `dir` is set; defaults to markdown (**/*.md, **/*.markdown)"),
+  csv: z.boolean().default(false).describe("also surface .csv files (shown read-only as a table) when `dir` is set"),
+  readOnly: z.boolean().default(false).describe("disable editing/saving — a viewer only"),
+  groups: z.array(ContentEditorGroup).optional().describe("virtual folders grouping scattered files; only meaningful with `dir`"),
+}).describe("A full-page content workspace — browse and edit a directory of markdown files (and view CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.");
+export type ContentEditor = z.infer<typeof ContentEditor>;
+
 /**
  * The set of islands a drilldown may embed: every built-in except the two that
  * carry drilldowns themselves (those use their *base* shape here so a drilldown
@@ -549,6 +569,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "search.box": SearchBox,
   "note.card": NoteCard,
   "source.doc": SourceDoc,
+  "content.editor": ContentEditor,
 } as const;
 
 export type IslandType = keyof typeof BUILTIN_ISLAND_SCHEMAS;
@@ -564,6 +585,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "metric.scorecard": 3,
   "source.doc": 2,
   "note.card": 3,
+  "content.editor": 6,
   "gauge.rings": 4,
   "gauge.goal": 2,
   "gauge.meter": 3,
@@ -611,6 +633,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   SearchBox,
   NoteCard,
   SourceDoc,
+  ContentEditor,
 ]);
 export type BuiltinIsland = z.infer<typeof BuiltinIsland>;
 
@@ -1030,6 +1053,28 @@ export function validateManifest(input: unknown): ValidationResult {
             type,
             message: "goal needs at least one of min or max",
             field: "goal",
+          });
+        }
+      }
+      if (type === "content.editor") {
+        const cfg = result.data as { file?: string; dir?: string; csv?: boolean; include?: unknown; groups?: unknown };
+        const hasFile = typeof cfg.file === "string" && cfg.file.length > 0;
+        const hasDir = typeof cfg.dir === "string" && cfg.dir.length > 0;
+        if (hasFile === hasDir) {
+          errors.push({
+            page: pageId,
+            index,
+            type,
+            message: hasFile ? "content.editor takes either 'file' or 'dir', not both" : "content.editor needs a 'file' or a 'dir'",
+            field: hasFile ? undefined : "dir",
+          });
+        } else if (hasFile && (Array.isArray(cfg.groups) || Array.isArray(cfg.include) || cfg.csv === true)) {
+          errors.push({
+            page: pageId,
+            index,
+            type,
+            message: "content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set",
+            field: "groups",
           });
         }
       }

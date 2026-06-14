@@ -49,6 +49,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
     "search.box": { type, title: "New search", dataset: "TODO", fields: ["TODO"], titleField: "TODO" },
     "note.card": { type, title: "Note", markdown: "## Note\n\nWrite something." },
     "source.doc": { type, title: "Source", kind: "link", href: "https://" },
+    "content.editor": { type, title: "Content", dir: "data/docs" },
   };
   return base[type] ?? { type, title: "New island" };
 }

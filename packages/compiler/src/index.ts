@@ -737,7 +737,7 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       if (Array.isArray(stats)) for (const stat of stats) add((stat as Record<string, unknown>).value);
       break;
     }
-    // note.card, source.doc, and custom islands bind to no dataset
+    // note.card, source.doc, content.editor, and custom islands bind to no dataset
   }
   return { dataset, fields: [...fields] };
 }

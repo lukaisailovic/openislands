@@ -691,6 +691,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
   "search.box": { type: "search.box", dataset: "d", fields: ["name", "artist"], titleField: "name", detail: "artist", placeholder: "Search tracks…", limit: 5 },
   "note.card": { type: "note.card", markdown: "# hello" },
   "source.doc": { type: "source.doc", file: "doc.pdf", kind: "pdf" },
+  "content.editor": { type: "content.editor", dir: "data/docs" },
 };
 
 const invalidIslands: Record<IslandType, Record<string, unknown>> = {
@@ -718,6 +719,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "search.box": { type: "search.box", dataset: "d", fields: [], titleField: "name" },
   "note.card": { type: "note.card" },
   "source.doc": { type: "source.doc", kind: "spreadsheet" },
+  "content.editor": { type: "content.editor", dir: 5 },
 };
 
 describe("per-island schemas", () => {
@@ -824,6 +826,73 @@ describe("new island config fields", () => {
       type: "source.doc", kind: "link", href: "https://x.dev", label: "Runbook", description: "the on-call guide",
     });
     expect(r.success).toBe(true);
+  });
+});
+
+const editorManifest = (island: Record<string, unknown>) => ({
+  version: 1,
+  title: "t",
+  datasets: {},
+  pages: [{ id: "p", islands: [{ type: "content.editor", ...island }] }],
+});
+
+describe("content.editor", () => {
+  it("accepts a dir workspace with groups, include, and csv", () => {
+    const r = validateManifest(
+      editorManifest({
+        dir: "data/docs",
+        include: ["**/*.md"],
+        csv: true,
+        groups: [{ id: "specs", label: "Specs", icon: "files", match: ["specs/**"] }],
+      }),
+    );
+    expect(r.ok, r.errors.map((e) => e.message).join("; ")).toBe(true);
+  });
+
+  it("accepts a single file document", () => {
+    expect(validateManifest(editorManifest({ file: "data/docs/readme.md" })).ok).toBe(true);
+  });
+
+  it("rejects declaring both file and dir, naming the island", () => {
+    const r = validateManifest(editorManifest({ file: "data/docs/readme.md", dir: "data/docs" }));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "content.editor");
+    expect(err).toBeDefined();
+    expect(err!.page).toBe("p");
+    expect(err!.index).toBe(0);
+    expect(err!.message).toBe("content.editor takes either 'file' or 'dir', not both");
+  });
+
+  it("rejects declaring neither file nor dir, pointing at dir", () => {
+    const r = validateManifest(editorManifest({}));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "content.editor");
+    expect(err).toBeDefined();
+    expect(err!.field).toBe("dir");
+    expect(err!.message).toBe("content.editor needs a 'file' or a 'dir'");
+  });
+
+  it("rejects csv, include, or groups paired with a single file", () => {
+    const r = validateManifest(editorManifest({ file: "data/docs/readme.md", csv: true }));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "content.editor");
+    expect(err).toBeDefined();
+    expect(err!.field).toBe("groups");
+    expect(err!.message).toBe("content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set");
+    expect(validateManifest(editorManifest({ file: "data/docs/readme.md", groups: [{ id: "g", match: ["*"] }] })).ok).toBe(false);
+    expect(validateManifest(editorManifest({ file: "data/docs/readme.md", include: ["*.md"] })).ok).toBe(false);
+  });
+
+  it("rejects an explicit span below the minimum 6", () => {
+    const r = validateManifest(editorManifest({ dir: "data/docs", span: 5 }));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.field === "span" && e.type === "content.editor");
+    expect(err).toBeDefined();
+    expect(err!.message).toBe("span 5 is below the minimum 6 for content.editor");
+  });
+
+  it("accepts a span at the minimum 6", () => {
+    expect(validateManifest(editorManifest({ dir: "data/docs", span: 6 })).ok).toBe(true);
   });
 });
 

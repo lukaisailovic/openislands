@@ -50,6 +50,9 @@ describe("islandRequirements", () => {
   it("returns no dataset for note islands", () => {
     expect(islandRequirements({ type: "note.card", markdown: "x" }).dataset).toBeNull();
   });
+  it("binds content.editor to no dataset and no fields", () => {
+    expect(islandRequirements({ type: "content.editor", dir: "data/x" })).toEqual({ dataset: null, fields: [] });
+  });
   it("extracts detail fields for table.grid and timeline.feed", () => {
     const table = islandRequirements({
       type: "table.grid",
