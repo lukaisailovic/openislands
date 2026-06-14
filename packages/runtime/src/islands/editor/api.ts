@@ -43,7 +43,7 @@ export async function history(appId: string, path: string): Promise<FileVersion[
   return versions;
 }
 
-export function restore(appId: string, path: string, id: string): Promise<void> {
+export function restore(appId: string, path: string, id: number): Promise<void> {
   return post(appId, "restore", { path, id });
 }
 

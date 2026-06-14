@@ -8,7 +8,7 @@ export interface EditorFile {
 }
 
 export interface FileVersion {
-  id: string;
+  id: number;
   createdAt: number;
   byteSize: number;
   label?: string;

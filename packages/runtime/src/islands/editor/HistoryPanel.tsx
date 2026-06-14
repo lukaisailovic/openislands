@@ -41,7 +41,7 @@ export function HistoryPanel({
 }) {
   const appId = useAppId();
   const [state, setState] = useState<{ versions?: FileVersion[]; error?: string }>({});
-  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -55,7 +55,7 @@ export function HistoryPanel({
     };
   }, [open, appId, path]);
 
-  const handleRestore = async (id: string) => {
+  const handleRestore = async (id: number) => {
     setRestoringId(id);
     try {
       await restore(appId, path, id);
