@@ -5,6 +5,7 @@ import {
   flattenPageIslands,
   type IslandType,
   type Page,
+  QuerySpec,
   ValueFormat,
   jsonSchemaFor,
   manifestJsonSchema,
@@ -645,6 +646,82 @@ describe("validateManifest — connectors", () => {
     const r = validateManifest(m);
     expect(r.ok).toBe(false);
     expect(r.errors.some((e) => e.page === "-" && /connectors\.whoop/.test(e.message))).toBe(true);
+  });
+});
+
+// --- Queries: declared, typed, read-only reads ----------------------------------
+
+const queryManifest = {
+  version: 1,
+  title: "Finance Overview",
+  datasets: { net_worth: { source: "data/net_worth.csv" } },
+  pages: [{ id: "overview", islands: [{ type: "note.card", markdown: "x" }] }],
+  queries: {
+    by_month: {
+      dataset: "net_worth",
+      description: "Net worth for a month",
+      params: { month: { type: "string", required: true }, klass: { enum: ["BTC", "Cash"] } },
+      where: [{ field: "month", op: "eq", param: "month" }],
+      orderBy: [{ field: "month", dir: "desc" }],
+    },
+  },
+};
+
+type LooseQueries = typeof queryManifest & { queries: Record<string, Record<string, unknown>> };
+
+describe("validateManifest — queries", () => {
+  it("accepts a valid query and carries it into the normalized manifest", () => {
+    const r = validateManifest(queryManifest);
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(r.manifest!.queries!.by_month!.dataset).toBe("net_worth");
+    expect(r.manifest!.queries!.by_month!.params!.month!.type).toBe("string");
+    expect(r.manifest!.queries!.by_month!.params!.klass!.enum).toEqual(["BTC", "Cash"]);
+  });
+
+  it("leaves queries undefined when the manifest declares none", () => {
+    const r = validateManifest(goodManifest);
+    expect(r.ok).toBe(true);
+    expect(r.manifest!.queries).toBeUndefined();
+  });
+
+  it("rejects a query with a missing dataset", () => {
+    const m = structuredClone(queryManifest) as LooseQueries;
+    delete m.queries.by_month.dataset;
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => e.page === "-" && /queries\.by_month/.test(e.message))).toBe(true);
+  });
+
+  it("rejects a where filter that sets both param and value", () => {
+    const m = structuredClone(queryManifest) as LooseQueries;
+    m.queries.by_month.where = [{ field: "month", op: "eq", param: "month", value: "x" }];
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /exactly one of 'param' or 'value'/.test(e.message))).toBe(true);
+  });
+
+  it("rejects a where filter referencing an undeclared param", () => {
+    const m = structuredClone(queryManifest) as LooseQueries;
+    m.queries.by_month.where = [{ field: "month", op: "eq", param: "nope" }];
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /undeclared param 'nope'/.test(e.message))).toBe(true);
+  });
+
+  it("QuerySpec parses select, where, aggregate, and param forms", () => {
+    const r = QuerySpec.safeParse({
+      dataset: "net_worth",
+      select: ["month", { field: "net_worth_eur", fn: "sum", as: "total" }],
+      params: { a: { type: "number", min: 0, max: 10 }, b: { enum: ["x", "y"], required: false } },
+      where: [{ field: "month", op: "gte", param: "a" }],
+      orderBy: [{ field: "month", dir: "desc" }],
+      limit: 10,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("QuerySpec rejects a missing dataset", () => {
+    expect(QuerySpec.safeParse({ where: [] }).success).toBe(false);
   });
 });
 

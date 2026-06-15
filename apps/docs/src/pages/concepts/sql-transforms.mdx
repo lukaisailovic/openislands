@@ -79,6 +79,12 @@ A `sql` dataset is derived. It's a query, not a file, so nothing can write to it
 way, from the `source` files it reads, through the `SELECT`, into the islands. To change what a
 transform returns, change its SQL or the files beneath it.
 
+A transform renders to islands and takes no parameters. For a parameterized, on-demand read over a
+dataset — one an agent calls and gets rows back from, not a chart — declare a
+[query](/data/queries) instead. A query is a declarative spec the compiler turns into SQL, and it
+often points at a transform: the transform does the joins and shaping, the query parameterizes the
+read.
+
 ## The binding check still applies
 
 Islands bind to a transform's *output* columns, and `validate` checks them against the live

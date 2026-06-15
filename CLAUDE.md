@@ -76,7 +76,7 @@ Node ≥ 20.
 
 - `docs/data-app-model.md` — manifest shape, island catalog + required fields, spans, filters,
   custom islands, workspaces.
-- `docs/agent-edit-loop.md` — the MCP read-many/write-one loop, actions (data writes), connectors.
+- `docs/agent-edit-loop.md` — the MCP read-many/write-one loop, actions (data writes), queries (parameterized reads), connectors.
 - `CONTRIBUTING.md` — adding an island, the PR gate, releases.
 - `apps/docs/src/pages/` — the public docs (manifest, data contracts, islands, MCP).
 - `packages/schema/src/index.ts` — the exact, authoritative island config schemas.

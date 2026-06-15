@@ -16,6 +16,22 @@
       "description": "Record a money movement in the transactions log"
     }
   },
+  "queries": {
+    "get_transactions_since": {
+      "description": "Transactions on or after a date, newest first - optionally narrowed to one category.",
+      "dataset": "transactions",
+      "params": {
+        "since": { "type": "date", "description": "ISO day (YYYY-MM-DD); include transactions on or after this date" },
+        "category": { "type": "string", "required": false, "description": "optional category (e.g. Income, Equities); omit for all" }
+      },
+      "select": ["ts", "account", "description", "category", "amount_eur"],
+      "where": [
+        { "field": "ts", "op": "gte", "param": "since" },
+        { "field": "category", "op": "eq", "param": "category" }
+      ],
+      "orderBy": [{ "field": "ts", "dir": "desc" }]
+    }
+  },
   "pages": [
     {
       "id": "overview",

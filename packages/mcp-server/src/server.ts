@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createTwoFilesPatch } from "diff";
 import { z } from "zod";
-import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, inferSchema, listConnectorStatuses, query, queryRaw, readManifest as readProjectManifest, resetEngine, runConnectorSync } from "@openislands/compiler";
+import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, checkQueries, inferSchema, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery } from "@openislands/compiler";
 import { BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, LayoutRow, jsonSchemaFor, validateManifest, type IslandError, type IslandType } from "@openislands/schema";
 import { getAppStateStore, getContentStore } from "@openislands/storage";
 import { createCheckpointStore, isCheckpointId } from "./checkpoints.js";
@@ -87,7 +87,9 @@ export function createServer(projectRoot: string): McpServer {
       return columnsByDataset.get(dataset)!;
     };
     const { errors } = await checkManifestContracts(projectRoot, v.manifest, columnsFor);
-    return { ok: errors.length === 0, errors, custom: v.custom.map((c) => c.type) };
+    const queryErrors = await checkQueries(projectRoot, v.manifest);
+    const allErrors = [...errors, ...queryErrors.map((e) => `query '${e.query}': ${e.message}`)];
+    return { ok: allErrors.length === 0, errors: allErrors, custom: v.custom.map((c) => c.type) };
   }
 
   const server = new McpServer({ name: "openislands", version: "0.1.0" });
@@ -276,6 +278,63 @@ export function createServer(projectRoot: string): McpServer {
         return json({ ok: true, inserted: result.inserted, checkpoint_id: result.checkpoint_id });
       } catch (e) {
         if (e instanceof ActionValidationError) return json({ ok: false, errors: e.errors });
+        return json({ ok: false, error: (e as Error).message });
+      }
+    },
+  );
+
+  // --- read queries: typed, parameterized reads -----------------------------------
+
+  server.registerTool(
+    "list_queries",
+    { description: "List the manifest's declared read queries with their params JSON Schema and result columns — the agent's grounding for run_query." },
+    async () => {
+      const manifest = await readProjectManifest(projectRoot);
+      const queries = manifest.queries ?? {};
+      resetEngine(projectRoot);
+      const out = [];
+      for (const [name, spec] of Object.entries(queries)) {
+        let params: unknown = {};
+        let columns: unknown[] = [];
+        try {
+          params = z.toJSONSchema(await queryParamSchema(projectRoot, name));
+        } catch {
+          /* surfaced by validate */
+        }
+        try {
+          columns = await queryColumns(projectRoot, name);
+        } catch {
+          /* surfaced by validate */
+        }
+        out.push({ name, description: spec.description, params, columns });
+      }
+      return json(out);
+    },
+  );
+
+  server.registerTool(
+    "run_query",
+    {
+      description: "Run a declared read-only query with typed params. Validates params first (all-or-nothing); returns rows. Read-only and row-capped — never writes.",
+      inputSchema: {
+        name: z.string(),
+        params: z.record(z.string(), z.unknown()).optional(),
+        limit: z.number().int().positive().max(500).optional(),
+      },
+    },
+    async ({ name, params, limit }) => {
+      const manifest = await readProjectManifest(projectRoot);
+      const spec = manifest.queries?.[name];
+      if (!spec) {
+        const declared = Object.keys(manifest.queries ?? {});
+        return json({ ok: false, error: `unknown query '${name}'. Declared: ${declared.length ? declared.join(", ") : "(none)"}` });
+      }
+      resetEngine(projectRoot);
+      try {
+        const result = await runQuery(projectRoot, name, params ?? {}, { limit: limit ?? 100 });
+        return json({ ok: true, rowCount: result.rows.length, columns: result.columns, rows: result.rows });
+      } catch (e) {
+        if (e instanceof QueryValidationError) return json({ ok: false, errors: e.errors });
         return json({ ok: false, error: (e as Error).message });
       }
     },

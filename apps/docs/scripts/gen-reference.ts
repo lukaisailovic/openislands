@@ -180,8 +180,8 @@ function buildDoc(): string {
 > Run \`pnpm gen:reference\` to refresh it after a schema change.
 
 A manifest is the typed declaration of a data app: the datasets it reads, the pages
-and islands that render them, and the optional actions and connectors that write to
-them. This page documents every field the schema accepts. The schema is the single
+and islands that render them, the optional actions and connectors that write to them,
+and the queries that read from them. This page documents every field the schema accepts. The schema is the single
 source of truth: the CLI, runtime, and MCP server all validate against it, so an
 island bound to a field that doesn't exist fails the build and names the island.
 
@@ -197,6 +197,7 @@ A manifest is a JSON object with the following top-level shape:
   "datasets": { /* ... */ },     // required: named data sources (see Datasets)
   "pages": [ /* ... */ ],        // required: the app's pages (see Pages)
   "actions": { /* ... */ },      // optional: typed data writes (see Actions)
+  "queries": { /* ... */ },      // optional: typed, parameterized reads (see Queries)
   "connectors": { /* ... */ }    // optional: vendored sync integrations (see Connectors)
 }
 \`\`\`
@@ -209,6 +210,7 @@ A manifest is a JSON object with the following top-level shape:
 | \`datasets\` | \`object\` | yes | A map of dataset name to a dataset declaration. See [Datasets](#datasets). |
 | \`pages\` | \`array of object\` | yes | The app's pages, one sidebar entry each. See [Pages](#pages). |
 | \`actions\` | \`object\` | no | A map of action name to an action declaration. See [Actions](#actions). |
+| \`queries\` | \`object\` | no | A map of query name to a query declaration. See [Queries](#queries). |
 | \`connectors\` | \`object\` | no | A map of connector name to a connector declaration. See [Connectors](#connectors). |
 
 ## Datasets
@@ -325,6 +327,58 @@ A **field override** (\`fields.<column>\`) narrows one column of the derived row
 | \`max\` | \`number\` | no | Maximum for a numeric column. |
 | \`default\` | \`string \\| number \\| boolean\` | no | Value applied when the column is omitted. |
 | \`description\` | \`string\` | no | Free-form note describing the column. |
+
+## Queries
+
+A **query** is a manifest-declared, read-only read over one dataset, written as a
+declarative spec — not raw SQL. The compiler translates it to a parameterized,
+type-aware \`SELECT\`, validates every \`field\` against the live columns, and binds every
+param and value (so it's injection-safe). Its \`dataset\` is a \`source\` dataset or a
+\`sql\` transform; there are no joins, so heavy shaping lives in a transform the query
+points at.
+
+\`\`\`jsonc
+"queries": {
+  "get_daily_macros": {
+    "description": "Macros + goals for one day; omit date for the latest.",
+    "dataset": "macros_daily",
+    "params": { "date": { "type": "date", "required": false } },
+    "where": [{ "field": "date", "op": "eq", "param": "date" }],
+    "orderBy": [{ "field": "date", "dir": "desc" }],
+    "limit": 1
+  }
+}
+\`\`\`
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| \`dataset\` | \`string\` | yes | The dataset to read: a \`source\` dataset or a \`sql\` transform. |
+| \`select\` | \`array of string \\| object\` | no | Columns to return: a column name or \`{ field, fn?, as? }\` where \`fn\` is \`sum\` / \`avg\` / \`count\` / \`min\` / \`max\`. Omit for all columns. |
+| \`where\` | \`array of object\` | no | Filters, ANDed together; each is \`{ field, op, param }\` or \`{ field, op, value }\` (see filter ops). |
+| \`groupBy\` | \`array of string\` | no | Columns to group by, for aggregate \`select\` entries. |
+| \`orderBy\` | \`array of object\` | no | Sort keys, each \`{ field, dir? }\` where \`dir\` is \`asc\` / \`desc\` (default \`asc\`). |
+| \`limit\` | \`number\` | no | Max rows returned. |
+| \`params\` | \`object\` | no | A map of parameter name to a parameter declaration (see query params). |
+| \`description\` | \`string\` | no | Free-form note describing the query. |
+
+A **query param** (\`params.<name>\`) declares one parameter, referenced by a \`where\`
+clause's \`param\`:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| \`type\` | \`"string" \\| "number" \\| "boolean" \\| "date"\` | no | The parameter type. Defaults to \`string\`. |
+| \`required\` | \`boolean\` | no | Whether the caller must supply it. Defaults to \`true\`; \`false\` makes it optional. |
+| \`enum\` | \`array of string\` | no | Constrain a string parameter to a fixed set of values. |
+| \`min\` | \`number\` | no | Minimum for a numeric parameter. |
+| \`max\` | \`number\` | no | Maximum for a numeric parameter. |
+| \`default\` | \`string \\| number \\| boolean\` | no | Value used when the caller omits it; implies optional. |
+| \`description\` | \`string\` | no | Free-form note describing the parameter. |
+
+A **filter** (\`where[]\`) names a \`field\`, an \`op\`, and exactly one of \`param\` (bind a
+declared param) or \`value\` (a literal). The ops are \`eq\`, \`ne\`, \`lt\`, \`lte\`, \`gt\`,
+\`gte\`, \`contains\` (case-insensitive substring), \`sameDay\` (match a timestamp field to a
+date), and \`in\` (a literal \`value\` array). A filter bound to an **optional** param the
+caller omits is dropped, so the query runs without it.
 
 ## Connectors
 

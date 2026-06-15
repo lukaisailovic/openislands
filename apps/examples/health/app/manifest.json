@@ -88,6 +88,30 @@
       "description": "Sync Whoop recovery, sleep, and workouts"
     }
   },
+  "queries": {
+    "get_daily_macros": {
+      "description": "Macros + goals for one day. Omit date for the latest logged day.",
+      "dataset": "macros_daily",
+      "params": { "date": { "type": "date", "required": false, "description": "ISO day (YYYY-MM-DD); defaults to the latest logged day" } },
+      "where": [{ "field": "date", "op": "eq", "param": "date" }],
+      "orderBy": [{ "field": "date", "dir": "desc" }],
+      "limit": 1
+    },
+    "get_meals_on": {
+      "description": "Every meal logged on a given day, newest first.",
+      "dataset": "meals",
+      "params": { "date": { "type": "date", "description": "ISO day (YYYY-MM-DD)" } },
+      "where": [{ "field": "ts", "op": "sameDay", "param": "date" }],
+      "orderBy": [{ "field": "ts", "dir": "desc" }]
+    },
+    "get_low_batches": {
+      "description": "Cooked batches at or under a remaining-fraction threshold, emptiest first.",
+      "dataset": "batches_status",
+      "params": { "threshold": { "type": "number", "required": false, "default": 0.25, "min": 0, "max": 1, "description": "remaining fraction (0-1); defaults to 0.25" } },
+      "where": [{ "field": "remaining_pct", "op": "lte", "param": "threshold" }],
+      "orderBy": [{ "field": "remaining_pct", "dir": "asc" }]
+    }
+  },
   "pages": [
     {
       "id": "today",

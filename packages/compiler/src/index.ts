@@ -12,12 +12,13 @@
  */
 import { createHash } from "node:crypto";
 import { join, extname, basename, isAbsolute } from "node:path";
-import duckdb from "@duckdb/node-api";
+import duckdb, { type DuckDBValue } from "@duckdb/node-api";
 import { type ContentStore, getContentStore } from "@openislands/storage";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
 import { queryResultToArrowIPC } from "./arrow.js";
 import { checkCustomIsland } from "./customSchema.js";
 import { checkConnectors } from "./connectors.js";
+import { checkQueries } from "./queries.js";
 
 export { queryResultToArrowIPC } from "./arrow.js";
 export {
@@ -59,6 +60,18 @@ export {
   type SyncResult,
   type ConnectorValidationError,
 } from "./connectors.js";
+export {
+  runQuery,
+  queryColumns,
+  queryParamSchema,
+  validateParams,
+  checkQueries,
+  buildQuerySql,
+  QueryValidationError,
+  type QueryRunResult,
+  type ParamError,
+  type QueryContractError,
+} from "./queries.js";
 
 const { DuckDBInstance, DuckDBTypeId, StatementType } = duckdb;
 type DuckDBConnection = Awaited<ReturnType<InstanceType<typeof DuckDBInstance>["connect"]>>;
@@ -174,7 +187,7 @@ export function resetEngine(projectDir: string): void {
   engines.delete(projectDir);
 }
 
-function quoteIdent(name: string): string {
+export function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
@@ -495,6 +508,27 @@ export async function queryRaw(projectDir: string, sql: string, opts?: { limit?:
 async function runSelect(conn: DuckDBConnection, sql: string, limit: number): Promise<QueryResult> {
   const capped = `SELECT * FROM (${sql}) AS _capped LIMIT ${Math.max(0, Math.floor(limit))}`;
   const reader = await conn.runAndReadAll(capped);
+  return { columns: columnsFromReader(reader), rows: rowsFromReader(reader) };
+}
+
+// --- Declared queries: run a generated parameterized SELECT ----------------------
+
+/** Runs a read-only SELECT with named params bound as prepared-statement values, row-capped. The named-param sibling of queryRaw; the query builder in queries.ts generates the SQL it runs. */
+export async function queryWithParams(
+  projectDir: string,
+  sql: string,
+  params?: Record<string, unknown>,
+  opts?: { limit?: number },
+): Promise<QueryResult> {
+  const engine = await getEngine(projectDir);
+  await assertReadOnly(engine.conn, sql);
+  const trimmed = sql.trim().replace(/;\s*$/, "");
+  const cap = Math.max(0, Math.floor(opts?.limit ?? DEFAULT_ROW_CAP));
+  const capped = `SELECT * FROM (${trimmed}) AS _q LIMIT ${cap}`;
+  const reader =
+    params && Object.keys(params).length > 0
+      ? await engine.conn.runAndReadAll(capped, params as Record<string, DuckDBValue>)
+      : await engine.conn.runAndReadAll(capped);
   return { columns: columnsFromReader(reader), rows: rowsFromReader(reader) };
 }
 
@@ -921,6 +955,11 @@ export async function compile(projectDir: string): Promise<CompileReport> {
   if (manifest.connectors) {
     const connectorErrors = await checkConnectors(projectDir, manifest);
     for (const e of connectorErrors) report.errors.push(`[connector ${e.connector}] ${e.message}`);
+  }
+
+  if (manifest.queries) {
+    const queryErrors = await checkQueries(projectDir, manifest);
+    for (const e of queryErrors) report.errors.push(`[query ${e.query}] ${e.message}`);
   }
 
   report.ok = report.errors.length === 0;

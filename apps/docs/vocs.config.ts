@@ -32,6 +32,11 @@ export default defineConfig({
       ],
     },
     {
+      text: "Reading Data",
+      collapsed: false,
+      items: [{ text: "Queries", link: "/data/queries" }],
+    },
+    {
       text: "Writing Data",
       collapsed: false,
       items: [

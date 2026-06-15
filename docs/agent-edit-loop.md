@@ -13,7 +13,8 @@ validated, snapshotted proposal-and-apply pipeline.
 **Read first:** `list_islands` (built-in types + required fields), `get_island_schema(type)`,
 `get_manifest`, `get_data_schema(dataset)`, `query_data({ dataset } | { sql }, limit)` — pass a
 `dataset` name for a whole dataset *or* a read-only `sql` SELECT over the registered dataset
-views, not both — `validate_manifest`, and `list_checkpoints` (rollback points, newest last).
+views, not both — `list_queries`/`run_query` (declared parameterized reads, see Queries below),
+`validate_manifest`, and `list_checkpoints` (rollback points, newest last).
 
 **The manifest write path:** `propose_edit(manifest)` takes the **full** manifest, validates it
 + checks every binding against the live data, and returns a `diff` — but does **not** write. If the
@@ -44,6 +45,50 @@ table; the file and table must already exist. Declare an action in the manifest:
 "actions": {
   "log_meal": { "dataset": "meals", "mode": "insert",
     "fields": { "meal_type": { "enum": ["breakfast", "lunch", "dinner", "snack"] } } }
+}
+```
+
+## Queries (the read path)
+
+The read mirror of an action: a manifest-declared, read-only read over **one** dataset (a `source`
+dataset or a `sql` transform). It's a **declarative spec, not raw SQL** — `{ dataset, params?,
+select?, where?, groupBy?, orderBy?, limit? }` — that the compiler translates to a parameterized,
+type-aware `SELECT`. No joins by design; heavy shaping lives in a `sql` transform the `dataset`
+points at. Why declarative beats an inline-SQL string: the translator emits casts itself (no
+`TRY_CAST`/`ILIKE` footgun), every `field` is validated against live columns at build time (fail
+loud, like an island binding), and every param/literal is bound (injection-safe — only verified
+identifiers are quoted).
+
+- `params` (`QueryParam`): `type` (string|number|boolean|date, default string), `required` (default
+  true; false = optional), `enum`, `min`, `max`, `default`, `description`.
+- `where`: array of `{ field, op, param }` or `{ field, op, value }` (exactly one of param/value).
+  Ops: `eq, ne, lt, lte, gt, gte, contains` (case-insensitive substring), `sameDay` (timestamp
+  field vs a date), `in` (literal `value` array). **An omitted optional param drops its filter** —
+  so `get_daily_macros` with no `date` falls through to `order by date desc limit 1`.
+- `select`: array of column names or `{ field, fn?, as? }` (`fn` ∈ sum/avg/count/min/max); omit =
+  all columns. `groupBy`: array of column names. `orderBy`: array of `{ field, dir? }` (asc|desc).
+  `limit`: integer.
+
+Discover with `list_queries` (each query's `name`, `description`, `params` as JSON Schema, result
+`columns`), then `run_query({ name, params?, limit? })` — params validated, `limit` 1–500, result
+row-capped. Success is `{ ok: true, rowCount, columns, rows }`; a bad param is
+`{ ok: false, errors }` (all-or-nothing), an unknown name or query error is `{ ok: false, error }`.
+
+Because the spec is plain JSON, an agent **authors** a query through the normal `propose_edit` →
+`apply_edit` loop (the write path only ever writes the manifest) — it creates a read tool, not
+just runs one. `propose_edit`/`validate` check the same thing as an island binding: the `dataset`
+exists and every `field` (in `where`/`select`/`groupBy`/`orderBy`) is a real column (else a named
+error).
+
+```jsonc
+"queries": {
+  "get_daily_macros": {
+    "dataset": "macros_daily",
+    "params": { "date": { "type": "date", "required": false } },
+    "where": [{ "field": "date", "op": "eq", "param": "date" }],
+    "orderBy": [{ "field": "date", "dir": "desc" }],
+    "limit": 1
+  }
 }
 ```
 

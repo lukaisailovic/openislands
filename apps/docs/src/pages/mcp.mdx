@@ -100,6 +100,27 @@ discovers and runs them:
 Inserts are all-or-nothing and path-confined to the project: an action can only write the
 `source` file its declared dataset names.
 
+## The read query path: queries
+
+Queries are typed, read-only reads over a dataset, declared in the manifest. They're the read
+mirror of actions: a saved, named, parameterized version of `query_data`. A query is a declarative
+spec — a dataset, filters, a projection — that the compiler translates to a parameterized
+`SELECT`, not raw SQL. The agent discovers and runs them:
+
+- **`list_queries`** returns each declared query with its `name`, `description`, its `params` as a
+  **JSON Schema**, and the result `columns`. This is the agent's grounding for what to pass and
+  what comes back.
+- **`run_query({ name, params?, limit? })`** validates the params, then runs the compiled `SELECT`.
+  On success it returns `{ ok: true, rowCount, columns, rows }`. A bad param rejects the whole call
+  with `{ ok: false, errors }` (all-or-nothing); an unknown name or a query error returns
+  `{ ok: false, error }`. `limit` is 1–500 and the result is row-capped either way. Params and
+  literals are bound, never interpolated, and every `field` is validated against the live columns.
+
+A query is plain JSON in the manifest. Because the only thing the write path writes is the
+manifest, an agent authors a query through the normal `propose_edit` / `apply_edit` loop, exactly
+like an island or an action — it creates the read tool, it doesn't just run one.
+See [Queries](/data/queries) for the full shape.
+
 ## Connectors
 
 Connectors sync an external provider's data into `source` datasets on a schedule, through the
@@ -130,6 +151,9 @@ Every guarantee is structural, not advisory:
   count- and byte-capped, oldest pruned first.
 - **Path confinement.** Writes are scoped to the project's declared `source` files; there is
   no general filesystem access.
+- **Reads are bounded too.** `query_data` and `run_query` only run read-only `SELECT`s; a query
+  compiles from a declarative spec with its `field`s validated and its params and literals bound,
+  not interpolated, and every result is row-capped.
 - **Prompt-injection posture.** Because the *only* mutations are a validated full-manifest
   proposal and a schema-checked row insert (both diffed or reported, both reversible), data
   that tries to talk an agent into a harmful edit still can't bypass validation, the diff, or

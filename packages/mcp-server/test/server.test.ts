@@ -373,6 +373,125 @@ describe("data actions", () => {
   });
 });
 
+describe("read queries", () => {
+  function withQuery(root: string, queries: Record<string, unknown>): string {
+    const m = JSON.parse(validManifest(root));
+    m.queries = queries;
+    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    return root;
+  }
+
+  it("list_queries returns the declared query with a params JSON Schema and columns", async () => {
+    const root = withQuery(freshProject(), {
+      alloc_by_class: {
+        dataset: "allocation",
+        description: "Allocation for one class",
+        select: ["class", "value_eur"],
+        params: { class: { type: "string" } },
+        where: [{ field: "class", op: "eq", param: "class" }],
+      },
+    });
+    const client = await connect(root);
+    const queries = (await call(client, "list_queries")) as {
+      name: string;
+      description?: string;
+      params: { properties?: Record<string, unknown>; required?: string[] };
+      columns: { name: string }[];
+    }[];
+    expect(queries).toHaveLength(1);
+    const q = queries[0]!;
+    expect(q.name).toBe("alloc_by_class");
+    expect(Object.keys(q.params.properties ?? {})).toEqual(["class"]);
+    expect(q.columns.map((c) => c.name)).toEqual(["class", "value_eur"]);
+  });
+
+  it("list_queries returns an empty list when none are declared", async () => {
+    const client = await connect(freshProject());
+    expect(await call(client, "list_queries")).toEqual([]);
+  });
+
+  it("run_query returns rows for valid params", async () => {
+    const root = withQuery(freshProject(), {
+      alloc_by_class: { dataset: "allocation", select: ["class", "value_eur"], params: { class: { type: "string" } }, where: [{ field: "class", op: "eq", param: "class" }] },
+    });
+    const client = await connect(root);
+    const out = (await call(client, "run_query", { name: "alloc_by_class", params: { class: "BTC" } })) as {
+      ok: boolean;
+      rowCount: number;
+      rows: { class: string; value_eur: number }[];
+    };
+    expect(out.ok).toBe(true);
+    expect(out.rowCount).toBe(1);
+    expect(out.rows[0]!.class).toBe("BTC");
+  });
+
+  it("run_query rejects an unknown query name listing the declared ones", async () => {
+    const root = withQuery(freshProject(), {
+      alloc_by_class: { dataset: "allocation", select: ["class"], params: { class: { type: "string" } }, where: [{ field: "class", op: "eq", param: "class" }] },
+    });
+    const client = await connect(root);
+    const out = (await call(client, "run_query", { name: "ghost" })) as { ok: boolean; error: string };
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/unknown query/i);
+    expect(out.error).toMatch(/alloc_by_class/);
+  });
+
+  it("run_query rejects a missing/bad param naming it", async () => {
+    const root = withQuery(freshProject(), {
+      by_value: { dataset: "allocation", select: ["class"], params: { min: { type: "number" } }, where: [{ field: "value_eur", op: "gte", param: "min" }] },
+    });
+    const client = await connect(root);
+    const missing = (await call(client, "run_query", { name: "by_value" })) as { ok: boolean; errors: { param: string }[] };
+    expect(missing.ok).toBe(false);
+    expect(missing.errors.some((e) => e.param === "min")).toBe(true);
+
+    const wrongType = (await call(client, "run_query", { name: "by_value", params: { min: "lots" } })) as { ok: boolean; errors: { param: string }[] };
+    expect(wrongType.ok).toBe(false);
+    expect(wrongType.errors.some((e) => e.param === "min")).toBe(true);
+  });
+
+  it("an agent can author a query end-to-end via propose_edit → apply_edit", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+
+    const next = JSON.parse(validManifest(root));
+    expect(next.queries).toBeUndefined();
+    next.queries = {
+      alloc_by_class: {
+        dataset: "allocation",
+        description: "Allocation for one asset class",
+        select: ["class", "value_eur"],
+        params: { class: { type: "string" } },
+        where: [{ field: "class", op: "eq", param: "class" }],
+      },
+    };
+    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
+    expect(proposed.ok, JSON.stringify(proposed.errors)).toBe(true);
+    expect(proposed.proposal_id).toBeTruthy();
+
+    const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id! })) as { ok: boolean };
+    expect(applied.ok).toBe(true);
+
+    const listed = (await call(client, "list_queries")) as { name: string }[];
+    expect(listed.some((q) => q.name === "alloc_by_class")).toBe(true);
+
+    const ran = (await call(client, "run_query", { name: "alloc_by_class", params: { class: "ETH" } })) as { ok: boolean; rows: { class: string; value_eur: number }[] };
+    expect(ran.ok).toBe(true);
+    expect(ran.rows[0]!.class).toBe("ETH");
+  });
+
+  it("propose_edit rejects a query whose field is not a column (checkQueries runs in dryCheck)", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const next = JSON.parse(validManifest(root));
+    next.queries = { broken: { dataset: "allocation", where: [{ field: "ghost_col", op: "eq", value: 1 }] } };
+    const out = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string; errors: string[] };
+    expect(out.ok).toBe(false);
+    expect(out.proposal_id).toBeUndefined();
+    expect(out.errors.some((e) => typeof e === "string" && e.includes("ghost_col"))).toBe(true);
+  });
+});
+
 const DEMO_CONNECTOR = `
 import { defineConnector } from "@openislands/connector-kit";
 import { z } from "zod";

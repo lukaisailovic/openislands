@@ -848,6 +848,78 @@ export const ConnectorSpec = z.object({
 });
 export type ConnectorSpec = z.infer<typeof ConnectorSpec>;
 
+// --- Queries: declared, typed, read-only reads -----------------------------------
+
+/** One typed query parameter. Bound into the generated SQL as a value (never interpolated) and referenced from a `where` filter by name. */
+export const QueryParam = z.object({
+  type: z.enum(["string", "number", "boolean", "date"]).optional(),
+  required: z.boolean().optional().describe("default true; set false to make the param optional — its filter is dropped when the value is omitted"),
+  enum: z.array(z.string()).optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  description: z.string().optional(),
+});
+export type QueryParam = z.infer<typeof QueryParam>;
+
+/** Comparison operators a `where` filter supports. `sameDay` truncates a timestamp field to its date before comparing; `contains` is a case-insensitive substring match; `in` takes a literal `value` array. */
+export const QUERY_OPS = ["eq", "ne", "lt", "lte", "gt", "gte", "contains", "sameDay", "in"] as const;
+export type QueryOp = (typeof QUERY_OPS)[number];
+
+/** Aggregate functions a `select` item may apply to its field. */
+export const QUERY_AGGREGATES = ["sum", "avg", "count", "min", "max"] as const;
+export type QueryAggregate = (typeof QUERY_AGGREGATES)[number];
+
+/**
+ * One AND-ed filter. Compares `field` against exactly one of a declared `param`
+ * (by name) or a literal `value`. A filter whose `param` is omitted at call time
+ * is dropped — so an optional param naturally means "no narrowing on this field".
+ */
+export const QueryFilter = z.object({
+  field: z.string(),
+  op: z.enum(QUERY_OPS).optional().describe("comparison operator; defaults to eq"),
+  param: z.string().optional().describe("name of a declared parameter to compare against"),
+  value: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]).optional().describe("a literal to compare against (an array for op: in)"),
+});
+export type QueryFilter = z.infer<typeof QueryFilter>;
+
+/** One projected column: a bare field, optionally aggregated (`fn`) and/or renamed (`as`). `field: "*"` is only valid with `fn: "count"`. */
+export const QueryColumn = z.object({
+  field: z.string(),
+  fn: z.enum(QUERY_AGGREGATES).optional(),
+  as: z.string().optional(),
+});
+export type QueryColumn = z.infer<typeof QueryColumn>;
+
+/** One sort key. */
+export const QueryOrder = z.object({
+  field: z.string(),
+  dir: z.enum(["asc", "desc"]).optional().describe("defaults to asc"),
+});
+export type QueryOrder = z.infer<typeof QueryOrder>;
+
+/**
+ * A manifest-declared, read-only query: an opinionated, declarative SELECT over
+ * one dataset (a source or a `sql` transform), translated to parameterized DuckDB
+ * SQL by the compiler. The read mirror of an action — discovered with
+ * list_queries, run with run_query. `where` filters bind typed `params`; an
+ * omitted optional param drops its filter. There are no joins — heavy shaping
+ * belongs in a `sql` transform the query reads from. Declarative (not raw SQL) so
+ * an agent can author a query through the same manifest write path it uses for
+ * islands, and every `field` is checked against the live data like an island binding.
+ */
+export const QuerySpec = z.object({
+  dataset: z.string().describe("the dataset or sql transform to read from"),
+  description: z.string().optional(),
+  params: z.record(z.string(), QueryParam).optional(),
+  select: z.array(z.union([z.string(), QueryColumn])).optional().describe("projected columns; omit for all columns"),
+  where: z.array(QueryFilter).optional(),
+  groupBy: z.array(z.string()).optional(),
+  orderBy: z.array(QueryOrder).optional(),
+  limit: z.number().int().positive().optional(),
+});
+export type QuerySpec = z.infer<typeof QuerySpec>;
+
 export const Manifest = z.object({
   version: z.literal(1),
   title: z.string(),
@@ -856,6 +928,7 @@ export const Manifest = z.object({
   pages: z.array(Page),
   actions: z.record(z.string(), ActionSpec).optional(),
   connectors: z.record(z.string(), ConnectorSpec).optional(),
+  queries: z.record(z.string(), QuerySpec).optional(),
 });
 export type Manifest = z.infer<typeof Manifest>;
 
@@ -981,6 +1054,24 @@ export function validateManifest(input: unknown): ValidationResult {
         rootError(`connectors.${name}: output '${output}' targets source '${source}', not writable — supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
       }
     }
+  }
+
+  // queries
+  const queries = root.queries === undefined ? undefined : (root.queries as Record<string, unknown>);
+  for (const [name, spec] of Object.entries(queries ?? {})) {
+    const r = QuerySpec.safeParse(spec);
+    if (!r.success) {
+      rootError(`queries.${name}: ${r.error.issues[0]?.message ?? "invalid"}`);
+      continue;
+    }
+    const declaredParams = r.data.params ?? {};
+    r.data.where?.forEach((filter, i) => {
+      const hasParam = filter.param !== undefined;
+      const hasValue = filter.value !== undefined;
+      if (hasParam === hasValue) rootError(`queries.${name}: where[${i}] needs exactly one of 'param' or 'value'`);
+      if (filter.op === "in" && hasValue && !Array.isArray(filter.value)) rootError(`queries.${name}: where[${i}] op 'in' needs an array 'value'`);
+      if (hasParam && !(filter.param! in declaredParams)) rootError(`queries.${name}: where[${i}] references undeclared param '${filter.param}'`);
+    });
   }
 
   const pages = Array.isArray(root.pages) ? (root.pages as Record<string, unknown>[]) : [];
@@ -1195,6 +1286,7 @@ export function validateManifest(input: unknown): ValidationResult {
     pages: normalizedPages,
     actions: actions as Record<string, ActionSpec> | undefined,
     connectors: connectors as Record<string, ConnectorSpec> | undefined,
+    queries: queries as Record<string, QuerySpec> | undefined,
   };
   return { ok: true, manifest, errors, custom };
 }
