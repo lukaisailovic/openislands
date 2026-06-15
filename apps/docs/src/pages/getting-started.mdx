@@ -5,15 +5,6 @@ scaffold a project, connect your agent to it over MCP, then drive it with prompt
 agent reads your data, proposes a change as a full manifest, validates it, and applies it — and
 can undo any of it. Here's the path from nothing to an agent-maintained dashboard.
 
-```mermaid
-flowchart LR
-  U[You] --> I[init project]
-  I --> M[connect agent over MCP]
-  M --> Pr[prompt the agent]
-  Pr --> Ag[Agent: read → propose → validate → apply]
-  Ag -.rollback.-> Ag
-```
-
 ::::steps
 
 ##### Scaffold a project
