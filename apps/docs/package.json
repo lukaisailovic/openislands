@@ -1,6 +1,6 @@
 {
   "name": "@openislands/docs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenIslands documentation site — Vocs, with live islands rendered from @openislands/runtime.",
   "private": true,
   "type": "module",
