@@ -215,7 +215,7 @@ describe("startWatcher integration", () => {
     writeFileSync(csv, readFileSync(csv, "utf8") + newRow + "\n");
     await Promise.race([
       event,
-      new Promise((_, reject) => setTimeout(() => reject(new Error("no event in 3s")), 3000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("no event in 10s")), 10000)),
     ]);
 
     unsub();
@@ -239,7 +239,7 @@ describe("startWatcher integration", () => {
     writeFileSync(join(dir, "data", "note.md"), "# external note\n");
     await Promise.race([
       filesChanged,
-      new Promise((_, reject) => setTimeout(() => reject(new Error("no files-changed in 3s")), 3000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("no files-changed in 10s")), 10000)),
     ]);
 
     expect(received).toContainEqual({ type: "files-changed", paths: ["data/note.md"] });

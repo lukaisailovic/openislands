@@ -28,7 +28,6 @@
     "examples": "tsx packages/cli/src/index.ts serve apps/examples"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.10",
     "oxfmt": "^0.54.0",
     "oxlint": "^1.69.0",
     "tsdown": "^0.22.2",

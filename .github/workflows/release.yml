@@ -1,44 +1,124 @@
 name: Release
 
+# Manual, maintainer-gated release. Bumps every published package to one shared
+# version, tags vX.Y.Z, publishes to npm via OIDC trusted publishing (no tokens),
+# and cuts a GitHub release. Dispatch-only, so forks and pull requests never run it.
+#
+# npm trusted publishing is configured against THIS filename (release.yml). Renaming
+# it breaks publishing until the trusted publisher on npmjs.com is updated.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: Semver bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      dry_run:
+        description: Build and validate without publishing or pushing anything
+        type: boolean
+        default: false
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   release:
+    name: Bump, publish & tag
     runs-on: ubuntu-latest
+    if: github.repository == 'lukaisailovic/openislands'
     permissions:
-      contents: write
-      id-token: write
+      contents: write # bump commit, tag, push, GitHub release
+      id-token: write # npm OIDC trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
-      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 bundles npm 10.
-      # pnpm publish shells out to this npm for the actual upload.
-      - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
-      - name: Version and publish
+
+      # Build before typecheck: vite build generates the runtime's routeTree.gen.ts.
+      - name: Lint, build, typecheck & test
         run: |
-          if [ -z "$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit)" ]; then
-            echo "No changesets present — nothing to release."
-            exit 0
-          fi
+          pnpm lint
           pnpm build
-          pnpm changeset version
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "chore: release packages [skip ci]"
-          pnpm changeset publish
-          git push origin HEAD:main
-          git push origin --tags
+          pnpm typecheck
+          pnpm test
+
+      - name: Resolve and apply next version
+        id: version
         env:
-          NPM_CONFIG_PROVENANCE: "true"
+          RELEASE_TYPE: ${{ inputs.release_type }}
+        run: |
+          version="$(cd packages/cli && npm version "$RELEASE_TYPE" --no-git-tag-version --no-commit-hooks)"
+          version="${version#v}"
+          for d in compiler connector-kit mcp-server runtime schema storage; do
+            (cd "packages/$d" && npm version "$version" --no-git-tag-version --no-commit-hooks --allow-same-version >/dev/null)
+          done
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Preflight — refuse to clobber an existing release
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::git tag ${TAG} already exists"; exit 1
+          fi
+          if npm view "openislands@${VERSION}" version >/dev/null 2>&1; then
+            echo "::error::openislands@${VERSION} is already published to npm"; exit 1
+          fi
+
+      - name: Commit and tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "chore(release): v${VERSION}"
+          git tag -a "${TAG}" -m "openislands ${VERSION}"
+
+      # Push commit + tag together BEFORE publishing, so a blocked push fails the
+      # run before anything reaches npm.
+      - name: Push commit and tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: git push --atomic origin "HEAD:${{ github.ref_name }}" "refs/tags/${TAG}"
+
+      # OIDC trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10, and
+      # pnpm delegates the actual upload to it.
+      - name: Upgrade npm for OIDC trusted publishing
+        if: ${{ !inputs.dry_run }}
+        run: npm install -g npm@latest
+
+      # No NPM_TOKEN: npm mints a short-lived token from id-token:write. pnpm
+      # resolves workspace:* and hands each tarball to npm.
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
+        run: pnpm -r publish --no-git-checks --provenance --access public
+
+      - name: Validate publish (dry run)
+        if: ${{ inputs.dry_run }}
+        run: pnpm -r publish --no-git-checks --access public --dry-run
+
+      - name: Create GitHub release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release create "${TAG}" --generate-notes --verify-tag --title "${TAG}" --latest
