@@ -2,7 +2,7 @@
   "name": "finance-example",
   "private": true,
   "type": "module",
-  "description": "Editor types only \u2014 OpenIslands runs this project without node_modules.",
+  "description": "Editor types only — OpenIslands runs this project without node_modules.",
   "devDependencies": {
     "@openislands/connector-kit": "workspace:*",
     "@types/react": "^19.2.0",

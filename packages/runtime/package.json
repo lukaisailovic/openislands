@@ -1,7 +1,7 @@
 {
   "name": "@openislands/runtime",
-  "version": "0.1.0",
-  "description": "OpenIslands runtime \u2014 the TanStack Start SSR app and island registry.",
+  "version": "0.2.0",
+  "description": "OpenIslands runtime — the TanStack Start SSR app and island registry.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",
