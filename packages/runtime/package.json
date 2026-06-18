@@ -33,11 +33,15 @@
       "./islands": {
         "types": "./dist/islands/index.d.mts",
         "default": "./dist/islands/index.mjs"
+      },
+      "./server": {
+        "default": "./dist/server/server.js"
       }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map"
   ],
   "scripts": {
     "build": "vite build && tsdown",

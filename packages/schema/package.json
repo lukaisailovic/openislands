@@ -24,7 +24,7 @@
       }
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "!dist/**/*.map"],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
     "typecheck": "tsc --noEmit",

@@ -16,7 +16,7 @@
   "publishConfig": {
     "bin": { "openislands": "./dist/index.mjs" }
   },
-  "files": ["dist", "templates"],
+  "files": ["dist", "templates", "!dist/**/*.map"],
   "scripts": {
     "build": "tsdown src/index.ts --format esm && node scripts/copy-templates.mjs",
     "typecheck": "tsc --noEmit",
