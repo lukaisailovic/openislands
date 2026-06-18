@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import {
+  actionFields,
   actionRowSchema,
   insertRows,
   ActionValidationError,
@@ -93,6 +94,64 @@ describe("actionRowSchema", () => {
       { "data/meals.csv": MEALS_CSV },
     );
     await expect(actionRowSchema(dir, "log_meal")).rejects.toThrow(/protein/);
+  });
+});
+
+describe("actionFields", () => {
+  it("derives render descriptors from the CSV column types", async () => {
+    const dir = project(manifestWith({ log_meal: { dataset: "meals", mode: "insert" } }), {
+      "data/meals.csv": MEALS_CSV,
+    });
+    const fields = await actionFields(dir, "log_meal");
+    expect(fields.map((f) => [f.name, f.type])).toEqual([
+      ["name", "string"],
+      ["kcal", "number"],
+      ["logged", "date"],
+    ]);
+    expect(fields.every((f) => f.required)).toBe(true);
+  });
+
+  it("applies enum and min/max overrides onto the descriptors", async () => {
+    const dir = project(
+      manifestWith({
+        log_meal: {
+          dataset: "meals",
+          mode: "insert",
+          fields: {
+            name: { enum: ["Eggs", "Oatmeal"], description: "the dish" },
+            kcal: { type: "number", min: 0, max: 1000 },
+          },
+        },
+      }),
+      { "data/meals.csv": MEALS_CSV },
+    );
+    const fields = await actionFields(dir, "log_meal");
+    const name = fields.find((f) => f.name === "name")!;
+    const kcal = fields.find((f) => f.name === "kcal")!;
+    expect(name.enum).toEqual(["Eggs", "Oatmeal"]);
+    expect(name.description).toBe("the dish");
+    expect(kcal).toMatchObject({ type: "number", min: 0, max: 1000 });
+  });
+
+  it("marks a field with a default as optional and one without as required", async () => {
+    const dir = project(
+      manifestWith({ log_meal: { dataset: "meals", mode: "insert", fields: { logged: { default: "2026-01-01" } } } }),
+      { "data/meals.csv": MEALS_CSV },
+    );
+    const fields = await actionFields(dir, "log_meal");
+    const logged = fields.find((f) => f.name === "logged")!;
+    const kcal = fields.find((f) => f.name === "kcal")!;
+    expect(logged.required).toBe(false);
+    expect(logged.default).toBe("2026-01-01");
+    expect(kcal.required).toBe(true);
+  });
+
+  it("throws when a fields override names a column not in the dataset", async () => {
+    const dir = project(
+      manifestWith({ log_meal: { dataset: "meals", mode: "insert", fields: { protein: { type: "number" } } } }),
+      { "data/meals.csv": MEALS_CSV },
+    );
+    await expect(actionFields(dir, "log_meal")).rejects.toThrow(/protein/);
   });
 });
 

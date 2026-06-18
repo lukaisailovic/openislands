@@ -50,6 +50,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
     "note.card": { type, title: "Note", markdown: "## Note\n\nWrite something." },
     "source.doc": { type, title: "Source", kind: "link", href: "https://" },
     "content.editor": { type, title: "Content", dir: "data/docs" },
+    "form.entry": { type, title: "New form", action: "TODO" },
   };
   return base[type] ?? { type, title: "New island" };
 }

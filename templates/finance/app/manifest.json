@@ -82,7 +82,8 @@
           "id": "activity",
           "title": "Activity",
           "islands": [
-            { "type": "timeline.feed", "title": "Recent transactions", "dataset": "transactions", "ts": "ts", "titleField": "description", "detail": "category", "span": 12 }
+            { "type": "form.entry", "title": "Log a transaction", "action": "log_transaction", "submitLabel": "Add", "span": 5 },
+            { "type": "timeline.feed", "title": "Recent transactions", "dataset": "transactions", "ts": "ts", "titleField": "description", "detail": "category", "span": 7 }
           ]
         }
       ]

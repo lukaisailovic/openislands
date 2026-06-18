@@ -229,6 +229,51 @@ describe("compile (contract mismatch)", () => {
   });
 });
 
+const formManifest = (island: Record<string, unknown>, actions: Record<string, unknown>) => ({
+  version: 1,
+  title: "T",
+  datasets: { meals: { source: "data/meals.csv" } },
+  pages: [{ id: "p", islands: [{ type: "form.entry", ...island }] }],
+  actions,
+});
+const MEALS = "name,kcal,logged\nOatmeal,300,2026-01-01\n";
+
+describe("compile (form.entry contract check)", () => {
+  it("passes when the action is declared and every listed field is a real column", async () => {
+    const dir = project(
+      formManifest({ action: "log_meal", fields: ["name", "kcal"] }, { log_meal: { dataset: "meals", mode: "insert" } }),
+      { "data/meals.csv": MEALS },
+    );
+    const report = await compile(dir);
+    expect(report.ok, report.errors.join(" ")).toBe(true);
+  });
+
+  it("fails naming an unknown action", async () => {
+    const dir = project(formManifest({ action: "ghost" }, { log_meal: { dataset: "meals", mode: "insert" } }), {
+      "data/meals.csv": MEALS,
+    });
+    const report = await compile(dir);
+    expect(report.ok).toBe(false);
+    const joined = report.errors.join(" ");
+    expect(joined).toContain("unknown action");
+    expect(joined).toContain("[p#0 form.entry]");
+  });
+
+  it("fails naming a form field that is not a column of the action's dataset", async () => {
+    const dir = project(
+      formManifest({ action: "log_meal", fields: ["name", "protein"] }, { log_meal: { dataset: "meals", mode: "insert" } }),
+      { "data/meals.csv": MEALS },
+    );
+    const report = await compile(dir);
+    expect(report.ok).toBe(false);
+    const joined = report.errors.join(" ");
+    expect(joined).toContain("is not a column");
+    expect(joined).toContain("protein");
+    const failed = report.islandChecks.find((c) => c.type === "form.entry");
+    expect(failed!.missingFields).toContain("protein");
+  });
+});
+
 describe("compile (grouped page)", () => {
   const groupedManifest = {
     version: 1,

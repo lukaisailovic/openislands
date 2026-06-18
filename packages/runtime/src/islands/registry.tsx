@@ -12,6 +12,7 @@ import { ContentEditor } from "./ContentEditor.js";
 import { CorrelationScatter } from "./CorrelationScatter.js";
 import { CustomPlaceholder } from "./CustomPlaceholder.js";
 import { DistributionHeatmap } from "./DistributionHeatmap.js";
+import { FormEntry } from "./FormEntry.js";
 import { FunnelSteps } from "./FunnelSteps.js";
 import { GaugeGoal } from "./GaugeGoal.js";
 import { GaugeMeter } from "./GaugeMeter.js";
@@ -58,6 +59,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "status.grid": StatusGrid,
   "search.box": SearchBox,
   "content.editor": ContentEditor,
+  "form.entry": FormEntry,
 };
 
 export function registerIsland(type: IslandType, renderer: IslandRenderer): void {
@@ -74,8 +76,11 @@ setDrilldownResolver(resolveRenderer);
 
 /**
  * Islands that bind to a dataset need a client query. Data-free ones (note/source)
- * don't, and `content.editor` manages its own file fetching.
+ * don't, `content.editor` manages its own file fetching, and `form.entry` fetches
+ * its action's schema instead of a dataset.
  */
 export function islandNeedsData(type: string): boolean {
-  return type !== "note.card" && type !== "source.doc" && type !== "content.editor";
+  return (
+    type !== "note.card" && type !== "source.doc" && type !== "content.editor" && type !== "form.entry"
+  );
 }

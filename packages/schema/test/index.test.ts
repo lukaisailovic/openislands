@@ -769,6 +769,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
   "note.card": { type: "note.card", markdown: "# hello" },
   "source.doc": { type: "source.doc", file: "doc.pdf", kind: "pdf" },
   "content.editor": { type: "content.editor", dir: "data/docs" },
+  "form.entry": { type: "form.entry", action: "log_meal", fields: ["name", "kcal"], submitLabel: "Log" },
 };
 
 const invalidIslands: Record<IslandType, Record<string, unknown>> = {
@@ -797,6 +798,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "note.card": { type: "note.card" },
   "source.doc": { type: "source.doc", kind: "spreadsheet" },
   "content.editor": { type: "content.editor", dir: 5 },
+  "form.entry": { type: "form.entry" },
 };
 
 describe("per-island schemas", () => {
@@ -971,6 +973,39 @@ describe("content.editor", () => {
 
   it("accepts a span at the minimum 6", () => {
     expect(validateManifest(editorManifest({ dir: "data/docs", span: 6 })).ok).toBe(true);
+  });
+});
+
+const formManifest = (island: Record<string, unknown>, actions?: Record<string, unknown>) => ({
+  version: 1,
+  title: "T",
+  datasets: { meals: { source: "data/meals.csv" } },
+  pages: [{ id: "p", islands: [{ type: "form.entry", ...island }] }],
+  ...(actions ? { actions } : {}),
+});
+
+describe("form.entry", () => {
+  it("accepts a form bound to an action and is in the builtin registry", () => {
+    expect(BUILTIN_ISLAND_TYPES).toContain("form.entry");
+    const r = validateManifest(formManifest({ action: "log_meal" }, { log_meal: { dataset: "meals", mode: "insert" } }));
+    expect(r.ok, r.errors.map((e) => e.message).join("; ")).toBe(true);
+  });
+
+  it("validates at the schema layer even with no declared actions — existence is a compiler concern", () => {
+    const r = validateManifest(formManifest({ action: "log_meal" }));
+    expect(r.ok, r.errors.map((e) => e.message).join("; ")).toBe(true);
+  });
+
+  it("rejects an explicit span below the minimum 3", () => {
+    const r = validateManifest(formManifest({ action: "log_meal", span: 2 }, { log_meal: { dataset: "meals", mode: "insert" } }));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.field === "span" && e.type === "form.entry");
+    expect(err).toBeDefined();
+    expect(err!.message).toBe("span 2 is below the minimum 3 for form.entry");
+  });
+
+  it("accepts a span at the minimum 3", () => {
+    expect(validateManifest(formManifest({ action: "log_meal", span: 3 })).ok).toBe(true);
   });
 });
 

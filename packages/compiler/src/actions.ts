@@ -13,7 +13,7 @@
 import { z } from "zod";
 import type { ActionSpec, FieldSpec, Manifest } from "@openislands/schema";
 import { getAppStateStore, getContentStore } from "@openislands/storage";
-import { inferSchema, readManifest, resetEngine, type ColumnType } from "./index.js";
+import { inferSchema, readManifest, resetEngine, type Column, type ColumnType } from "./index.js";
 import { resolveWriter, type WriteTarget } from "./writers.js";
 
 export const MAX_SNAPSHOTS_PER_FILE = 20;
@@ -92,28 +92,71 @@ function withBounds(schema: z.ZodType, spec: FieldSpec): z.ZodType {
 }
 
 /**
- * Derives the strict Zod row schema for an action: dataset column types merged
- * with the action's `fields` overrides. A `fields` key naming a column that
- * isn't in the dataset throws — the same compatible-refinement discipline as
- * island binding checks.
+ * Resolves an action's target columns from the live dataset and validates that
+ * every `fields` override names a real column — the same compatible-refinement
+ * discipline as island binding checks. The shared prelude for both the row
+ * schema (validation) and the form descriptors (rendering), so they can't drift.
  */
-export async function actionRowSchema(projectDir: string, actionName: string): Promise<z.ZodObject> {
+async function resolveActionColumns(projectDir: string, actionName: string): Promise<{ action: ActionSpec; columns: Column[] }> {
   const manifest = await readManifest(projectDir);
   const action = lookupAction(manifest, actionName);
   const schema = await inferSchema(projectDir, action.dataset);
   const columnNames = new Set(schema.columns.map((c) => c.name));
-
   for (const fieldName of Object.keys(action.fields ?? {})) {
     if (!columnNames.has(fieldName)) {
       throw new Error(`action '${actionName}': field '${fieldName}' is not a column of dataset '${action.dataset}'`);
     }
   }
+  return { action, columns: schema.columns };
+}
 
+/**
+ * Derives the strict Zod row schema for an action: dataset column types merged
+ * with the action's `fields` overrides — the single source of truth for row
+ * validation here and the JSON Schema the MCP server hands an agent.
+ */
+export async function actionRowSchema(projectDir: string, actionName: string): Promise<z.ZodObject> {
+  const { action, columns } = await resolveActionColumns(projectDir, actionName);
   const shape: Record<string, z.ZodType> = {};
-  for (const column of schema.columns) {
+  for (const column of columns) {
     shape[column.name] = columnSchema(column.type, action.fields?.[column.name]);
   }
   return z.object(shape).strict();
+}
+
+/**
+ * One field of an action, shaped for a form UI: a dataset column's inferred type
+ * merged with its `fields` override. The render-side mirror of the row schema
+ * `actionRowSchema` validates against — a column is `required` unless its
+ * override supplies a `default`.
+ */
+export interface ActionField {
+  name: string;
+  type: "string" | "number" | "boolean" | "date";
+  required: boolean;
+  enum?: string[];
+  min?: number;
+  max?: number;
+  default?: string | number | boolean;
+  description?: string;
+}
+
+/** An action's fields as render-ready descriptors — the same column+override merge as `actionRowSchema`, projected for building a form rather than validating a row. */
+export async function actionFields(projectDir: string, actionName: string): Promise<ActionField[]> {
+  const { action, columns } = await resolveActionColumns(projectDir, actionName);
+  return columns.map((column) => {
+    const spec = action.fields?.[column.name];
+    return {
+      name: column.name,
+      type: spec?.type ?? column.type,
+      required: spec?.default === undefined,
+      enum: spec?.enum,
+      min: spec?.min,
+      max: spec?.max,
+      default: spec?.default,
+      description: spec?.description,
+    };
+  });
 }
 
 /**

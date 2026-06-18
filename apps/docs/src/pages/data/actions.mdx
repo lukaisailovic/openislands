@@ -104,5 +104,14 @@ snapshotted before it runs, data that tries to talk an agent into a bad write st
 past validation or escape `rollback`.
 :::
 
+## Surfacing an action to humans
+
+An action isn't agent-only. Drop a [`form.entry`](/islands/content-and-layout#formentry) island on a
+page and point it at an action, and the runtime renders a form — one typed input per field, the
+action's types, enums, ranges, and defaults carried straight through — with a submit button that
+inserts a row. It runs the very same write path `run_action` does: validate, snapshot, insert, then
+the bound dataset's islands refresh live. The form is the human-facing mirror of the agent call,
+authored by reusing the action rather than re-declaring its fields.
+
 See [MCP Server](/mcp) for the full tool surface, and [Connectors](/data/connectors) for syncing
 a provider's data into `source` datasets on a schedule, through this same write path.

@@ -247,7 +247,7 @@ A `layout.row` is a structural wrapper: it holds other islands and forces them o
 their own full-width grid row. It carries no `span`, `title`, or data binding, and it
 cannot nest another `layout.row`.
 
-**Built-in islands:** [`metric.kpi`](#metrickpi) · [`metric.scorecard`](#metricscorecard) · [`timeseries.line`](#timeseriesline) · [`category.bar`](#categorybar) · [`category.combo`](#categorycombo) · [`waterfall.bars`](#waterfallbars) · [`breakdown.treemap`](#breakdowntreemap) · [`distribution.heatmap`](#distributionheatmap) · [`activity.calendar`](#activitycalendar) · [`funnel.steps`](#funnelsteps) · [`rank.list`](#ranklist) · [`compare.radar`](#compareradar) · [`map.choropleth`](#mapchoropleth) · [`correlation.scatter`](#correlationscatter) · [`category.pie`](#categorypie) · [`table.grid`](#tablegrid) · [`timeline.feed`](#timelinefeed) · [`gauge.rings`](#gaugerings) · [`gauge.goal`](#gaugegoal) · [`gauge.meter`](#gaugemeter) · [`status.grid`](#statusgrid) · [`search.box`](#searchbox) · [`note.card`](#notecard) · [`source.doc`](#sourcedoc) · [`content.editor`](#contenteditor)
+**Built-in islands:** [`metric.kpi`](#metrickpi) · [`metric.scorecard`](#metricscorecard) · [`timeseries.line`](#timeseriesline) · [`category.bar`](#categorybar) · [`category.combo`](#categorycombo) · [`waterfall.bars`](#waterfallbars) · [`breakdown.treemap`](#breakdowntreemap) · [`distribution.heatmap`](#distributionheatmap) · [`activity.calendar`](#activitycalendar) · [`funnel.steps`](#funnelsteps) · [`rank.list`](#ranklist) · [`compare.radar`](#compareradar) · [`map.choropleth`](#mapchoropleth) · [`correlation.scatter`](#correlationscatter) · [`category.pie`](#categorypie) · [`table.grid`](#tablegrid) · [`timeline.feed`](#timelinefeed) · [`gauge.rings`](#gaugerings) · [`gauge.goal`](#gaugegoal) · [`gauge.meter`](#gaugemeter) · [`status.grid`](#statusgrid) · [`search.box`](#searchbox) · [`note.card`](#notecard) · [`source.doc`](#sourcedoc) · [`content.editor`](#contenteditor) · [`form.entry`](#formentry)
 
 ### `metric.kpi`
 
@@ -692,6 +692,21 @@ A full-page content workspace — browse and edit a directory of markdown files 
 | `csv` | `boolean` | no | also surface .csv files (an editable table — cells and row add/delete; read-only when `readOnly`) when `dir` is set |
 | `readOnly` | `boolean` | no | disable editing/saving — a viewer only |
 | `groups` | `array of object` | no | virtual folders grouping scattered files; only meaningful with `dir` |
+
+### `form.entry`
+
+A data-entry form card bound to a manifest `action` — renders one typed input per action field, with a submit button in the bottom-right that inserts a row; the bound dataset's islands then refresh live. The human-facing mirror of the agent's run_action: it reuses the action's typing and so binds no dataset of its own.
+
+**Minimum span:** 3
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `action` | `string` | yes | name of a manifest `actions` entry this form writes to; the form's inputs are derived from that action's resolved row schema — types, enums, ranges, and defaults all come from the action |
+| `fields` | `array of string` | no | the action's columns to render as inputs, in this order; omit to show every insertable column. Each must be a column of the action's dataset |
+| `submitLabel` | `string` | no | text on the submit button; defaults to "Add" |
 
 ## Custom islands
 

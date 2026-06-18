@@ -42,7 +42,7 @@ this lives in the docs site under `apps/docs/src/pages/`.
 `span` is a 1–12 grid column count; each group gets its own 12-column grid. Every island type
 has a minimum span below which it stops being legible (`ISLAND_MIN_SPAN` in
 `packages/schema/src/index.ts`): `metric.kpi`/`source.doc`/`gauge.goal` 2,
-`note.card`/`gauge.meter`/`search.box`/`category.pie`/`funnel.steps`/`metric.scorecard` 3,
+`note.card`/`gauge.meter`/`search.box`/`category.pie`/`funnel.steps`/`metric.scorecard`/`form.entry` 3,
 `table.grid`/`map.choropleth` 5, `activity.calendar`/`content.editor` 6, everything else 4. An explicit `span` below its type's minimum is a named validation error
 (e.g. "span 1 is below the minimum 4 for timeseries.line"). The runtime additionally floors
 spans responsively — below ~640px every tile goes full-width, and in a middle band spans render
@@ -109,6 +109,7 @@ Get any island's exact config schema with `get_island_schema(type)` (MCP) or rea
 | `source.doc` | — | `file` or `href`; `kind: pdf\|markdown\|image\|link`; renders as a document card (type icon, name, open action); `label?` overrides the displayed name (defaults to the file basename or link host), `description?` adds a caption |
 | `content.editor` | — | a full-page, data-free content workspace — browse and edit a tree of markdown files (and view CSVs) Obsidian-style; exactly one of `file` (one doc under `data/` or `docs/`) or `dir` (a directory, recursed) — both or neither is a named error; with `dir`: `include?` globs (default markdown), `csv: true` also surfaces `.csv` files as an editable table (cells + row add/delete; read-only under `readOnly`), `groups: [{id, label?, icon?, match}]` are virtual folders (globs relative to `dir`; unmatched files fall into Ungrouped); `readOnly?` makes it a viewer; edits save to the file, each save records a restorable version under `.openislands/editor.sqlite`; renders full-bleed and binds no dataset |
 | `layout.row` | `islands` | a full-width structural row holding other islands — children render on their own 12-column grid row; no `span`/`title`, no nesting, no data binding |
+| `form.entry` | `action` | a data-entry form bound to a manifest action; one typed input per field + a submit button that inserts a row (types/enums/defaults come from the action); optional `fields` subset/order and `submitLabel`; binds no dataset |
 
 ### `content.editor` (the content workspace)
 

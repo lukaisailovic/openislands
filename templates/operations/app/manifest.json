@@ -73,7 +73,8 @@
           "id": "incidents",
           "title": "Incidents",
           "islands": [
-            { "type": "timeline.feed", "title": "Recent incidents", "dataset": "incidents", "ts": "ts", "titleField": "title", "span": 12,
+            { "type": "form.entry", "title": "Report an incident", "action": "log_incident", "submitLabel": "Report", "span": 5 },
+            { "type": "timeline.feed", "title": "Recent incidents", "dataset": "incidents", "ts": "ts", "titleField": "title", "span": 7,
               "footer": [ { "field": "severity", "pill": true }, { "field": "status" } ],
               "details": [ { "field": "service", "label": "Service" }, { "field": "summary", "label": "Summary" } ] }
           ]

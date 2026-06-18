@@ -504,6 +504,15 @@ export const ContentEditor = z.object({
 }).describe("A full-page content workspace — browse and edit a directory of markdown files (and CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.");
 export type ContentEditor = z.infer<typeof ContentEditor>;
 
+export const FormEntry = z.object({
+  type: z.literal("form.entry"),
+  ...baseFields,
+  action: z.string().describe("name of a manifest `actions` entry this form writes to; the form's inputs are derived from that action's resolved row schema — types, enums, ranges, and defaults all come from the action"),
+  fields: z.array(z.string()).optional().describe("the action's columns to render as inputs, in this order; omit to show every insertable column. Each must be a column of the action's dataset"),
+  submitLabel: z.string().optional().describe("text on the submit button; defaults to \"Add\""),
+}).describe("A data-entry form card bound to a manifest `action` — renders one typed input per action field, with a submit button in the bottom-right that inserts a row; the bound dataset's islands then refresh live. The human-facing mirror of the agent's run_action: it reuses the action's typing and so binds no dataset of its own.");
+export type FormEntry = z.infer<typeof FormEntry>;
+
 /**
  * The set of islands a drilldown may embed: every built-in except the two that
  * carry drilldowns themselves (those use their *base* shape here so a drilldown
@@ -578,6 +587,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "note.card": NoteCard,
   "source.doc": SourceDoc,
   "content.editor": ContentEditor,
+  "form.entry": FormEntry,
 } as const;
 
 export type IslandType = keyof typeof BUILTIN_ISLAND_SCHEMAS;
@@ -594,6 +604,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "source.doc": 2,
   "note.card": 3,
   "content.editor": 6,
+  "form.entry": 3,
   "gauge.rings": 4,
   "gauge.goal": 2,
   "gauge.meter": 3,
@@ -642,6 +653,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   NoteCard,
   SourceDoc,
   ContentEditor,
+  FormEntry,
 ]);
 export type BuiltinIsland = z.infer<typeof BuiltinIsland>;
 

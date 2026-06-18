@@ -30,6 +30,7 @@ export {
 } from "./customSchema.js";
 export {
   actionRowSchema,
+  actionFields,
   insertRows,
   insertValidatedRows,
   replaceValidatedRows,
@@ -38,6 +39,7 @@ export {
   ActionValidationError,
   MAX_SNAPSHOTS_PER_FILE,
   MAX_SNAPSHOT_BYTES_PER_FILE,
+  type ActionField,
   type RetentionOpts,
   type RowError,
   type InsertResult,
@@ -825,6 +827,29 @@ export async function checkManifestContracts(
         } catch (e) {
           errors.push({ kind: "custom", page: page.id, index, type, message: `custom schema is broken: ${(e as Error).message}` });
         }
+      }
+
+      if (type === "form.entry") {
+        const actionName = config.action as string;
+        const action = manifest.actions?.[actionName];
+        if (!action) {
+          checks.push({ page: page.id, index, type, ok: false, missingFields: [] });
+          errors.push({ kind: "island", page: page.id, index, type, field: "action", message: `unknown action '${actionName}' — declare it in manifest.actions` });
+          continue;
+        }
+        const cols = await columnsFor(action.dataset);
+        if (!cols) {
+          checks.push({ page: page.id, index, type, dataset: action.dataset, ok: false, missingFields: [] });
+          errors.push({ kind: "island", page: page.id, index, type, field: "action", message: `action '${actionName}' targets unknown or unreadable dataset '${action.dataset}'` });
+          continue;
+        }
+        const listed = Array.isArray(config.fields) ? (config.fields as string[]) : [];
+        const missing = listed.filter((f) => !cols.has(f));
+        checks.push({ page: page.id, index, type, dataset: action.dataset, ok: missing.length === 0, missingFields: missing });
+        for (const field of missing) {
+          errors.push({ kind: "island", page: page.id, index, type, field, message: `form field '${field}' is not a column of action '${actionName}' dataset '${action.dataset}'. Available: ${[...cols].join(", ")}` });
+        }
+        continue;
       }
 
       const req = islandRequirements(config);
