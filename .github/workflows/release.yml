@@ -21,6 +21,9 @@ jobs:
           node-version: 22
           cache: pnpm
           registry-url: https://registry.npmjs.org
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 bundles npm 10.
+      # pnpm publish shells out to this npm for the actual upload.
+      - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
       - name: Version and publish
         run: |
@@ -38,5 +41,4 @@ jobs:
           git push origin HEAD:main
           git push origin --tags
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"

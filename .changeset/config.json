@@ -2,7 +2,17 @@
   "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
+  "fixed": [
+    [
+      "openislands",
+      "@openislands/compiler",
+      "@openislands/connector-kit",
+      "@openislands/mcp",
+      "@openislands/runtime",
+      "@openislands/schema",
+      "@openislands/storage"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
