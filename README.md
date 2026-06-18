@@ -1,95 +1,181 @@
-<h1 align="center">OpenIslands</h1>
+<div align="center">
 
-<p align="center"><strong>Agent-built dashboards over data you own — that don't rot.</strong></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/lukaisailovic/openislands/main/apps/docs/public/logo-light.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/lukaisailovic/openislands/main/apps/docs/public/logo-dark.svg">
+  <img alt="OpenIslands" src="https://raw.githubusercontent.com/lukaisailovic/openislands/main/apps/docs/public/logo-light.svg" width="84" height="84">
+</picture>
 
-<p align="center">
-  Point your AI coding agent at a folder of files. Get a typed, durable dashboard
-  it can keep maintaining. Everything stays on your machine.
+# OpenIslands
+
+**Dashboards your AI agent builds and keeps maintaining, over data that never leaves your machine.**
+
+Point a coding agent at a folder of files. It builds a typed, durable dashboard
+and keeps it healthy for months as the data changes. No cloud, no account,
+no rendering code to rot.
+
+<p>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-2dd4bf.svg"></a>
+  <img alt="Node >= 20" src="https://img.shields.io/badge/Node-%E2%89%A5%2020-2dd4bf.svg">
+  <img alt="ESM only" src="https://img.shields.io/badge/Module-ESM-2dd4bf.svg">
+  <img alt="Status: alpha" src="https://img.shields.io/badge/Status-alpha-f59e0b.svg">
+  <a href="./CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-2dd4bf.svg"></a>
 </p>
 
-<p align="center">
-  <code>MIT</code> · <code>local-first</code> · <code>npx openislands</code> · <code>MCP</code>
+<p>
+  <a href="#quickstart">Quickstart</a> &nbsp;·&nbsp;
+  <a href="#why-openislands">Why</a> &nbsp;·&nbsp;
+  <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
+  <a href="#islands">Islands</a> &nbsp;·&nbsp;
+  <a href="#documentation">Docs</a> &nbsp;·&nbsp;
+  <a href="./CONTRIBUTING.md">Contributing</a>
 </p>
+
+</div>
 
 ---
 
-AI agents are great at building a dashboard once. Then your data changes a column,
-a new export lands, you ask a new question — and the hand-generated app silently
-breaks or quietly lies. OpenIslands fixes the *maintenance* problem.
+AI agents are great at building a dashboard once. Then a column gets renamed, a new
+export lands, you ask a different question, and the generated app quietly breaks or,
+worse, keeps rendering the wrong number. OpenIslands fixes the part agents are bad at:
+keeping it alive.
 
-It is a **local-first compiler and runtime** where an app is a typed **manifest** of
-reusable visual **islands** (KPI cards, charts, tables, timelines, treemaps…) bound
-to **typed data contracts** built from your files. An agent edits the manifest — not
-fragile rendering code — through a validated, diffed, reversible pipeline. When the
-data and an island disagree, the build **fails loudly and names the island** instead
-of rendering something wrong.
+It's a local-first compiler and runtime. An app is a typed **manifest** of reusable
+visual **islands** (KPI cards, charts, tables, gauges, timelines) bound to **typed data
+contracts** built from your files. Your agent edits the manifest, never the rendering
+code, through a pipeline that validates, diffs, and can roll back every change. When the
+data and an island disagree, the build fails loudly and names the island instead of
+drawing something wrong.
+
+## Quickstart
+
+Scaffold a project from a template, then serve it over your files:
 
 ```bash
-npx openislands init --template finance   # scaffold a dashboard
-openislands validate                      # check the manifest + every data binding
-openislands serve                         # run it as a live local app over your files
+npx openislands init my-dashboard --template finance
+cd my-dashboard
+npx openislands serve            # http://127.0.0.1:4321
 ```
 
-## Why it's different
+`finance` is the flagship: net worth, allocation, holdings, and transactions as typed
+islands over CSVs you own. `health` and `operations` are there too.
 
-|  | OpenIslands |
+Now hand it to an agent. Add the MCP server to your tool of choice (Claude Code, Cursor,
+and friends), pointed at the project directory:
+
+```jsonc
+// .mcp.json
+{
+  "mcpServers": {
+    "openislands": {
+      "command": "npx",
+      "args": ["-y", "@openislands/mcp", "."]
+    }
+  }
+}
+```
+
+Then just ask:
+
+> Drop `data/spending.csv` into the project and add a page charting monthly spend by category.
+
+The agent reads your data, proposes the **full** manifest so you see a diff before
+anything is written, applies it with a snapshot of the prior version, and rolls back if
+the result is wrong. Leave `serve` running and the page live-updates over SSE as each
+edit lands.
+
+## Why OpenIslands
+
+|  |  |
 |---|---|
-| **Your data** | Plain files you own — git it, zip it, runs locally. No account, no cloud. |
-| **Durable** | Typed islands + a closed registry. No 300-line React component to rot. |
-| **Agent-maintained** | A CLI + an MCP server, so Claude Code / Cursor build *and keep maintaining* it. |
-| **Fails loudly** | Incompatible data fails validation with a named error — never a silent wrong chart. |
-| **Live** | Edit the manifest or drop a new export — the dashboard updates over your live files, no rebuild. |
+| **Your data, your disk** | Plain files you own. No account, no cloud, nothing to sign into. |
+| **Built to last** | Typed islands from a closed registry. There's no 300-line React component to rot. |
+| **Agent-maintained** | A CLI and an MCP server, so Claude Code or Cursor build the dashboard and keep it healthy. |
+| **Fails loudly** | Bind an island to a field that doesn't exist and validation stops with a named error. You never get a silently wrong chart. |
+| **Always live** | Edit the manifest or drop a new export and the dashboard updates over your live files. No rebuild, no snapshot to drift. |
 
-This is not a hosted app builder, not a WYSIWYG dashboard tool, and not a BI platform.
-It is the typed, file-based layer an agent edits safely.
+It isn't a hosted app builder or a BI platform. It's the typed, file-based layer your
+agent edits safely.
 
 ## How it works
 
-```
-files (CSV/JSON/Parquet/md)  →  native DuckDB query core (runs transforms/queries LIVE)
-                                       │
-        manifest (typed islands)  →  serve runtime (TanStack Start SSR)  →  your dashboard
-                                       ↑              │ SSE on file change → islands refetch
+```text
+ files (CSV / JSON / Parquet / md)
+        │
+        ▼
+ DuckDB query core  ──  runs transforms + queries live  ──┐
+        │                                                 │
+ manifest (typed islands)  ──►  serve runtime  ──►  your dashboard
+                                (TanStack Start SSR)      ▲
+                                       │ SSE on file change → islands refetch
         AI agent  ──(MCP: propose → validate → diff → apply → rollback)──┘
 ```
 
-- **`@openislands/schema`** — Zod schemas for the manifest + islands → also emits JSON
-  Schema for editor autocomplete and agent grounding. The single source of truth.
-- **`@openislands/compiler`** — the DuckDB query core: turns files into typed data
-  contracts and runs transforms/queries live; checks every island binding against the data.
-- **`@openislands/runtime`** — the island registry and renderer (the `serve` runtime).
-- **`openislands`** — the CLI (`init` / `validate` / `serve` / `add`).
-- **`@openislands/mcp`** — the MCP server: read-many / write-one, so an agent edits your
-  dashboard without it rotting.
+The pieces, smallest contract first:
+
+| Package | Role |
+|---|---|
+| `@openislands/schema` | The keystone. Zod schemas for the manifest and islands, emitted as TypeScript types and JSON Schema for editor autocomplete and agent grounding. Everything else depends on it. |
+| `@openislands/compiler` | The DuckDB query core. Turns files into typed data contracts, runs transforms and queries live, and checks every island binding against the data. |
+| `@openislands/runtime` | The island registry and renderers behind `serve` (TanStack Start SSR + React islands + live updates). |
+| `openislands` | The CLI: `init`, `validate`, `serve`, `add`, `infer`. |
+| `@openislands/mcp` | The MCP server. Read many, write one, so an agent edits the manifest without breaking it. |
+
+## Islands
+
+An island is a reusable, typed visual block. You declare it in the manifest, bind it to
+fields that exist in your data, and the runtime renders it. The built-ins cover most of a
+dashboard:
+
+- **Metrics & gauges:** KPI cards, scorecards, goal rings, meters, status grids.
+- **Charts:** line, bar, combo, and pie, over time or category.
+- **Tables & feeds:** sortable grids and activity feeds.
+- **Content & layout:** Markdown notes, a rich content editor, and rows that group islands.
+
+Need something the registry doesn't have? Drop a renderer under `components/custom/` and
+bind to it like any other island. The full catalog, with required fields and live
+previews, lives in the [docs](#documentation).
 
 ## Templates
 
-`finance` (net worth / portfolio), `health` (macros, biomarkers, wearables — pairs with
-[health-mcp](https://github.com/lukaisailovic/health-mcp)), and `operations` (a non-personal
-breadth-prover). The same engine renders all three with no domain-specific hacks.
+Three templates ship with the repo, and the same engine renders all of them with no
+domain-specific hacks:
+
+- **`finance`:** net worth, portfolio allocation, holdings, transactions.
+- **`health`:** macros, biomarkers, and wearables (pairs with [health-mcp](https://github.com/lukaisailovic/health-mcp)).
+- **`operations`:** a non-personal template that proves the breadth of the island set.
 
 ## Status
 
-Early, and live-first (no static export in v1 — it's deferred with a future publish tier).
-The schema, compiler, runtime, CLI, MCP server, and three templates work today, and
-`pnpm test` is green. `openislands serve` boots the production runtime (**TanStack Start**
-SSR + React islands + TanStack Query + SSE live updates) and queries your files live through
-the DuckDB core on every request. An optional hosted sync/publish tier comes later.
+Alpha, and live-first. The schema, compiler, runtime, CLI, MCP server, and all three
+templates work today, and `pnpm test` is green. There's no static export in v1: `serve`
+boots the production runtime and queries your files on every request. A hosted
+publish/sync tier may come later.
+
+## Documentation
+
+- [Data app model](./docs/data-app-model.md): the manifest, the island catalog, data contracts, and workspaces.
+- [Agent edit loop](./docs/agent-edit-loop.md): the read-many/write-one MCP loop, actions, queries, and connectors.
+- [Contributing](./CONTRIBUTING.md): adding an island, the PR gate, releases.
+
+The full docs site lives in [`apps/docs`](./apps/docs) (built with Vocs).
 
 ## Develop
 
 ```bash
 pnpm install
-pnpm build      # tsdown (rolldown / Oxc) across packages
-pnpm test       # vitest
-pnpm lint       # oxlint
-pnpm format     # oxfmt
-pnpm validate:templates
+pnpm build                 # tsdown (rolldown / Oxc) across packages
+pnpm test                  # vitest
+pnpm typecheck             # tsc --noEmit per package
+pnpm lint                  # oxlint
+pnpm validate:templates    # every template's manifest + bindings
+pnpm demo                  # serve the finance template locally
 ```
 
-Toolchain: pnpm + Turborepo + Changesets, **tsdown (rolldown/Oxc)** for builds,
-**oxlint** + **oxfmt** for lint/format, Vitest, Node ≥ 20, ESM-only.
+Toolchain: pnpm + Turborepo + Changesets, tsdown for builds, oxlint and oxfmt for
+lint/format, Vitest, Node ≥ 20, ESM only. See [CONTRIBUTING.md](./CONTRIBUTING.md) before
+opening a PR.
 
 ## License
 
-MIT © Luka Isailovic
+[MIT](./LICENSE) © Luka Isailovic
