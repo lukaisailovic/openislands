@@ -16,7 +16,7 @@ no rendering code to rot.
 
 <p>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-2dd4bf.svg"></a>
-  <img alt="Node >= 20" src="https://img.shields.io/badge/Node-%3E%3D_20-2dd4bf.svg">
+  <img alt="Node &gt;= 20" src="https://img.shields.io/badge/Node-%3E%3D_20-2dd4bf.svg">
   <img alt="ESM only" src="https://img.shields.io/badge/Module-ESM-2dd4bf.svg">
   <img alt="Status: alpha" src="https://img.shields.io/badge/Status-alpha-f59e0b.svg">
   <a href="./CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-2dd4bf.svg"></a>
