@@ -2,8 +2,8 @@
 
 A query is the read mirror of an [action](/data/actions). Where an action is a typed write into a
 `source` dataset, a query is a typed, read-only read over one dataset, declared in the manifest
-and called on demand. You don't write SQL: a query is a declarative spec — a dataset, optional
-filters, a projection, an order — that the compiler translates to a parameterized `SELECT`. You
+and called on demand. You don't write SQL: a query is a declarative spec (a dataset, optional
+filters, a projection, an order) that the compiler translates to a parameterized `SELECT`. You
 declare a query; an agent runs it over [MCP](/mcp).
 
 ```mermaid
@@ -42,8 +42,8 @@ single dataset.
 
 A query is the dual of a transform, not a replacement for one. A transform is a file-backed view
 bound to islands: it renders, takes no parameters, and shapes data once. A query renders nothing,
-takes parameters, and returns rows when called. A query often selects from a transform — let the
-transform do the joins and aggregation, let the query parameterize the read.
+takes parameters, and returns rows when called. A query often selects from a transform: let the
+transform do the joins and aggregation, and let the query parameterize the read.
 
 ## Declaring one
 
@@ -93,7 +93,7 @@ in its `param` field; the value is bound when the query runs.
 | `sameDay` | A timestamp field falls on a given date. |
 | `in` | The field is one of a literal `value` array. |
 
-A filter bound to an **optional** param the caller omits is **dropped** — the query runs as if the
+A filter bound to an **optional** param the caller omits is **dropped**; the query runs as if the
 filter weren't there. That's the latest-row pattern above: omit `date` and the day filter
 disappears, leaving `order by date desc limit 1`.
 
@@ -134,14 +134,14 @@ Queries belong to the agent edit loop, not to a CLI command. An agent:
 ## Authoring queries
 
 Because a query is declarative JSON, an agent writes one end-to-end through the same
-`propose_edit` → `apply_edit` loop it uses for islands and actions — no new tool, no file write.
+`propose_edit` → `apply_edit` loop it uses for islands and actions. No new tool, no file write.
 It reads the data, drafts the `queries` block, proposes the full manifest, reviews the diff, and
 applies it. The MCP write path only ever writes `app/manifest.json`, so a JSON spec is what lets
 an agent create a read tool, not just run one.
 
 `propose_edit` and `validate` enforce the same checks: the `dataset` must exist, and every `field`
 in `where`, `select`, `groupBy`, and `orderBy` must be a real column on it. A field that doesn't
-exist is a named error, caught before the manifest lands — the same fail-loud binding check an
+exist is a named error, caught before the manifest lands: the same fail-loud binding check an
 island gets.
 
 :::note
