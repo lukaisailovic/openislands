@@ -157,6 +157,61 @@
   color: var(--vocs-color-accent);
   font-size: 0.7rem;
   letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/*
+ * The prompt pill carries a full natural-language sentence, so it can't sit on
+ * one line like a shell command. Let it wrap, set it in the body font (not mono),
+ * and tint it with the accent so it reads as the primary, agent-first start.
+ */
+.oi-command-prompt-variant {
+  align-items: flex-start;
+  max-width: 34rem;
+  text-align: left;
+  border-color: color-mix(in oklab, var(--vocs-color-accent) 40%, var(--oi-edge));
+  background: color-mix(in oklab, var(--vocs-color-accent) 7%, var(--oi-surface));
+}
+
+.oi-command-prompt-variant .oi-command-prompt {
+  margin-top: 0.05rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.oi-command-prompt-variant .oi-command-text {
+  font-family: var(--font-sans);
+  white-space: normal;
+  line-height: 1.4;
+}
+
+/* The two start affordances: the agent prompt and the manual scaffold command.
+ * The hero centers its children (text-center), so each column resets to a
+ * left-aligned unit — the label sits flush over its pill. */
+.oi-starts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1.5rem 2.5rem;
+  margin-top: 0.5rem;
+}
+
+.oi-start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.oi-start-label {
+  margin: 0;
+  font-family: var(--oi-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--oi-muted);
 }
 
 /* Content sections below the hero. */

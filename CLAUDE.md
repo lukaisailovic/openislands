@@ -22,10 +22,11 @@ packages/storage     # swappable storage ports (ContentStore / AppStateStore / V
 packages/compiler    # DuckDB query core: files → typed contracts; runs transforms/queries live
 packages/runtime     # TanStack Start SSR app: island registry + React renderers
 packages/cli         # the `openislands` command (init / validate / serve / add / infer)
-packages/mcp-server  # the MCP edit loop (@openislands/mcp)
-templates/           # finance, health, operations — scaffolded by `init`
+packages/mcp-server  # the MCP edit loop (@openislands/mcp): read-many + patch_manifest/propose_edit + validate_sql
+templates/           # empty (default), finance, health, operations — each ships .mcp.json + AGENTS.md + the skill; scaffolded by `init`
+skills/openislands/  # the installable agent skill (npx skills add lukaisailovic/openislands --skill openislands); synced into every template
 apps/examples/       # dogfood workspace (multi-app serve)
-apps/docs/           # the docs site (Vocs)
+apps/docs/           # the docs site (Vocs); apps/docs/public/start.md is the raw agent-onboarding doc served at /start.md
 ```
 
 ## Invariants (don't break these)
@@ -45,6 +46,9 @@ apps/docs/           # the docs site (Vocs)
 - **Prefer built-in islands.** Unknown types render a placeholder until a renderer exists under
   `components/custom/`.
 - **Tests live in `test/`**, not `src/` (so the bundler doesn't ship them).
+- **The agent skill has one source: `skills/openislands/SKILL.md`.** Edit it there, then `pnpm sync:skill`
+  to regenerate the copies in `templates/*/.agents/skills/` and the shared `.mcp.json` + `AGENTS.md`
+  (from `scripts/template-files/`); never hand-edit the synced copies. `validate:templates` re-syncs first.
 
 ## Commands
 
@@ -53,7 +57,8 @@ pnpm install && pnpm build
 pnpm typecheck             # tsc --noEmit per package (the build strips types, never checks them)
 pnpm test                  # vitest
 pnpm lint                  # oxlint
-pnpm validate:templates    # every template's manifest + bindings
+pnpm validate:templates    # re-syncs the skill, then validates every template's manifest + bindings
+pnpm sync:skill            # skills/openislands/ + scripts/template-files/ → templates/*/.agents, .mcp.json, AGENTS.md
 node_modules/.bin/tsx packages/cli/src/index.ts serve templates/finance
 ```
 

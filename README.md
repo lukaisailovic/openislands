@@ -49,16 +49,18 @@ drawing something wrong.
 
 ## Quickstart
 
-Scaffold a project from a template, then serve it over your files:
+Scaffold a project, then serve it over your files:
 
 ```bash
-npx openislands init my-dashboard --template finance
+npx openislands init my-dashboard            # blank starter (the empty template)
 cd my-dashboard
-npx openislands serve            # http://127.0.0.1:4321
+npx openislands serve                        # http://127.0.0.1:4321
 ```
 
-`finance` is the flagship: net worth, allocation, holdings, and transactions as typed
-islands over CSVs you own. `health` and `operations` are there too.
+With no flag, `init` scaffolds the `empty` template: a blank starter you build up from your
+own files. Want a populated example? Pass `--template finance` (the flagship: net worth,
+allocation, holdings, and transactions over CSVs you own). `health` and `operations` ship
+too.
 
 Now hand it to an agent. Add the MCP server to your tool of choice (Claude Code, Cursor,
 and friends), pointed at the project directory:
@@ -79,10 +81,25 @@ Then just ask:
 
 > Drop `data/spending.csv` into the project and add a page charting monthly spend by category.
 
-The agent reads your data, proposes the **full** manifest so you see a diff before
-anything is written, applies it with a snapshot of the prior version, and rolls back if
-the result is wrong. Leave `serve` running and the page live-updates over SSE as each
-edit lands.
+The agent reads your data, proposes the change so you see a diff before anything is
+written, applies it with a snapshot of the prior version, and rolls back if the result
+is wrong. Leave `serve` running and the page live-updates over SSE as each edit lands.
+
+### Agents and skills
+
+`init` sets this up for you. Every scaffolded project ships a local `.mcp.json`, an
+`AGENTS.md`, and the OpenIslands skill under `.agents/skills/openislands/`, so an agent
+that opens the folder picks up the MCP tools and the conventions with no extra wiring.
+
+Want the skill in another project or in your own agent setup? Install it anywhere:
+
+```bash
+npx skills add lukaisailovic/openislands --skill openislands
+```
+
+Or skip the scaffold entirely and let an agent drive from a single paste:
+
+> Read https://openislands.sh/start.md then help me build my first agent-maintained dashboard.
 
 ## Why OpenIslands
 

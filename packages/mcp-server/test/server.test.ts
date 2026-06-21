@@ -717,3 +717,169 @@ describe("M7 catalog additions are discoverable + bindable", () => {
     expect(err!.message).toContain("does_not_exist");
   });
 });
+
+describe("propose_edit accepts a manifest object", () => {
+  it("takes a JSON object directly (no double-encoding) and applies it", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const next = JSON.parse(validManifest(root));
+    next.title = "Object edit";
+    const proposed = (await call(client, "propose_edit", { manifest: next })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
+    expect(proposed.ok, JSON.stringify(proposed.errors)).toBe(true);
+    const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id! })) as { ok: boolean };
+    expect(applied.ok).toBe(true);
+    expect(JSON.parse(validManifest(root)).title).toBe("Object edit");
+  });
+});
+
+describe("patch_manifest — section-level CRUD", () => {
+  it("adds a query incrementally without re-sending the whole manifest", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const out = (await call(client, "patch_manifest", {
+      queries: {
+        alloc_by_class: { dataset: "allocation", select: ["class", "value_eur"], params: { class: { type: "string" } }, where: [{ field: "class", op: "eq", param: "class" }] },
+      },
+    })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
+    expect(out.ok, JSON.stringify(out.errors)).toBe(true);
+    await call(client, "apply_edit", { proposal_id: out.proposal_id! });
+    const written = JSON.parse(validManifest(root));
+    expect(Object.keys(written.queries)).toEqual(["alloc_by_class"]);
+    // untouched sections survive the patch
+    expect(written.title).toBe("Finance Overview");
+    expect(written.pages[0].islands).toHaveLength(3);
+  });
+
+  it("adds a dataset from a new file and binds it in one patch", async () => {
+    const root = freshProject();
+    writeFileSync(join(root, "data", "crypto.csv"), "coin,amount_eur\nBTC,50000\nETH,20000\n");
+    const client = await connect(root);
+    const page = JSON.parse(validManifest(root)).pages[0];
+    page.islands.push({ type: "rank.list", title: "Crypto", dataset: "crypto", label: "coin", value: "amount_eur", span: 12 });
+    const out = (await call(client, "patch_manifest", {
+      datasets: { crypto: { source: "data/crypto.csv", description: "holdings" } },
+      pages: [page],
+    })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
+    expect(out.ok, JSON.stringify(out.errors)).toBe(true);
+    await call(client, "apply_edit", { proposal_id: out.proposal_id! });
+    const written = JSON.parse(validManifest(root));
+    expect(written.datasets.crypto.source).toBe("data/crypto.csv");
+    expect(written.pages[0].islands.at(-1).type).toBe("rank.list");
+  });
+
+  it("upserts a page by id rather than appending a duplicate", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const page = JSON.parse(validManifest(root)).pages[0];
+    page.islands.push({ type: "note.card", title: "Note", markdown: "hello", span: 12 });
+    const out = (await call(client, "patch_manifest", { pages: [page] })) as { ok: boolean; proposal_id?: string };
+    expect(out.ok).toBe(true);
+    await call(client, "apply_edit", { proposal_id: out.proposal_id! });
+    const written = JSON.parse(validManifest(root));
+    expect(written.pages).toHaveLength(1);
+    expect(written.pages[0].islands.at(-1).type).toBe("note.card");
+  });
+
+  it("appends a brand-new page by a new id", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const out = (await call(client, "patch_manifest", {
+      pages: [{ id: "extra", title: "Extra", islands: [{ type: "note.card", markdown: "x", span: 12 }] }],
+    })) as { ok: boolean; proposal_id?: string };
+    expect(out.ok).toBe(true);
+    await call(client, "apply_edit", { proposal_id: out.proposal_id! });
+    const written = JSON.parse(validManifest(root));
+    expect(written.pages.map((p: { id: string }) => p.id)).toEqual(["overview", "extra"]);
+  });
+
+  it("removes a section entry with null", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    expect(JSON.parse(validManifest(root)).actions.log_allocation).toBeDefined();
+    const out = (await call(client, "patch_manifest", { actions: { log_allocation: null } })) as { ok: boolean; proposal_id?: string };
+    expect(out.ok).toBe(true);
+    await call(client, "apply_edit", { proposal_id: out.proposal_id! });
+    expect(JSON.parse(validManifest(root)).actions).toBeUndefined();
+  });
+
+  it("removes a page by id", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    await call(client, "patch_manifest", { pages: [{ id: "extra", islands: [{ type: "note.card", markdown: "x", span: 12 }] }] }).then((o) =>
+      call(client, "apply_edit", { proposal_id: (o as { proposal_id: string }).proposal_id }),
+    );
+    const out = (await call(client, "patch_manifest", { remove_pages: ["extra"] })) as { ok: boolean; proposal_id?: string };
+    expect(out.ok).toBe(true);
+    await call(client, "apply_edit", { proposal_id: out.proposal_id! });
+    expect(JSON.parse(validManifest(root)).pages.map((p: { id: string }) => p.id)).toEqual(["overview"]);
+  });
+
+  it("rejects an invalid patch naming the offending field and returns no proposal_id", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const out = (await call(client, "patch_manifest", {
+      queries: { broken: { dataset: "allocation", where: [{ field: "ghost_col", op: "eq", value: 1 }] } },
+    })) as { ok: boolean; proposal_id?: string; errors: string[] };
+    expect(out.ok).toBe(false);
+    expect(out.proposal_id).toBeUndefined();
+    expect(out.errors.some((e) => typeof e === "string" && e.includes("ghost_col"))).toBe(true);
+  });
+});
+
+describe("validate_sql — transform dry-run", () => {
+  it("returns the columns of a valid SELECT over the views", async () => {
+    const client = await connect(freshProject());
+    const out = (await call(client, "validate_sql", { sql: "SELECT class, SUM(value_eur) AS total FROM allocation GROUP BY class" })) as {
+      ok: boolean;
+      columns?: { name: string }[];
+    };
+    expect(out.ok).toBe(true);
+    expect(out.columns!.map((c) => c.name).toSorted()).toEqual(["class", "total"]);
+  });
+
+  it("returns the real DuckDB error for an unknown table — not an opaque failure", async () => {
+    const client = await connect(freshProject());
+    const out = (await call(client, "validate_sql", { sql: "SELECT * FROM ghost_table" })) as { ok: boolean; error?: string };
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/ghost_table/i);
+  });
+
+  it("rejects a non-SELECT statement", async () => {
+    const client = await connect(freshProject());
+    const out = (await call(client, "validate_sql", { sql: "DROP TABLE allocation" })) as { ok: boolean; error?: string };
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/read-only|SELECT/i);
+  });
+});
+
+describe("dataset readability + path confinement", () => {
+  it("accepts a dataset sourced from docs/*.md (markdown is a first-class source)", async () => {
+    const root = freshProject();
+    mkdirSync(join(root, "docs"), { recursive: true });
+    writeFileSync(join(root, "docs", "strategy.md"), "# Strategy\n\nBuy low.\n");
+    const client = await connect(root);
+    const out = (await call(client, "patch_manifest", { datasets: { strategy: { source: "docs/strategy.md", description: "notes" } } })) as {
+      ok: boolean;
+      proposal_id?: string;
+      errors?: unknown[];
+    };
+    expect(out.ok, JSON.stringify(out.errors)).toBe(true);
+  });
+
+  it("surfaces the real reason a sql transform is broken without blinding healthy datasets", async () => {
+    const root = freshProject();
+    mkdirSync(join(root, "models"), { recursive: true });
+    writeFileSync(join(root, "models", "broken.sql"), "SELECT * FROM table_that_does_not_exist");
+    const client = await connect(root);
+    const out = (await call(client, "patch_manifest", { datasets: { derived: { sql: "models/broken.sql" } } })) as {
+      ok: boolean;
+      errors: string[];
+    };
+    expect(out.ok).toBe(false);
+    const errors = out.errors.map(String);
+    // the broken transform names its real catalog error...
+    expect(errors.some((e) => e.includes("derived") && /table_that_does_not_exist|does not exist|Catalog/i.test(e))).toBe(true);
+    // ...and the healthy datasets are NOT falsely reported as unreadable
+    expect(errors.some((e) => e.includes("net_worth_monthly") && /unreadable/i.test(e))).toBe(false);
+  });
+});

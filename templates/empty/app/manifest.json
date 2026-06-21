@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "title": "My dashboard",
+  "datasets": {},
+  "pages": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "islands": [
+        {
+          "type": "note.card",
+          "title": "Welcome",
+          "span": 12,
+          "markdown": "# Your dashboard is empty\n\nDrop a data file (CSV / JSON / Parquet / SQLite) into `data/`, then ask your agent to build a dashboard from it.\n\nThe agent edits this manifest through the OpenIslands MCP server — see `AGENTS.md`. Or do it yourself: run `npx openislands serve` and edit `app/manifest.json`."
+        }
+      ]
+    }
+  ]
+}

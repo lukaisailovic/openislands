@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "openislands": {
+      "command": "npx",
+      "args": ["-y", "@openislands/mcp", "."]
+    }
+  }
+}

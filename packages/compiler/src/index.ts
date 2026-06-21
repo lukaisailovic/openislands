@@ -137,6 +137,10 @@ interface Engine {
   conn: DuckDBConnection;
   manifest: Manifest;
   registered: Set<string>;
+  /** Datasets that failed to register, mapped to the real reason. A failed dataset
+   * no longer aborts the whole engine — healthy siblings still register, and the
+   * captured message surfaces instead of a blanket "unknown or unreadable". */
+  failures: Map<string, string>;
 }
 
 const engines = new Map<string, Promise<Engine>>();
@@ -158,22 +162,38 @@ export async function readManifest(projectDir: string): Promise<Manifest> {
   return validation.manifest;
 }
 
+/** Register every dataset of a manifest onto a connection, isolating per-dataset failures
+ * so one bad source or transform can't blind the rest (it lands in `failures`, not a throw). */
+async function registerDatasets(
+  conn: DuckDBConnection,
+  store: ContentStore,
+  manifest: Manifest,
+): Promise<{ registered: Set<string>; failures: Map<string, string> }> {
+  const specs = Object.values(manifest.datasets);
+  if (specs.some((spec) => spec.source && isSqliteSource(spec.source))) {
+    await conn.run("INSTALL sqlite; LOAD sqlite;");
+  }
+  const registered = new Set<string>();
+  const failures = new Map<string, string>();
+  for (const [name, spec] of Object.entries(manifest.datasets)) {
+    try {
+      await registerDataset(conn, store, name, spec);
+      registered.add(name);
+    } catch (e) {
+      failures.set(name, (e as Error).message);
+    }
+  }
+  return { registered, failures };
+}
+
 async function buildEngine(projectDir: string): Promise<Engine> {
   const store = getContentStore(projectDir);
   const manifest = await readManifest(projectDir);
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
   await store.configureEngine(conn);
-  const specs = Object.values(manifest.datasets);
-  if (specs.some((spec) => spec.source && isSqliteSource(spec.source))) {
-    await conn.run("INSTALL sqlite; LOAD sqlite;");
-  }
-  const registered = new Set<string>();
-  for (const [name, spec] of Object.entries(manifest.datasets)) {
-    await registerDataset(conn, store, name, spec);
-    registered.add(name);
-  }
-  return { conn, manifest, registered };
+  const { registered, failures } = await registerDatasets(conn, store, manifest);
+  return { conn, manifest, registered, failures };
 }
 
 function getEngine(projectDir: string): Promise<Engine> {
@@ -187,6 +207,11 @@ function getEngine(projectDir: string): Promise<Engine> {
 /** Drops the cached engine so the next call re-reads the manifest and files. */
 export function resetEngine(projectDir: string): void {
   engines.delete(projectDir);
+}
+
+/** Why a dataset isn't queryable: its real registration failure if it had one, else just unknown. */
+function unavailableDataset(engine: Engine, dataset: string): Error {
+  return new Error(engine.failures.get(dataset) ?? `unknown dataset '${dataset}'`);
 }
 
 export function quoteIdent(name: string): string {
@@ -431,7 +456,7 @@ function rangeClause(column: Column, range: QueryRange): { sql: string; params: 
 /** Runs a dataset's view read-only over the live files and returns JSON-able rows. */
 export async function query(projectDir: string, dataset: string, opts?: QueryOpts): Promise<QueryResult> {
   const engine = await getEngine(projectDir);
-  if (!engine.registered.has(dataset)) throw new Error(`unknown dataset '${dataset}'`);
+  if (!engine.registered.has(dataset)) throw unavailableDataset(engine, dataset);
   const limit = opts?.limit ?? DEFAULT_ROW_CAP;
   const view = quoteIdent(dataset);
 
@@ -534,10 +559,31 @@ export async function queryWithParams(
   return { columns: columnsFromReader(reader), rows: rowsFromReader(reader) };
 }
 
+/**
+ * Dry-run a read-only SELECT against the project's registered dataset views WITHOUT
+ * returning data — the agent's way to author a `sql` transform body and confirm it
+ * binds before wiring it into a dataset. Returns the result columns on success, or
+ * the exact DuckDB error (catalog / parse / type) on failure.
+ */
+export async function validateSql(
+  projectDir: string,
+  sql: string,
+): Promise<{ ok: true; columns: Column[] } | { ok: false; error: string }> {
+  const engine = await getEngine(projectDir);
+  try {
+    await assertReadOnly(engine.conn, sql);
+    const trimmed = sql.trim().replace(/;\s*$/, "");
+    const reader = await engine.conn.runAndReadAll(`SELECT * FROM (${trimmed}) AS _validate LIMIT 0`);
+    return { ok: true, columns: columnsFromReader(reader) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /** A column's distinct non-null values, sorted and row-capped — populates a select filter's options when the manifest omits them. The column is verified before it is interpolated. */
 export async function distinctValues(projectDir: string, dataset: string, column: string, opts?: { limit?: number }): Promise<string[]> {
   const engine = await getEngine(projectDir);
-  if (!engine.registered.has(dataset)) throw new Error(`unknown dataset '${dataset}'`);
+  if (!engine.registered.has(dataset)) throw unavailableDataset(engine, dataset);
   const columns = await datasetColumns(engine.conn, dataset);
   const col = verifyField(columns, dataset, column, "distinct column");
   const capped = Math.max(0, Math.floor(opts?.limit ?? DEFAULT_ROW_CAP));
@@ -555,9 +601,39 @@ export async function inferSchema(projectDir: string, datasetOrFile: string): Pr
     const reader = await engine.conn.runAndReadAll(`SELECT * FROM ${quoteIdent(datasetOrFile)} LIMIT 0`);
     return { dataset: datasetOrFile, columns: columnsFromReader(reader) };
   }
+  if (engine.failures.has(datasetOrFile)) throw unavailableDataset(engine, datasetOrFile);
   const uri = getContentStore(projectDir).sourceUri(datasetOrFile);
   const reader = await engine.conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(datasetOrFile, uri)} LIMIT 0`);
   return { dataset: datasetOrFile, columns: columnsFromReader(reader) };
+}
+
+/**
+ * Resolve a *proposed* manifest's datasets to their live columns — and the real reason any
+ * failed — using a throwaway in-memory engine, NOT the cached on-disk one. This is what lets
+ * the MCP server validate a manifest that introduces brand-new datasets (a CSV, a `sql`
+ * transform, a markdown doc) before it is ever written to disk: the on-disk engine wouldn't
+ * know about them yet, which is why a fresh dataset used to come back "unknown or unreadable".
+ */
+export async function inspectManifestDatasets(
+  projectDir: string,
+  manifest: Manifest,
+): Promise<{ columns: Map<string, Column[]>; failures: Map<string, string> }> {
+  const store = getContentStore(projectDir);
+  const instance = await DuckDBInstance.create(":memory:");
+  const conn = await instance.connect();
+  try {
+    await store.configureEngine(conn);
+    const { registered, failures } = await registerDatasets(conn, store, manifest);
+    const columns = new Map<string, Column[]>();
+    for (const name of registered) {
+      const reader = await conn.runAndReadAll(`SELECT * FROM ${quoteIdent(name)} LIMIT 0`);
+      columns.set(name, columnsFromReader(reader));
+    }
+    return { columns, failures };
+  } finally {
+    conn.closeSync();
+    instance.closeSync();
+  }
 }
 
 /**
@@ -968,6 +1044,9 @@ export async function compile(projectDir: string): Promise<CompileReport> {
       report.errors.push(`dataset '${name}': ${(e as Error).message}`);
     }
   }
+  for (const [name, message] of engine.failures) {
+    report.errors.push(`dataset '${name}': ${message}`);
+  }
 
   const contracts = await checkManifestContracts(projectDir, manifest, async (dataset) => schemas[dataset] ?? null);
   report.islandChecks = contracts.checks;
@@ -995,7 +1074,7 @@ export async function compile(projectDir: string): Promise<CompileReport> {
 
 export async function materialize(projectDir: string, dataset: string): Promise<CacheRef> {
   const engine = await getEngine(projectDir);
-  if (!engine.registered.has(dataset)) throw new Error(`unknown dataset '${dataset}'`);
+  if (!engine.registered.has(dataset)) throw unavailableDataset(engine, dataset);
   const spec = engine.manifest.datasets[dataset]!;
   const hash = createHash("sha256").update(JSON.stringify({ dataset, spec })).digest("hex").slice(0, 16);
   const path = await getContentStore(projectDir).cacheTarget(`${dataset}-${hash}.parquet`);

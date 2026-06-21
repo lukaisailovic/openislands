@@ -1,0 +1,4 @@
+node_modules/
+.openislands/
+.env
+!.env.example

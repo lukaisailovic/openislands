@@ -56,16 +56,19 @@ export function confineReadable(projectRoot: string, candidate: string): string 
   return abs;
 }
 
-const WRITABLE_DIRS = ["app", "models", "data"];
+/** Top-level dirs a dataset source / sql transform may live under. `docs/` is here
+ * because markdown files are a first-class dataset source (a `source.doc` island or
+ * a markdown dataset). Action writability is enforced downstream by the writer, not here. */
+const SOURCE_DIRS = ["app", "data", "docs", "models"];
 
-/** Assert a dataset source path is allowed to be read (confined + in a data dir). */
+/** Assert a dataset source path is allowed to be read (confined + in a source dir). */
 export function confineDatasetSource(projectRoot: string, source: string): string {
   const abs = confineReadable(projectRoot, source);
   const root = realRoot(projectRoot);
   const rel = relative(root, abs);
   const top = rel.split(/[\\/]/)[0];
-  if (!top || !WRITABLE_DIRS.includes(top)) {
-    throw new PathConfinementError(`dataset source '${source}' must live under ${WRITABLE_DIRS.join("/, ")}/`);
+  if (!top || !SOURCE_DIRS.includes(top)) {
+    throw new PathConfinementError(`dataset source '${source}' must live under ${SOURCE_DIRS.join("/, ")}/`);
   }
   return abs;
 }

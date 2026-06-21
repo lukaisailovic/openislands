@@ -16,7 +16,7 @@ sequenceDiagram
   participant A as Agent
   participant S as MCP server
   A->>S: read manifest + data
-  A->>S: propose_edit(full manifest)
+  A->>S: patch_manifest(one section) | propose_edit(full manifest)
   S-->>A: diff (or named errors)
   A->>S: apply_edit(proposal_id)
   S-->>A: checkpoint_id
@@ -55,34 +55,137 @@ An agent grounds itself before it ever proposes a change. These tools are all re
 | `get_manifest` | The current manifest. |
 | `get_data_schema(dataset)` | A dataset's live, DuckDB-inferred columns and types. |
 | `query_data({ dataset } \| { sql }, limit)` | Rows from a dataset, or a read-only `SELECT` over the registered dataset views. |
-| `validate_manifest` | Validates the current manifest and checks every binding against the data. |
+| `validate_sql({ sql })` | Dry-runs a read-only `SELECT` against the dataset views; returns its result columns or the exact DuckDB error. |
+| `validate_manifest({ manifest? })` | Validates a manifest (the one on disk, or one you pass) and checks every binding against the data. |
 | `list_checkpoints` | The rollback points, newest last. |
 
 `query_data` takes a `dataset` name for a whole dataset *or* a read-only `sql` SELECT over the
 dataset views, never both. This is how an agent confirms a column exists and what its values
 look like *before* binding an island to it.
 
+`validate_sql` is the same read-only surface, aimed at **authoring a transform**: paste the SQL you
+intend to save as a `sql` dataset and get back its result columns, or the exact DuckDB error, before
+you wire it into the manifest. See [CRUD recipes](#crud-recipes).
+
 ## The manifest write path
 
 Exactly one pipeline writes the manifest, in two steps with a human-reviewable diff between
-them:
+them. An agent stages an edit (`patch_manifest` or `propose_edit`), reviews the returned diff,
+then applies it.
 
-1. **`propose_edit(manifest)`** takes the **full** manifest as a string. It validates the
-   structure and checks every binding against the live data, then returns a unified `diff`,
-   but does **not** write. If the data check fails it returns `{ ok: false, errors, diff }`
-   (each error naming the page, island index, type, and missing field) and **no**
-   `proposal_id`; the agent fixes the binding and proposes again. On success it returns `{ ok:
-   true, proposal_id, diff }`.
-2. **`apply_edit(proposal_id)`** writes that proposal. Before writing, it **snapshots the
-   current manifest** as a checkpoint and returns its `checkpoint_id`. A proposal is rejected
-   if it's unknown or **stale**: if the manifest on disk changed since it was proposed (a
-   content-hash check), the agent must re-run `propose_edit`.
+| Tool | What it does |
+| --- | --- |
+| `patch_manifest({ ... })` | **The preferred editor.** Merges one or more sections into the current manifest, validates the result, and stages it. |
+| `propose_edit({ manifest })` | Stages a **full** manifest rewrite. |
+| `apply_edit({ proposal_id })` | Writes a staged proposal and snapshots the prior manifest. |
+| `rollback({ checkpoint_id? })` | Restores a snapshot byte-for-byte (the latest if no id). |
 
-**`rollback(checkpoint_id?)`** restores a checkpoint **byte-for-byte** (the latest if no id is
+### `patch_manifest` — the incremental editor
+
+`patch_manifest` is how an agent should normally edit the manifest. It takes a **partial**
+manifest — `{ title?, icon?, datasets?, actions?, queries?, connectors?, pages?, remove_pages? }` —
+merges it into the document on disk, validates the merged result against the live data, and returns
+a unified `diff` plus a `proposal_id` (it writes **nothing** yet). You never re-send, or re-typo,
+the whole manifest.
+
+The merge follows the shape of each section:
+
+- **Record sections** (`datasets`, `actions`, `queries`, `connectors`) are keyed maps. Each entry is
+  upserted by name: `name → spec` adds or replaces that one entry, and **`name → null` deletes it**.
+  Untouched entries are left alone.
+- **`pages`** is a list, so it's upserted **by `id`**: a page whose `id` already exists is replaced,
+  a new `id` is appended. **`remove_pages: ["id", …]`** deletes pages by id.
+- **Scalars** (`title`, `icon`) are overwritten when present.
+
+```jsonc
+// patch_manifest — add one dataset and one page, delete a stale query, all in one call
+{
+  "datasets": { "spending": { "source": "data/spending.csv", "description": "monthly spend" } },
+  "pages": [
+    { "id": "spending", "title": "Spending", "islands": [
+      { "type": "category.bar", "title": "By category", "dataset": "spending",
+        "x": "category", "y": "amount_eur" }
+    ] }
+  ],
+  "queries": { "legacy_rollup": null }
+}
+```
+
+The validation is identical to `propose_edit`'s: if a binding fails, you get
+`{ ok: false, errors, diff }` (each error naming the page, island, and field) and **no**
+`proposal_id`. Fix the patch and call again. On success: `{ ok: true, proposal_id, diff }`.
+
+### `propose_edit` — the full rewrite
+
+**`propose_edit({ manifest })`** takes the whole manifest when you really do want to replace it
+end to end. It accepts a manifest **object** (preferred) or a JSON string — no double-encoding.
+It validates the structure, checks every binding against the live data, and returns the same
+`{ ok, proposal_id?, diff, errors? }` shape as `patch_manifest`.
+
+A proposed manifest is validated **against itself**: new datasets, `sql` transforms, and markdown
+sources introduced in the same edit resolve and bind correctly, even starting from an empty
+manifest. `validate_manifest({ manifest? })` runs that same check without staging anything — pass a
+manifest object to dry-run it, or omit it to validate the one on disk.
+
+### Apply and roll back
+
+**`apply_edit({ proposal_id })`** writes a staged proposal (from either editor). Before writing it
+**snapshots the current manifest** as a checkpoint and returns its `checkpoint_id`. A proposal is
+rejected if it's unknown or **stale**: if the manifest on disk changed since it was staged (a
+content-hash check), re-stage the edit.
+
+**`rollback({ checkpoint_id? })`** restores a checkpoint **byte-for-byte** (the latest if no id is
 given). It restores the manifest *and* any data checkpoints, so it undoes data writes too.
 
 There is no raw file-write tool and no git dependency by design. Safety is the
-proposal/apply/rollback loop plus on-disk snapshots, not trust.
+stage/apply/rollback loop plus on-disk snapshots, not trust.
+
+## CRUD recipes
+
+Author against the live contract, stage with `patch_manifest`, apply.
+
+**Add a dataset from a file.** Drop the file under `data/` (or `models/` / `docs/` / `app/`), then
+upsert it and confirm its inferred columns:
+
+```jsonc
+// patch_manifest
+{ "datasets": { "crypto": { "source": "data/crypto.csv", "description": "holdings" } } }
+```
+
+Then `get_data_schema({ dataset: "crypto" })` before you bind an island to it.
+
+**Add a SQL transform — dry-run it first.** `validate_sql` lets you get the SQL right before it ever
+touches the manifest:
+
+```jsonc
+// 1. validate_sql — returns the result columns, or the exact DuckDB error
+{ "sql": "SELECT class, SUM(value_eur) AS value_eur FROM holdings GROUP BY class" }
+
+// 2. once it's valid, save it under models/ and wire it in with patch_manifest
+{ "datasets": { "allocation": { "sql": "models/transforms/allocation.sql" } } }
+```
+
+A transform can read any other dataset by its name; `validate_sql` resolves those same views.
+
+**Add an island to a page.** A page is upserted by `id`, so read the page, append the island, and
+send just that page back (everything you omit on the page is replaced, so include the existing
+islands):
+
+```jsonc
+// patch_manifest
+{ "pages": [ { "id": "overview", "title": "Overview", "islands": [
+    /* ...existing islands... */,
+    { "type": "rank.list", "title": "Top assets", "dataset": "allocation",
+      "label": "class", "value": "value_eur", "span": 6 }
+] } ] }
+```
+
+**Remove something.** Set a record entry to `null`, or list page ids in `remove_pages`:
+
+```jsonc
+// patch_manifest
+{ "queries": { "by_class": null }, "actions": { "log_txn": null }, "remove_pages": ["scratch"] }
+```
 
 ## The data write path: actions
 
@@ -117,7 +220,7 @@ spec — a dataset, filters, a projection — that the compiler translates to a 
   literals are bound, never interpolated, and every `field` is validated against the live columns.
 
 A query is plain JSON in the manifest. Because the only thing the write path writes is the
-manifest, an agent authors a query through the normal `propose_edit` / `apply_edit` loop, exactly
+manifest, an agent authors a query through the normal `patch_manifest` / `apply_edit` loop, exactly
 like an island or an action — it creates the read tool, it doesn't just run one.
 See [Queries](/data/queries) for the full shape.
 
@@ -144,8 +247,8 @@ own.
 
 Every guarantee is structural, not advisory:
 
-- **Validate before write.** `propose_edit` and `run_action` both fail closed: an invalid
-  manifest or a bad row never reaches disk.
+- **Validate before write.** `patch_manifest`, `propose_edit`, and `run_action` all fail closed:
+  an invalid manifest or a bad row never reaches disk.
 - **Snapshot before change.** `apply_edit`, `run_action`, and `run_sync` each snapshot to
   `.openislands/history/` first, and `rollback` restores any of them byte-for-byte. History is
   count- and byte-capped, oldest pruned first.
@@ -154,10 +257,10 @@ Every guarantee is structural, not advisory:
 - **Reads are bounded too.** `query_data` and `run_query` only run read-only `SELECT`s; a query
   compiles from a declarative spec with its `field`s validated and its params and literals bound,
   not interpolated, and every result is row-capped.
-- **Prompt-injection posture.** Because the *only* mutations are a validated full-manifest
-  proposal and a schema-checked row insert (both diffed or reported, both reversible), data
-  that tries to talk an agent into a harmful edit still can't bypass validation, the diff, or
-  the rollback snapshot.
+- **Prompt-injection posture.** Because the *only* mutations are a validated manifest edit
+  (`patch_manifest` or `propose_edit`) and a schema-checked row insert — both diffed or reported,
+  both reversible — data that tries to talk an agent into a harmful edit still can't bypass
+  validation, the diff, or the rollback snapshot.
 
 ## Related
 
