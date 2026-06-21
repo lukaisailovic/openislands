@@ -1,5 +1,5 @@
 import { HomePage } from "vocs";
-import { CopyCommand } from "./CopyCommand.client";
+import { CopyPrompt } from "./CopyPrompt.client";
 import { LiveIsland } from "./LiveIsland.client";
 import { netWorthByMonth, sampleData } from "./sampleData";
 
@@ -92,18 +92,8 @@ export function Home() {
             Get started
           </HomePage.Button>
           <HomePage.Button href="/introduction">Introduction</HomePage.Button>
-          <HomePage.Button href={GITHUB_URL}>GitHub</HomePage.Button>
+          <CopyPrompt prompt={AGENT_PROMPT} label="Copy agent prompt" />
         </HomePage.Buttons>
-        <div className="oi-starts">
-          <div className="oi-start">
-            <p className="oi-start-label">Hand it to your agent</p>
-            <CopyCommand command={AGENT_PROMPT} kind="prompt" />
-          </div>
-          <div className="oi-start">
-            <p className="oi-start-label">Or scaffold it yourself</p>
-            <CopyCommand command="npx openislands init my-dashboard" />
-          </div>
-        </div>
       </HomePage.Root>
 
       <section className="oi-section">

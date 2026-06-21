@@ -108,110 +108,51 @@
   color: var(--oi-heading);
 }
 
-.oi-command {
+/*
+ * The agent-prompt copy button sits in the hero button row beside the Vocs
+ * HomePage buttons, so it mirrors their default variant (surface fill, gray6
+ * border, 15px medium text) and adds a leading icon plus a momentary tinted
+ * "Copied" state once the click lands.
+ */
+.oi-copy-prompt {
   display: inline-flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0.6rem 0.9rem;
-  border: 1px solid var(--oi-edge);
-  border-radius: 0.625rem;
-  background: var(--oi-surface);
-  font-family: var(--oi-mono);
-  font-size: 0.875rem;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: 1px solid var(--vocs-color-gray6);
+  border-radius: 0.5rem;
+  background: var(--vocs-color-gray4);
+  color: var(--oi-heading);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   transition:
     border-color 0.15s ease,
-    transform 0.15s ease;
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.oi-command:hover {
-  border-color: color-mix(in oklab, var(--vocs-color-accent) 55%, var(--oi-edge));
+.oi-copy-prompt:hover {
+  background: var(--vocs-color-gray5);
 }
 
-.oi-command:focus-visible {
+.oi-copy-prompt:focus-visible {
   outline: 2px solid var(--vocs-color-accent);
   outline-offset: 2px;
 }
 
-.oi-command-prompt {
+.oi-copy-prompt[data-copied] {
+  border-color: color-mix(in oklab, var(--vocs-color-accent) 60%, var(--vocs-color-gray6));
   color: var(--vocs-color-accent);
-  user-select: none;
 }
 
-.oi-command-text {
-  color: var(--oi-heading);
-  background: none;
-  border: 0;
-  padding: 0;
-  font-family: inherit;
-  font-size: inherit;
-}
-
-.oi-command-hint {
-  margin-left: 0.25rem;
-  padding: 0.05rem 0.4rem;
-  border-radius: 0.375rem;
-  background: color-mix(in oklab, var(--vocs-color-accent) 14%, transparent);
-  color: var(--vocs-color-accent);
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-/*
- * The prompt pill carries a full natural-language sentence, so it can't sit on
- * one line like a shell command. Let it wrap, set it in the body font (not mono),
- * and tint it with the accent so it reads as the primary, agent-first start.
- */
-.oi-command-prompt-variant {
-  align-items: flex-start;
-  max-width: 34rem;
-  text-align: left;
-  border-color: color-mix(in oklab, var(--vocs-color-accent) 40%, var(--oi-edge));
-  background: color-mix(in oklab, var(--vocs-color-accent) 7%, var(--oi-surface));
-}
-
-.oi-command-prompt-variant .oi-command-prompt {
-  margin-top: 0.05rem;
-  font-size: 0.95rem;
-  line-height: 1.4;
-}
-
-.oi-command-prompt-variant .oi-command-text {
-  font-family: var(--font-sans);
-  white-space: normal;
-  line-height: 1.4;
-}
-
-/* The two start affordances: the agent prompt and the manual scaffold command.
- * The hero centers its children (text-center), so each column resets to a
- * left-aligned unit — the label sits flush over its pill. */
-.oi-starts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 1.5rem 2.5rem;
-  margin-top: 0.5rem;
-}
-
-.oi-start {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.5rem;
-  text-align: left;
-}
-
-.oi-start-label {
-  margin: 0;
-  font-family: var(--oi-mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--oi-muted);
+.oi-copy-prompt-icon {
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
 /* Content sections below the hero. */
@@ -497,7 +438,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .oi-card,
-  .oi-command {
+  .oi-copy-prompt {
     transition: none;
   }
 
