@@ -82,6 +82,16 @@ Prefer `patch_manifest` — you never re-send (or re-typo) the whole document.
 - **queries** — a typed, parameterized read; run it with `run_query`. No raw SQL — heavy shaping
   lives in a `sql` transform the query reads from.
 
+## Layout & sizing
+
+Each island has a **min / recommended / max** span on the 12-column grid — check
+`get_island_schema({ type })` (its `layout` + `notes`) before you set `span`. Keep **compact**
+islands narrow (KPIs, funnels, gauges, pies, radars cap well below full width — a `span` over the
+max is a named error) and let **data-dense** islands (tables, charts, feeds, calendars) run the
+full 12. Omit `span` for the recommended width. Don't ship a lone KPI — group 2+ in a row or use
+`metric.scorecard`. `validate` and the edit tools also return advisory layout `warnings` for these
+smells; they never block the apply.
+
 ## CRUD recipes
 
 `patch_manifest` takes record sections as `name → spec` (and `name → null` to delete); `pages` are

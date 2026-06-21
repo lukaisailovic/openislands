@@ -1,7 +1,7 @@
 import { type CSSProperties, useMemo } from "react";
 import { SkeletonLine } from "@cloudflare/kumo";
 import type { DatasetSpec } from "@openislands/schema";
-import { BUILTIN_ISLAND_TYPES, type IslandType } from "@openislands/schema";
+import { BUILTIN_ISLAND_TYPES, ISLAND_DEFAULT_SPAN, type IslandType } from "@openislands/schema";
 import { type ActiveRange, type ActiveSelect, useIslandQuery } from "../client/useIslandQuery.js";
 import { useAppId } from "../client/useAppId.js";
 import { makeCustomIsland } from "../islands/CustomIsland.js";
@@ -16,6 +16,7 @@ import type {
 import { IslandErrorCard } from "./IslandErrorCard.js";
 import { IslandCard, type SourceInfo } from "./primitives.js";
 
+/** Fallback span for a custom island whose type carries no recommended width. */
 const DEFAULT_SPAN = 6;
 
 /**
@@ -77,7 +78,10 @@ export function IslandTile({
   const queryResult = useIslandQuery(config, needsData, range, select);
   const Renderer = useRenderer(config.type, customIslands);
 
-  const span = typeof config.span === "number" ? config.span : DEFAULT_SPAN;
+  const span =
+    typeof config.span === "number"
+      ? config.span
+      : (ISLAND_DEFAULT_SPAN[config.type as IslandType] ?? DEFAULT_SPAN);
   const tileStyle = { "--oi-span": span } as CSSProperties;
 
   if (liveError) {

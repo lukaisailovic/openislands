@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   BUILTIN_ISLAND_SCHEMAS,
   BUILTIN_ISLAND_TYPES,
+  ISLAND_DEFAULT_SPAN,
+  ISLAND_MAX_SPAN,
+  ISLAND_MIN_SPAN,
   flattenPageIslands,
   type IslandType,
   type Page,
   QuerySpec,
   ValueFormat,
   jsonSchemaFor,
+  lintManifest,
   manifestJsonSchema,
   validateManifest,
 } from "../src/index.js";
@@ -1028,6 +1032,112 @@ describe("validateManifest — per-island minimum span", () => {
     (m.pages[0]!.islands[0] as Record<string, unknown>).span = 2; // metric.kpi min is 2
     const r = validateManifest(m);
     expect(r.ok).toBe(true);
+  });
+});
+
+const funnelManifest = (span: number) => ({
+  version: 1,
+  title: "Conversion",
+  datasets: { steps: { source: "data/steps.csv" } },
+  pages: [
+    {
+      id: "overview",
+      islands: [{ type: "funnel.steps", dataset: "steps", label: "stage", value: "count", span }],
+    },
+  ],
+});
+
+describe("validateManifest — per-island maximum span", () => {
+  it("rejects a span above the type maximum, naming page/index/type", () => {
+    const r = validateManifest(funnelManifest(12));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.field === "span");
+    expect(err).toBeDefined();
+    expect(err!.type).toBe("funnel.steps");
+    expect(err!.page).toBe("overview");
+    expect(err!.index).toBe(0);
+    expect(err!.message).toBe(
+      "span 12 exceeds the maximum 6 for funnel.steps — it only stretches into empty space past that width",
+    );
+  });
+
+  it("accepts a span at the type maximum", () => {
+    expect(validateManifest(funnelManifest(6)).ok).toBe(true);
+  });
+
+  it("lets data-dense islands run the full 12 columns", () => {
+    const m = structuredClone(goodManifest);
+    (m.pages[0]!.islands[1] as Record<string, unknown>).span = 12; // timeseries.line max is 12
+    expect(validateManifest(m).ok).toBe(true);
+  });
+});
+
+describe("span metadata invariants", () => {
+  it("defines min ≤ recommended ≤ max within 1..12 for every built-in island", () => {
+    for (const type of BUILTIN_ISLAND_TYPES) {
+      const min = ISLAND_MIN_SPAN[type];
+      const def = ISLAND_DEFAULT_SPAN[type];
+      const max = ISLAND_MAX_SPAN[type];
+      expect(min, type).toBeGreaterThanOrEqual(1);
+      expect(max, type).toBeLessThanOrEqual(12);
+      expect(min, type).toBeLessThanOrEqual(def);
+      expect(def, type).toBeLessThanOrEqual(max);
+    }
+  });
+});
+
+const validManifest = (raw: unknown) => {
+  const r = validateManifest(raw);
+  expect(r.ok).toBe(true);
+  return r.manifest!;
+};
+
+describe("lintManifest", () => {
+  it("flags a standalone metric.kpi with no scorecard", () => {
+    // goodManifest: one metric.kpi (index 0) + one timeseries.line, no scorecard
+    const warnings = lintManifest(validManifest(goodManifest));
+    const lone = warnings.find((w) => w.type === "metric.kpi");
+    expect(lone).toBeDefined();
+    expect(lone!.index).toBe(0);
+    expect(lone!.page).toBe("overview");
+  });
+
+  it("does not flag KPIs when two or more share the page", () => {
+    const m = structuredClone(goodManifest);
+    (m.pages[0]!.islands as unknown[]).push({
+      type: "metric.kpi",
+      title: "Cash",
+      dataset: "net_worth",
+      value: "net_worth_eur",
+    });
+    const warnings = lintManifest(validManifest(m));
+    expect(warnings.some((w) => w.message.includes("standalone"))).toBe(false);
+  });
+
+  it("warns when a compact island is wider than its recommended span", () => {
+    // funnel.steps recommended 4, max 6 — span 6 is valid but wide
+    const m = {
+      version: 1,
+      title: "Conversion",
+      datasets: { steps: { source: "data/steps.csv" } },
+      pages: [
+        {
+          id: "overview",
+          islands: [{ type: "funnel.steps", dataset: "steps", label: "stage", value: "count", span: 6 }],
+        },
+      ],
+    };
+    const warnings = lintManifest(validManifest(m));
+    const wide = warnings.find((w) => w.type === "funnel.steps");
+    expect(wide).toBeDefined();
+    expect(wide!.message).toContain("recommended 4");
+  });
+
+  it("does not warn when a data-dense island is full-width", () => {
+    const m = structuredClone(goodManifest);
+    (m.pages[0]!.islands[1] as Record<string, unknown>).span = 12; // timeseries.line, max 12
+    const warnings = lintManifest(validManifest(m));
+    expect(warnings.some((w) => w.type === "timeseries.line")).toBe(false);
   });
 });
 

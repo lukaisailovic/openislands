@@ -60,8 +60,11 @@ SQL/data layer.**
 
 Island configs are the keystone schema and can change. Always ground an edit in the live contract:
 
-- `list_islands` → every built-in type with its required fields and a one-line description.
-- `get_island_schema({ type })` → the full JSON Schema for one type.
+- `list_islands` → every built-in type with its required fields, a one-line description, and its
+  span range (`minSpan` / `recommendedSpan` / `maxSpan`).
+- `get_island_schema({ type })` → the full JSON Schema for one type, plus its `layout`
+  (`{ minSpan, recommendedSpan, maxSpan }`) and `notes`. **Check this before setting `span`** — see
+  [Layout & sizing](#layout--sizing).
 
 Built-ins span metrics (`metric.kpi`, `metric.scorecard`), charts (`timeseries.line`, `category.bar`,
 `category.combo`, `category.pie`, `waterfall.bars`, `breakdown.treemap`, `correlation.scatter`,
@@ -70,6 +73,24 @@ Built-ins span metrics (`metric.kpi`, `metric.scorecard`), charts (`timeseries.l
 `status.grid`, `activity.calendar`), content (`note.card`, `source.doc`, `content.editor`), and input
 (`search.box`, `form.entry`). Prefer a built-in; an unknown type renders a placeholder until a custom
 renderer exists under `components/custom/`.
+
+## Layout & sizing
+
+Every island has a **min / recommended / max** span on the 12-column grid. Check
+`get_island_schema({ type })` (its `layout` + `notes`) before you set `span`:
+
+- **Keep compact islands narrow.** KPIs, funnels, gauges, pies, and radars cap well below full
+  width (e.g. `metric.kpi` and `funnel.steps` max out at 6, recommended 4) — past their natural
+  size they only stretch into dead space. A `span` over the max is a **named validation error**.
+- **Let data-dense islands go wide.** Tables, time-series, bar/combo/waterfall charts, heatmaps,
+  treemaps, calendars, feeds, status grids, and maps run the full 12.
+- **Omit `span` to get the recommended width** — the island renders at its natural size.
+- **Don't ship a lone KPI.** Group 2+ KPIs in a row, or use `metric.scorecard` for a tidy strip.
+
+`validate` and the MCP edit tools surface **advisory layout warnings** (a `warnings` array on
+`patch_manifest` / `propose_edit` / `validate_manifest`) for these smells — a standalone KPI, a
+compact island stretched past its recommended span. They never block the apply; treat them as a
+nudge toward a tidier layout.
 
 ## Recipes
 

@@ -627,6 +627,79 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "table.grid": 5,
 };
 
+/**
+ * The largest grid span at which each island still looks intentional. Fixed-aspect
+ * and single-value islands — a KPI, a funnel, a gauge, a pie — are capped well below
+ * full width because past their natural size they only stretch into dead space;
+ * data-dense islands (tables, time-series, calendars, feeds) may run the full 12.
+ * An explicit `span` above this is a named validation error — the mirror of
+ * `ISLAND_MIN_SPAN`, so a tile can never render too wide *or* too narrow to read.
+ */
+export const ISLAND_MAX_SPAN: Record<IslandType, number> = {
+  "metric.kpi": 6,
+  "metric.scorecard": 12,
+  "source.doc": 12,
+  "note.card": 12,
+  "content.editor": 12,
+  "form.entry": 8,
+  "gauge.rings": 8,
+  "gauge.goal": 8,
+  "gauge.meter": 8,
+  "status.grid": 12,
+  "search.box": 12,
+  "timeseries.line": 12,
+  "category.bar": 12,
+  "category.combo": 12,
+  "waterfall.bars": 12,
+  "timeline.feed": 12,
+  "breakdown.treemap": 12,
+  "distribution.heatmap": 12,
+  "activity.calendar": 12,
+  "funnel.steps": 6,
+  "rank.list": 12,
+  "compare.radar": 8,
+  "map.choropleth": 12,
+  "correlation.scatter": 12,
+  "category.pie": 8,
+  "table.grid": 12,
+};
+
+/**
+ * The span an island renders at when none is set — its natural, balanced width on
+ * the 12-column grid. Also the *recommended* size surfaced to agents during schema
+ * discovery: it always sits within `[ISLAND_MIN_SPAN, ISLAND_MAX_SPAN]`, and pushing
+ * a compact island past it is a layout *warning* (advisory), not an error — the soft
+ * tier between the two hard bounds.
+ */
+export const ISLAND_DEFAULT_SPAN: Record<IslandType, number> = {
+  "metric.kpi": 4,
+  "metric.scorecard": 6,
+  "source.doc": 4,
+  "note.card": 6,
+  "content.editor": 12,
+  "form.entry": 5,
+  "gauge.rings": 5,
+  "gauge.goal": 5,
+  "gauge.meter": 4,
+  "status.grid": 8,
+  "search.box": 6,
+  "timeseries.line": 6,
+  "category.bar": 6,
+  "category.combo": 8,
+  "waterfall.bars": 8,
+  "timeline.feed": 7,
+  "breakdown.treemap": 6,
+  "distribution.heatmap": 8,
+  "activity.calendar": 12,
+  "funnel.steps": 4,
+  "rank.list": 6,
+  "compare.radar": 6,
+  "map.choropleth": 8,
+  "correlation.scatter": 6,
+  "category.pie": 4,
+  "table.grid": 8,
+};
+
 export const BuiltinIsland = z.discriminatedUnion("type", [
   MetricKpi,
   MetricScorecard,
@@ -1145,6 +1218,7 @@ export function validateManifest(input: unknown): ValidationResult {
         continue;
       }
       const minSpan = ISLAND_MIN_SPAN[type as IslandType];
+      const maxSpan = ISLAND_MAX_SPAN[type as IslandType];
       const span = (result.data as { span?: number }).span;
       if (typeof span === "number" && span < minSpan) {
         errors.push({
@@ -1152,6 +1226,18 @@ export function validateManifest(input: unknown): ValidationResult {
           index,
           type,
           message: `span ${span} is below the minimum ${minSpan} for ${type}`,
+          field: "span",
+        });
+      }
+      if (typeof span === "number" && span > maxSpan) {
+        errors.push({
+          page: pageId,
+          index,
+          type,
+          message:
+            maxSpan < 12
+              ? `span ${span} exceeds the maximum ${maxSpan} for ${type} — it only stretches into empty space past that width`
+              : `span ${span} exceeds the maximum ${maxSpan} for ${type}`,
           field: "span",
         });
       }
@@ -1301,4 +1387,64 @@ export function validateManifest(input: unknown): ValidationResult {
     queries: queries as Record<string, QuerySpec> | undefined,
   };
   return { ok: true, manifest, errors, custom };
+}
+
+// --- Layout lint (advisory composition checks) ----------------------------------
+
+export interface LayoutWarning {
+  page: string;
+  /** flat island index (the `IslandError.index` space), or -1 for a page-level finding */
+  index: number;
+  type: string;
+  message: string;
+}
+
+/** Islands that only stretch into dead space past their recommended width (max < full). */
+function isCompactIsland(type: IslandType): boolean {
+  return ISLAND_MAX_SPAN[type] < 12;
+}
+
+/**
+ * Advisory layout checks over an already-validated manifest — composition smells
+ * that are a matter of taste, not correctness, so they surface as warnings, never
+ * build-breaking errors. Pure and structure-only (reuses `flattenPageIslands`), so
+ * the CLI's `validate` and the MCP edit loop can run the exact same checks and show
+ * an agent the same guidance whichever path it edits through.
+ */
+export function lintManifest(manifest: Manifest): LayoutWarning[] {
+  const warnings: LayoutWarning[] = [];
+
+  for (const page of manifest.pages) {
+    const flat = flattenPageIslands(page);
+
+    const kpis = flat.filter((entry) => entry.island.type === "metric.kpi");
+    const hasScorecard = flat.some((entry) => entry.island.type === "metric.scorecard");
+    if (kpis.length === 1 && !hasScorecard) {
+      warnings.push({
+        page: page.id,
+        index: kpis[0]!.index,
+        type: "metric.kpi",
+        message:
+          "a standalone metric.kpi reads as sparse — group 2+ KPIs in a row, or switch to metric.scorecard for a tidy strip of related numbers",
+      });
+    }
+
+    for (const { island, index } of flat) {
+      const type = island.type as IslandType;
+      if (!(type in ISLAND_MAX_SPAN)) continue;
+      const span = (island as { span?: number }).span;
+      if (typeof span !== "number") continue;
+      const recommended = ISLAND_DEFAULT_SPAN[type];
+      if (isCompactIsland(type) && span > recommended) {
+        warnings.push({
+          page: page.id,
+          index,
+          type,
+          message: `${type} span ${span} is wider than its recommended ${recommended} — compact islands stretch into empty space, so ${recommended} usually reads better`,
+        });
+      }
+    }
+  }
+
+  return warnings;
 }
