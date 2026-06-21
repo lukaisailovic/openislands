@@ -41,11 +41,16 @@ function templatesDir(): string {
   return fileURLToPath(new URL("../../../templates", import.meta.url));
 }
 
+/** Read from package.json so `openislands --version` tracks the published release (the release
+ * workflow bumps package.json; this follows automatically). Resolves to the package root from
+ * both the bundled dist/ and the tsx-run src/. */
+const VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+
 const program = new Command();
 program
   .name("openislands")
   .description("Agent-built dashboards over data you own, that don't rot.")
-  .version("0.1.0");
+  .version(VERSION);
 
 program
   .command("init [dir]")
