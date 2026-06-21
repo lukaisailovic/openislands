@@ -8,6 +8,7 @@
  * and checked against the data before a diff is even shown; nothing is written
  * until apply_edit, and the prior state is always snapshotted for rollback.
  */
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createTwoFilesPatch } from "diff";
@@ -20,6 +21,10 @@ import { confineDatasetSource } from "./paths.js";
 import { createProposalStore, hashManifest, type StoredProposal } from "./proposals.js";
 
 const MAX_ROWS_PER_ACTION = 100;
+
+/** Read from package.json so the MCP handshake version tracks the published release (the release
+ * workflow bumps package.json; this follows automatically). */
+const SERVER_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 /** Required fields, data binding, and description, derived from the island's Zod schema so they can never drift from it. */
 function islandContract(type: IslandType): { type: IslandType; required: string[]; bindsData: boolean; description: string } {
@@ -152,7 +157,7 @@ export function createServer(projectRoot: string): McpServer {
     return { ok: true, proposal_id: await proposals.save(stored), custom_islands: check.custom, diff };
   }
 
-  const server = new McpServer({ name: "openislands", version: "0.1.0" });
+  const server = new McpServer({ name: "openislands", version: SERVER_VERSION });
 
   // --- read-only introspection ----------------------------------------------------
 
