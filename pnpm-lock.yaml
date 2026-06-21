@@ -19,7 +19,7 @@ importers:
         version: 1.69.0
       tsdown:
         specifier: ^0.22.2
-        version: 0.22.2(tsx@4.22.4)(typescript@5.9.3)
+        version: 0.22.2(tsx@4.22.4)(typescript@5.9.3)(unrun@0.3.1)
       tsx:
         specifier: ^4.19.2
         version: 4.22.4
@@ -29,6 +29,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      unrun:
+        specifier: ^0.3.1
+        version: 0.3.1
       vitest:
         specifier: ^3.0.5
         version: 3.2.6(@types/debug@4.1.13)(@types/node@24.13.1)(happy-dom@20.10.2)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0)
@@ -4789,6 +4792,16 @@ packages:
   unplugin@3.0.0:
     resolution: {integrity: sha512-0Mqk3AT2TZCXWKdcoaufeXNukv2mTrEZExeXlHIOZXdqYoHHr4n51pymnwV8x2BOVxwXbK2HLlI7usrqMpycdg==}
     engines: {node: ^20.19.0 || >=22.12.0}
+
+  unrun@0.3.1:
+    resolution: {integrity: sha512-onIck/oNnCaytwths1ZVp1LK2Gq2hPoyFhiHebObuUXqR3S0uHuLLaBK8K6mRRgV7Ptip8AnNvaUsgzwWwBZuA==}
+    engines: {node: ^22.13.0 || >=24.0.0}
+    hasBin: true
+    peerDependencies:
+      synckit: ^0.11.11
+    peerDependenciesMeta:
+      synckit:
+        optional: true
 
   update-browserslist-db@1.2.3:
     resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
@@ -9681,7 +9694,7 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  tsdown@0.22.2(tsx@4.22.4)(typescript@5.9.3):
+  tsdown@0.22.2(tsx@4.22.4)(typescript@5.9.3)(unrun@0.3.1):
     dependencies:
       ansis: 4.3.1
       cac: 7.0.0
@@ -9701,6 +9714,7 @@ snapshots:
     optionalDependencies:
       tsx: 4.22.4
       typescript: 5.9.3
+      unrun: 0.3.1
     transitivePeerDependencies:
       - '@ts-macro/tsc'
       - '@typescript/native-preview'
@@ -9834,6 +9848,10 @@ snapshots:
       '@jridgewell/remapping': 2.3.5
       picomatch: 4.0.4
       webpack-virtual-modules: 0.6.2
+
+  unrun@0.3.1:
+    dependencies:
+      rolldown: 1.1.0
 
   update-browserslist-db@1.2.3(browserslist@4.28.2):
     dependencies:
