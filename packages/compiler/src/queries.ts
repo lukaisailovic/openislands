@@ -279,19 +279,31 @@ export async function queryColumns(projectDir: string, name: string): Promise<Co
  * a real column (orderBy may also name a select alias). Mirrors checkConnectors —
  * collects all problems rather than throwing on the first.
  */
-export async function checkQueries(projectDir: string, manifest: Manifest): Promise<QueryContractError[]> {
+export async function checkQueries(
+  projectDir: string,
+  manifest: Manifest,
+  columnsFor?: (dataset: string) => Promise<Column[] | null>,
+): Promise<QueryContractError[]> {
   const errors: QueryContractError[] = [];
   for (const [name, spec] of Object.entries(manifest.queries ?? {})) {
     if (!manifest.datasets[spec.dataset]) {
       errors.push({ query: name, field: "dataset", message: `unknown dataset '${spec.dataset}'` });
       continue;
     }
-    let columns: Column[];
-    try {
-      columns = await datasetColumns(projectDir, spec.dataset);
-    } catch (e) {
-      errors.push({ query: name, field: "dataset", message: `cannot read dataset '${spec.dataset}': ${(e as Error).message}` });
-      continue;
+    let columns: Column[] | null;
+    if (columnsFor) {
+      columns = await columnsFor(spec.dataset);
+      if (!columns) {
+        errors.push({ query: name, field: "dataset", message: `cannot read dataset '${spec.dataset}'` });
+        continue;
+      }
+    } else {
+      try {
+        columns = await datasetColumns(projectDir, spec.dataset);
+      } catch (e) {
+        errors.push({ query: name, field: "dataset", message: `cannot read dataset '${spec.dataset}': ${(e as Error).message}` });
+        continue;
+      }
     }
     const available = `Available: ${columns.map((c) => c.name).join(", ")}`;
     for (const miss of missingFields(spec, columns)) {

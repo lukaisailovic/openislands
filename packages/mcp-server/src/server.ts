@@ -12,8 +12,8 @@ import { join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createTwoFilesPatch } from "diff";
 import { z } from "zod";
-import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, checkQueries, inferSchema, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery } from "@openislands/compiler";
-import { BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, LayoutRow, jsonSchemaFor, validateManifest, type IslandError, type IslandType } from "@openislands/schema";
+import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, checkQueries, inferSchema, inspectManifestDatasets, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery, validateSql } from "@openislands/compiler";
+import { ActionSpec, BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, ConnectorSpec, DatasetSpec, LayoutRow, Page, QuerySpec, jsonSchemaFor, validateManifest, type IslandError, type IslandType } from "@openislands/schema";
 import { getAppStateStore, getContentStore } from "@openislands/storage";
 import { createCheckpointStore, isCheckpointId } from "./checkpoints.js";
 import { confineDatasetSource } from "./paths.js";
@@ -46,9 +46,57 @@ function parseManifest(raw: string): { raw: unknown } | { error: string } {
   }
 }
 
+/** A manifest may arrive as a JSON object (preferred — no double-encoding) or a JSON string. */
+function coerceManifest(input: string | Record<string, unknown>): { raw: unknown } | { error: string } {
+  return typeof input === "string" ? parseManifest(input) : { raw: input };
+}
+
+const manifestArg = z.union([z.string(), z.record(z.string(), z.unknown())]);
+
 function manifestDiff(base: string, proposed: string): string {
   if (base === proposed) return "(no changes)";
   return createTwoFilesPatch("app/manifest.json", "app/manifest.json", base, proposed);
+}
+
+const RECORD_SECTIONS = ["datasets", "actions", "queries", "connectors"] as const;
+
+/**
+ * Merge a section-level patch into the current manifest object and return a new one.
+ * Record sections (datasets/actions/queries/connectors) upsert by key — a `null` value
+ * deletes that key. Pages upsert by `id`; `remove_pages` drops ids. `datasets` is always
+ * kept present (it's required) even when emptied; other emptied sections are dropped.
+ */
+function applyManifestPatch(current: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...current };
+  if (typeof patch.title === "string") merged.title = patch.title;
+  if (typeof patch.icon === "string") merged.icon = patch.icon;
+
+  for (const section of RECORD_SECTIONS) {
+    const ops = patch[section] as Record<string, unknown> | undefined;
+    if (!ops) continue;
+    const next: Record<string, unknown> = { ...(merged[section] as Record<string, unknown> | undefined) };
+    for (const [name, value] of Object.entries(ops)) {
+      if (value === null) delete next[name];
+      else next[name] = value;
+    }
+    if (section === "datasets" || Object.keys(next).length > 0) merged[section] = next;
+    else delete merged[section];
+  }
+
+  const removePages = patch.remove_pages as string[] | undefined;
+  const upsertPages = patch.pages as Array<{ id: string }> | undefined;
+  if (upsertPages || removePages) {
+    const removed = new Set(removePages ?? []);
+    const pages = (Array.isArray(merged.pages) ? (merged.pages as Array<{ id: string }>) : []).filter((p) => !removed.has(p.id));
+    for (const page of upsertPages ?? []) {
+      const at = pages.findIndex((p) => p.id === page.id);
+      if (at >= 0) pages[at] = page;
+      else pages.push(page);
+    }
+    merged.pages = pages;
+  }
+
+  return merged;
 }
 
 export function createServer(projectRoot: string): McpServer {
@@ -75,21 +123,33 @@ export function createServer(projectRoot: string): McpServer {
       }
     }
 
-    resetEngine(projectRoot);
-    const columnsByDataset = new Map<string, Set<string> | null>();
+    // Resolve datasets against the PROPOSED manifest (a throwaway engine), not the on-disk one,
+    // so a brand-new dataset/transform/markdown source can be bound and validated before it's
+    // written — and a broken one reports the real DuckDB reason instead of a blanket "unreadable".
+    const { columns, failures } = await inspectManifestDatasets(projectRoot, v.manifest);
     const columnsFor = async (dataset: string): Promise<Set<string> | null> => {
-      if (!columnsByDataset.has(dataset)) {
-        const columns = await inferSchema(projectRoot, dataset)
-          .then((schema) => new Set(schema.columns.map((c) => c.name)))
-          .catch(() => null);
-        columnsByDataset.set(dataset, columns);
-      }
-      return columnsByDataset.get(dataset)!;
+      const cols = columns.get(dataset);
+      return cols ? new Set(cols.map((c) => c.name)) : null;
     };
     const { errors } = await checkManifestContracts(projectRoot, v.manifest, columnsFor);
-    const queryErrors = await checkQueries(projectRoot, v.manifest);
-    const allErrors = [...errors, ...queryErrors.map((e) => `query '${e.query}': ${e.message}`)];
+    const queryErrors = await checkQueries(projectRoot, v.manifest, async (dataset) => columns.get(dataset) ?? null);
+    const allErrors = [
+      ...[...failures].map(([name, message]) => `dataset '${name}': ${message}`),
+      ...errors,
+      ...queryErrors.map((e) => `query '${e.query}': ${e.message}`),
+    ];
     return { ok: allErrors.length === 0, errors: allErrors, custom: v.custom.map((c) => c.type) };
+  }
+
+  /** Serialize a proposed manifest, diff it against the base, dry-check it, and either return the
+   * validation errors or save a staged proposal. The shared tail of propose_edit and patch_manifest. */
+  async function stageProposal(base: string, manifest: unknown) {
+    const proposed = JSON.stringify(manifest, null, 2) + "\n";
+    const diff = manifestDiff(base, proposed);
+    const check = await dryCheck(manifest);
+    if (!check.ok) return { ok: false, errors: check.errors, diff };
+    const stored: StoredProposal = { manifest: proposed, diff, baseHash: hashManifest(base) };
+    return { ok: true, proposal_id: await proposals.save(stored), custom_islands: check.custom, diff };
   }
 
   const server = new McpServer({ name: "openislands", version: "0.1.0" });
@@ -153,11 +213,27 @@ export function createServer(projectRoot: string): McpServer {
 
   server.registerTool(
     "validate_manifest",
-    { description: "Dry-run validate a manifest (or the current one) and check island bindings against the data.", inputSchema: { manifest: z.string().optional() } },
+    {
+      description: "Dry-run validate a manifest (a JSON object or string, or the current one if omitted) and check island bindings against the data.",
+      inputSchema: { manifest: manifestArg.optional() },
+    },
     async ({ manifest }) => {
-      const parsed = parseManifest(manifest ?? (await readManifest()));
+      const parsed = manifest === undefined ? parseManifest(await readManifest()) : coerceManifest(manifest);
       if ("error" in parsed) return text(`Invalid JSON: ${parsed.error}`);
       return json(await dryCheck(parsed.raw));
+    },
+  );
+
+  server.registerTool(
+    "validate_sql",
+    {
+      description:
+        "Dry-run a read-only SELECT against the registered dataset views WITHOUT running it for real — returns the result columns if valid, or the exact DuckDB error (catalog / parse / type) if not. Author a `sql` transform body here and confirm it binds before wiring it into a dataset, or sanity-check a query_data SELECT.",
+      inputSchema: { sql: z.string().describe("a single read-only SELECT over the dataset views") },
+    },
+    async ({ sql }) => {
+      resetEngine(projectRoot);
+      return json(await validateSql(projectRoot, sql));
     },
   );
 
@@ -172,26 +248,48 @@ export function createServer(projectRoot: string): McpServer {
   server.registerTool(
     "propose_edit",
     {
-      description: "Propose a new full manifest. Validates + checks data + returns a diff. Does NOT write — call apply_edit to commit.",
-      inputSchema: { manifest: z.string().describe("the full proposed manifest as JSON") },
+      description:
+        "Propose a full manifest rewrite. Validates + checks data + returns a diff. Does NOT write — call apply_edit to commit. For adding/changing/removing individual datasets, actions, queries, connectors, or pages, prefer patch_manifest — it's incremental and far less error-prone than re-sending the whole manifest.",
+      inputSchema: { manifest: manifestArg.describe("the full proposed manifest — pass a JSON object (preferred) or a JSON string") },
     },
     async ({ manifest }) => {
-      const parsed = parseManifest(manifest);
+      const parsed = coerceManifest(manifest);
       if ("error" in parsed) return json({ ok: false, errors: [`Invalid JSON: ${parsed.error}`] });
-      const base = await readManifest();
-      const proposed = JSON.stringify(parsed.raw, null, 2) + "\n";
-      const diff = manifestDiff(base, proposed);
-      const check = await dryCheck(parsed.raw);
-      if (!check.ok) return json({ ok: false, errors: check.errors, diff });
+      return json(await stageProposal(await readManifest(), parsed.raw));
+    },
+  );
 
-      const stored: StoredProposal = { manifest: proposed, diff, baseHash: hashManifest(base) };
-      return json({ ok: true, proposal_id: await proposals.save(stored), custom_islands: check.custom, diff });
+  server.registerTool(
+    "patch_manifest",
+    {
+      description:
+        "Incrementally edit the manifest by section — the preferred editor. Add, replace, or remove individual datasets, actions, queries, connectors, and pages WITHOUT re-sending the whole manifest. Record sections take a map of name → spec (or name → null to delete). Pages take full Page objects (upserted by id); remove_pages deletes by id. To change one island, send just its page in `pages`. The patch is merged into the current manifest, validated, checked against the data, and returned as a diff + proposal_id — nothing is written until apply_edit. Same safety pipeline as propose_edit, far less to get wrong.",
+      inputSchema: {
+        title: z.string().optional(),
+        icon: z.string().optional().describe("workspace tile icon"),
+        datasets: z.record(z.string(), DatasetSpec.nullable()).optional().describe("name → dataset spec; name → null deletes it"),
+        actions: z.record(z.string(), ActionSpec.nullable()).optional().describe("name → action spec; name → null deletes it"),
+        queries: z.record(z.string(), QuerySpec.nullable()).optional().describe("name → query spec; name → null deletes it"),
+        connectors: z.record(z.string(), ConnectorSpec.nullable()).optional().describe("name → connector spec; name → null deletes it"),
+        pages: z.array(Page).optional().describe("full Page objects, upserted by id (a matching id is replaced, a new id is appended)"),
+        remove_pages: z.array(z.string()).optional().describe("page ids to remove"),
+      },
+    },
+    async (patch) => {
+      const base = await readManifest();
+      let current: Record<string, unknown>;
+      try {
+        current = JSON.parse(base) as Record<string, unknown>;
+      } catch {
+        current = {};
+      }
+      return json(await stageProposal(base, applyManifestPatch(current, patch as Record<string, unknown>)));
     },
   );
 
   server.registerTool(
     "apply_edit",
-    { description: "Write a previously-proposed edit. Rejects stale/unknown proposals. Snapshots the current manifest first for rollback.", inputSchema: { proposal_id: z.string() } },
+    { description: "Write a previously-proposed edit (from propose_edit or patch_manifest). Rejects stale/unknown proposals. Snapshots the current manifest first for rollback.", inputSchema: { proposal_id: z.string() } },
     async ({ proposal_id }) => {
       const proposal = await proposals.load(proposal_id);
       if (!proposal) return json({ ok: false, error: `Unknown proposal '${proposal_id}'. Call propose_edit first.` });

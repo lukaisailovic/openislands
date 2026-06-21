@@ -5,6 +5,10 @@ import { netWorthByMonth, sampleData } from "./sampleData";
 
 const GITHUB_URL = "https://github.com/lukaisailovic/openislands";
 
+/** Paste this into a coding agent; it reads the start doc and builds the first dashboard. */
+const AGENT_PROMPT =
+  "Read https://openislands.sh/start.md then help me build my first agent-maintained dashboard.";
+
 const kpiManifest = `{
   "type": "metric.kpi",
   "title": "Net worth",
@@ -90,7 +94,16 @@ export function Home() {
           <HomePage.Button href="/introduction">Introduction</HomePage.Button>
           <HomePage.Button href={GITHUB_URL}>GitHub</HomePage.Button>
         </HomePage.Buttons>
-        <CopyCommand command="npx openislands init my-dashboard" />
+        <div className="oi-starts">
+          <div className="oi-start">
+            <p className="oi-start-label">Hand it to your agent</p>
+            <CopyCommand command={AGENT_PROMPT} kind="prompt" />
+          </div>
+          <div className="oi-start">
+            <p className="oi-start-label">Or scaffold it yourself</p>
+            <CopyCommand command="npx openislands init my-dashboard" />
+          </div>
+        </div>
       </HomePage.Root>
 
       <section className="oi-section">

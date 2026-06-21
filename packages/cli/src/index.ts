@@ -49,8 +49,8 @@ program
 
 program
   .command("init [dir]")
-  .description("scaffold a new dashboard project from a template")
-  .option("-t, --template <name>", "finance | health | operations", "finance")
+  .description("scaffold a new dashboard project from a template (blank by default)")
+  .option("-t, --template <name>", "empty | finance | health | operations", "empty")
   .action((dir: string | undefined, opts: { template: string }) => {
     const target = resolve(dir ?? ".");
     const src = join(templatesDir(), opts.template);

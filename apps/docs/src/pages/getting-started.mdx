@@ -2,28 +2,49 @@
 
 OpenIslands is built for an **agent** to own a dashboard over months — but you bootstrap it. You
 scaffold a project, connect your agent to it over MCP, then drive it with prompts. From there the
-agent reads your data, proposes a change as a full manifest, validates it, and applies it — and
-can undo any of it. Here's the path from nothing to an agent-maintained dashboard.
+agent reads your data, proposes a change, validates it, and applies it — and can undo any of it.
+Here's the path from nothing to an agent-maintained dashboard.
+
+:::tip[The one-paste start]
+Already have a coding agent open? Paste this and let it take the wheel — it reads a short briefing,
+scaffolds a project, and starts building:
+
+> Read https://openislands.sh/start.md then help me build my first agent-maintained dashboard.
+
+The steps below are that same path, done by hand.
+:::
 
 ::::steps
 
 ##### Scaffold a project
 
-Pick a template (`finance`, `health`, or `operations`); `init` drops a complete, working project
-in the target directory.
+`init` drops a complete, working project in the target directory. With no flag it scaffolds the
+`empty` template — a blank starter with one welcome note and an empty `data/`, so you and your
+agent build it up from your own files.
 
 ```bash
-npx openislands init my-dashboard --template finance
+npx openislands init my-dashboard
 cd my-dashboard
 ```
 
-`finance` is the flagship: net worth, allocation, holdings, and transactions as typed islands
-over CSVs you own.
+Want a populated example instead? Pass `--template`:
+
+```bash
+npx openislands init my-dashboard --template finance
+```
+
+`finance` is the flagship — net worth, allocation, holdings, and transactions as typed islands over
+CSVs you own. `health` and `operations` are there too.
 
 ##### Connect your agent over MCP
 
-Add the `@openislands/mcp` server to your agent's MCP config, pointed at the project directory
-(the folder that holds `app/manifest.json`).
+`init` already did this. The scaffold ships a local `.mcp.json` wiring the `@openislands/mcp`
+server, an `AGENTS.md`, and the OpenIslands skill under `.agents/skills/openislands/` — so any
+agent that reads the project picks up the tools and the conventions. Open the folder in your agent
+and you're connected.
+
+If you're wiring it into a project by hand, this is the config it expects, pointed at the directory
+that holds `app/manifest.json`:
 
 ```jsonc [.mcp.json]
 {
@@ -40,6 +61,12 @@ Add the `@openislands/mcp` server to your agent's MCP config, pointed at the pro
 there's nothing to install globally. The last argument is the project directory — `.` if your
 agent runs from inside it.
 
+To add the skill to a project that doesn't have it (or to your own agent setup):
+
+```bash
+npx skills add lukaisailovic/openislands --skill openislands
+```
+
 ##### Serve it so you can watch
 
 ```bash
@@ -52,9 +79,9 @@ every request. Leave it running — each edit the agent applies live-updates the
 ##### Prompt the agent
 
 Now just ask. The agent grounds itself first (it reads the manifest, the dataset schema, and real
-rows), proposes the **full** manifest so you see a diff before anything is written, applies it
-with a snapshot of the prior version, and rolls back if the result is wrong. A binding to a column
-that doesn't exist comes back as a named error, so a broken dashboard never ships.
+rows), proposes the change so you see a diff before anything is written, applies it with a snapshot
+of the prior version, and rolls back if the result is wrong. A binding to a column that doesn't
+exist comes back as a named error, so a broken dashboard never ships.
 
 Prompts that work well:
 
