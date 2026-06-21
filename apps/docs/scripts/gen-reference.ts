@@ -16,6 +16,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BUILTIN_ISLAND_TYPES,
+  ISLAND_DEFAULT_SPAN,
+  ISLAND_MAX_SPAN,
   ISLAND_MIN_SPAN,
   jsonSchemaFor,
   type IslandType,
@@ -146,6 +148,8 @@ function islandSection(type: IslandType): string {
   const schema = jsonSchemaFor(type) as JsonSchemaNode;
   const rows = fieldRows(schema);
   const minSpan = ISLAND_MIN_SPAN[type];
+  const recommendedSpan = ISLAND_DEFAULT_SPAN[type];
+  const maxSpan = ISLAND_MAX_SPAN[type];
   const description = (schema.description ?? DESCRIPTION_FALLBACKS[type] ?? "")
     .replace(/\s+/g, " ")
     .trim();
@@ -155,7 +159,7 @@ function islandSection(type: IslandType): string {
     "",
     description,
     "",
-    `**Minimum span:** ${minSpan}`,
+    `**Span:** min ${minSpan}, recommended ${recommendedSpan}, max ${maxSpan} (of 12). Omit \`span\` to render at the recommended width; below min or above max is a named error.`,
     "",
     fieldTable(rows),
   ].join("\n");
@@ -411,11 +415,13 @@ and each key must be one of the connector's declared outputs.
 ## Islands
 
 Each island in a page's \`islands\` (or a group's \`islands\`) is an object discriminated
-by its \`type\`. Below is every built-in type with its minimum grid span and the fields
+by its \`type\`. Below is every built-in type with its grid span range and the fields
 its config accepts. \`id\`, \`title\`, and \`span\` are common optional fields on every
-data-bound island; \`span\` is a 1–12 grid column count and must not fall below the
-island's minimum span. Bind an island only to fields that exist in its dataset; a
-missing field fails validation and names the island.
+data-bound island; \`span\` is a 1–12 grid column count that must sit within the island's
+\`min\`–\`max\` range (a value below min or above max is a named validation error), and
+defaults to the recommended width when omitted. Compact, single-value islands cap well
+below full width; data-dense ones run the full 12. Bind an island only to fields that
+exist in its dataset; a missing field fails validation and names the island.
 
 A \`layout.row\` is a structural wrapper: it holds other islands and forces them onto
 their own full-width grid row. It carries no \`span\`, \`title\`, or data binding, and it

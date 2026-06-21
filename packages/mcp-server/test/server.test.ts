@@ -659,18 +659,16 @@ describe("M7 catalog additions are discoverable + bindable", () => {
   it("get_island_schema returns a JSON-Schema for a new type naming its required fields", async () => {
     const client = await connect(freshProject());
     const waterfall = (await call(client, "get_island_schema", { type: "waterfall.bars" })) as {
-      properties: Record<string, unknown>;
-      required: string[];
+      schema: { properties: Record<string, unknown>; required: string[] };
     };
-    expect(waterfall.required).toEqual(expect.arrayContaining(["label", "value"]));
-    expect(Object.keys(waterfall.properties)).toEqual(expect.arrayContaining(["label", "value"]));
+    expect(waterfall.schema.required).toEqual(expect.arrayContaining(["label", "value"]));
+    expect(Object.keys(waterfall.schema.properties)).toEqual(expect.arrayContaining(["label", "value"]));
 
     const rank = (await call(client, "get_island_schema", { type: "rank.list" })) as {
-      properties: Record<string, unknown>;
-      required: string[];
+      schema: { properties: Record<string, unknown>; required: string[] };
     };
-    expect(rank.required).toEqual(expect.arrayContaining(["label", "value"]));
-    expect(Object.keys(rank.properties)).toEqual(expect.arrayContaining(["label", "value"]));
+    expect(rank.schema.required).toEqual(expect.arrayContaining(["label", "value"]));
+    expect(Object.keys(rank.schema.properties)).toEqual(expect.arrayContaining(["label", "value"]));
   });
 
   it("propose → apply accepts a new island plus a select filter bound to real columns", async () => {
@@ -881,5 +879,139 @@ describe("dataset readability + path confinement", () => {
     expect(errors.some((e) => e.includes("derived") && /table_that_does_not_exist|does not exist|Catalog/i.test(e))).toBe(true);
     // ...and the healthy datasets are NOT falsely reported as unreadable
     expect(errors.some((e) => e.includes("net_worth_monthly") && /unreadable/i.test(e))).toBe(false);
+  });
+});
+
+describe("layout guidance", () => {
+  it("get_island_schema returns span layout + synthesized notes", async () => {
+    const client = await connect(freshProject());
+    const out = (await call(client, "get_island_schema", { type: "table.grid" })) as {
+      type: string;
+      schema: { properties: Record<string, unknown> };
+      layout: { minSpan: number; recommendedSpan: number; maxSpan: number };
+      notes: string[];
+    };
+    expect(out.type).toBe("table.grid");
+    expect(out.schema.properties).toBeDefined();
+    expect(out.layout).toEqual({ minSpan: 5, recommendedSpan: 8, maxSpan: 12 });
+    expect(out.notes[0]).toContain("Spans 5–12 columns");
+    expect(out.notes.some((n) => n.includes("full 12 columns"))).toBe(true);
+  });
+
+  it("get_island_schema flags a compact island and nudges metric.kpi off standalone", async () => {
+    const client = await connect(freshProject());
+    const kpi = (await call(client, "get_island_schema", { type: "metric.kpi" })) as {
+      layout: { minSpan: number; recommendedSpan: number; maxSpan: number };
+      notes: string[];
+    };
+    expect(kpi.layout).toEqual({ minSpan: 2, recommendedSpan: 4, maxSpan: 6 });
+    expect(kpi.notes.some((n) => n.includes("compact island"))).toBe(true);
+    expect(kpi.notes.some((n) => /standalone KPI/i.test(n) && /metric\.scorecard/.test(n))).toBe(true);
+  });
+
+  it("get_island_schema returns a null layout for the structural layout.row", async () => {
+    const client = await connect(freshProject());
+    const row = (await call(client, "get_island_schema", { type: "layout.row" })) as {
+      type: string;
+      schema: unknown;
+      layout: null;
+      notes: string[];
+    };
+    expect(row.type).toBe("layout.row");
+    expect(row.schema).toBeDefined();
+    expect(row.layout).toBeNull();
+    expect(row.notes[0]).toMatch(/full-width row/i);
+  });
+
+  it("list_islands carries the span range for each island", async () => {
+    const client = await connect(freshProject());
+    const islands = (await call(client, "list_islands")) as { type: string; minSpan?: number; recommendedSpan?: number; maxSpan?: number }[];
+    const kpi = islands.find((i) => i.type === "metric.kpi");
+    expect(kpi).toMatchObject({ minSpan: 2, recommendedSpan: 4, maxSpan: 6 });
+    const row = islands.find((i) => i.type === "layout.row");
+    expect(row?.minSpan).toBeUndefined();
+  });
+
+  it("validate_manifest returns advisory warnings without failing a valid manifest", async () => {
+    const client = await connect(freshProject());
+    const out = (await call(client, "validate_manifest")) as { ok: boolean; warnings: { page: string; type: string }[] };
+    expect(out.ok).toBe(true);
+    expect(out.warnings.some((w) => w.page === "overview" && w.type === "metric.kpi")).toBe(true);
+  });
+
+  it("propose_edit surfaces a lone-kpi warning but still stages (ok:true)", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const next = JSON.parse(validManifest(root));
+    next.title = "Edited";
+    const out = (await call(client, "propose_edit", { manifest: next })) as { ok: boolean; proposal_id?: string; warnings: { type: string }[] };
+    expect(out.ok).toBe(true);
+    expect(out.proposal_id).toBeTruthy();
+    expect(out.warnings.some((w) => w.type === "metric.kpi")).toBe(true);
+  });
+
+  it("patch_manifest warns when a compact island is wider than its recommended span", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const page = JSON.parse(validManifest(root)).pages[0];
+    page.islands[0].span = 6; // metric.kpi: max 6, recommended 4 — valid but wider than recommended
+    const out = (await call(client, "patch_manifest", { pages: [page] })) as { ok: boolean; warnings: { type: string; message: string }[] };
+    expect(out.ok).toBe(true);
+    expect(out.warnings.some((w) => w.type === "metric.kpi" && /recommended/i.test(w.message))).toBe(true);
+  });
+
+  it("a structurally-invalid manifest reports errors with empty warnings", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const out = (await call(client, "validate_manifest", { manifest: { version: 1, title: "x", datasets: {} } })) as { ok: boolean; errors: unknown[]; warnings: unknown[] };
+    expect(out.ok).toBe(false);
+    expect(out.errors.length).toBeGreaterThan(0);
+    expect(out.warnings).toEqual([]);
+  });
+});
+
+describe("history hygiene", () => {
+  async function applyTitleEdit(client: Client, root: string, title: string): Promise<void> {
+    const next = JSON.parse(validManifest(root));
+    next.title = title;
+    const proposed = (await call(client, "propose_edit", { manifest: next })) as { proposal_id: string };
+    await call(client, "apply_edit", { proposal_id: proposed.proposal_id });
+  }
+
+  it("cleanup_history keeps the newest N checkpoints and removes the rest", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    for (const title of ["e1", "e2", "e3"]) await applyTitleEdit(client, root, title);
+    expect(((await call(client, "list_checkpoints")) as string[]).length).toBe(3);
+
+    const out = (await call(client, "cleanup_history", { keep: 1 })) as { ok: boolean; kept: number; removed: number };
+    expect(out).toEqual({ ok: true, kept: 1, removed: 2 });
+    expect(((await call(client, "list_checkpoints")) as string[]).length).toBe(1);
+  });
+
+  it("cleanup_history defaulting keep is a no-op below the cap", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    await applyTitleEdit(client, root, "only");
+    const out = (await call(client, "cleanup_history")) as { ok: boolean; kept: number; removed: number };
+    expect(out).toEqual({ ok: true, kept: 1, removed: 0 });
+  });
+
+  it("staging a fresh proposal discards an earlier proposal made stale by an apply", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const a = JSON.parse(validManifest(root));
+    a.title = "A";
+    const propA = (await call(client, "propose_edit", { manifest: a })) as { proposal_id: string };
+
+    await applyTitleEdit(client, root, "applied"); // moves the base manifest, making propA stale
+
+    const c = JSON.parse(validManifest(root));
+    c.title = "C";
+    await call(client, "propose_edit", { manifest: c }); // staging C should sweep the stale propA
+
+    const stale = (await call(client, "apply_edit", { proposal_id: propA.proposal_id })) as { ok: boolean; error: string };
+    expect(stale.ok).toBe(false);
+    expect(stale.error).toMatch(/unknown/i); // gone, not merely rejected as stale
   });
 });

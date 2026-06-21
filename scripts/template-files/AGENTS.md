@@ -16,6 +16,10 @@ The short version:
   names the page, island, and field. Fix it; don't work around it.
 - **Data lives in `data/`, transforms in `models/`, docs in `docs/`.** Files are the source of truth and
   nothing leaves the machine.
+- **Size islands by their span range.** Each island has a min/recommended/max span; check
+  `get_island_schema` before setting `span`. Keep compact islands (KPIs, funnels, gauges, pies, radars)
+  narrow and let data-dense ones (tables, charts, feeds) go wide; don't ship a lone KPI — group them or
+  use `metric.scorecard`. `validate` and the MCP surface advisory layout warnings.
 - `npx openislands serve` runs the live dashboard at `127.0.0.1:4321`; `npx openislands validate` checks
   every binding.
 

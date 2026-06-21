@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { join, extname, basename, isAbsolute } from "node:path";
 import duckdb, { type DuckDBValue } from "@duckdb/node-api";
 import { type ContentStore, getContentStore } from "@openislands/storage";
-import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
+import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, lintManifest, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
 import { queryResultToArrowIPC } from "./arrow.js";
 import { checkCustomIsland } from "./customSchema.js";
 import { checkConnectors } from "./connectors.js";
@@ -1064,6 +1064,12 @@ export async function compile(projectDir: string): Promise<CompileReport> {
   if (manifest.queries) {
     const queryErrors = await checkQueries(projectDir, manifest);
     for (const e of queryErrors) report.errors.push(`[query ${e.query}] ${e.message}`);
+  }
+
+  for (const w of lintManifest(manifest)) {
+    report.warnings.push(
+      w.index < 0 ? `[${w.page}] ${w.message}` : `[${w.page}#${w.index} ${w.type}] ${w.message}`,
+    );
   }
 
   report.ok = report.errors.length === 0;

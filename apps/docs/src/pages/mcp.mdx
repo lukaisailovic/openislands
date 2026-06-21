@@ -50,13 +50,13 @@ An agent grounds itself before it ever proposes a change. These tools are all re
 
 | Tool | What it returns |
 | --- | --- |
-| `list_islands` | The built-in island types and the fields each requires. |
-| `get_island_schema(type)` | The exact config schema for one island type. |
+| `list_islands` | The built-in island types, the fields each requires, and each one's `minSpan` / `recommendedSpan` / `maxSpan`. |
+| `get_island_schema(type)` | The exact config schema for one island type, plus its `layout` (`{ minSpan, recommendedSpan, maxSpan }`) and `notes` — so the sizing rules reach you at discovery time. |
 | `get_manifest` | The current manifest. |
 | `get_data_schema(dataset)` | A dataset's live, DuckDB-inferred columns and types. |
 | `query_data({ dataset } \| { sql }, limit)` | Rows from a dataset, or a read-only `SELECT` over the registered dataset views. |
 | `validate_sql({ sql })` | Dry-runs a read-only `SELECT` against the dataset views; returns its result columns or the exact DuckDB error. |
-| `validate_manifest({ manifest? })` | Validates a manifest (the one on disk, or one you pass) and checks every binding against the data. |
+| `validate_manifest({ manifest? })` | Validates a manifest (the one on disk, or one you pass) and checks every binding against the data; also returns advisory layout `warnings`. |
 | `list_checkpoints` | The rollback points, newest last. |
 
 `query_data` takes a `dataset` name for a whole dataset *or* a read-only `sql` SELECT over the
@@ -66,6 +66,12 @@ look like *before* binding an island to it.
 `validate_sql` is the same read-only surface, aimed at **authoring a transform**: paste the SQL you
 intend to save as a `sql` dataset and get back its result columns, or the exact DuckDB error, before
 you wire it into the manifest. See [CRUD recipes](#crud-recipes).
+
+`get_island_schema` and `list_islands` also carry each island's **span range** — its `minSpan`,
+`recommendedSpan`, and `maxSpan` on the 12-column grid — so you can size a tile correctly before you
+set `span`, not after `validate` rejects it. Compact islands (a `metric.kpi`, `funnel.steps`, the
+gauges) cap well below 12; data-dense ones run the full width. See
+[Spans and the grid](/concepts/manifest#spans-and-the-grid).
 
 ## The manifest write path
 
@@ -113,19 +119,25 @@ The merge follows the shape of each section:
 
 The validation is identical to `propose_edit`'s: if a binding fails, you get
 `{ ok: false, errors, diff }` (each error naming the page, island, and field) and **no**
-`proposal_id`. Fix the patch and call again. On success: `{ ok: true, proposal_id, diff }`.
+`proposal_id`. Fix the patch and call again. On success: `{ ok: true, proposal_id, diff }`. Both
+shapes also carry an advisory **`warnings`** array — the layout linter's non-blocking suggestions
+(a lone `metric.kpi`, a compact island stretched past its recommended span). Warnings never set
+`ok` to `false` or block the apply; they're a nudge toward a tidier layout, not a gate.
 
 ### `propose_edit` — the full rewrite
 
 **`propose_edit({ manifest })`** takes the whole manifest when you really do want to replace it
 end to end. It accepts a manifest **object** (preferred) or a JSON string — no double-encoding.
 It validates the structure, checks every binding against the live data, and returns the same
-`{ ok, proposal_id?, diff, errors? }` shape as `patch_manifest`.
+`{ ok, proposal_id?, diff, errors?, warnings? }` shape as `patch_manifest`. **Reach for
+`patch_manifest` first** — it's the preferred incremental editor; `propose_edit` is for a full
+rewrite or a brand-new manifest, where re-sending the whole document is the point.
 
 A proposed manifest is validated **against itself**: new datasets, `sql` transforms, and markdown
 sources introduced in the same edit resolve and bind correctly, even starting from an empty
-manifest. `validate_manifest({ manifest? })` runs that same check without staging anything — pass a
-manifest object to dry-run it, or omit it to validate the one on disk.
+manifest. `validate_manifest({ manifest? })` runs that same check (errors **and** advisory layout
+`warnings`) without staging anything — pass a manifest object to dry-run it, or omit it to validate
+the one on disk.
 
 ### Apply and roll back
 
@@ -136,6 +148,11 @@ content-hash check), re-stage the edit.
 
 **`rollback({ checkpoint_id? })`** restores a checkpoint **byte-for-byte** (the latest if no id is
 given). It restores the manifest *and* any data checkpoints, so it undoes data writes too.
+
+History doesn't grow without bound: it auto-prunes to the newest few checkpoints after every
+`apply_edit`. **`cleanup_history({ keep? })`** prunes it on demand — keeping the newest `keep`
+checkpoints and deleting the rest — to reclaim space sooner or keep fewer. Trimmed checkpoints
+become unrecoverable.
 
 There is no raw file-write tool and no git dependency by design. Safety is the
 stage/apply/rollback loop plus on-disk snapshots, not trust.

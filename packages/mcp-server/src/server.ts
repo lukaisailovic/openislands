@@ -14,7 +14,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createTwoFilesPatch } from "diff";
 import { z } from "zod";
 import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, checkQueries, inferSchema, inspectManifestDatasets, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery, validateSql } from "@openislands/compiler";
-import { ActionSpec, BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, ConnectorSpec, DatasetSpec, LayoutRow, Page, QuerySpec, jsonSchemaFor, validateManifest, type IslandError, type IslandType } from "@openislands/schema";
+import { ActionSpec, BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, ConnectorSpec, DatasetSpec, ISLAND_DEFAULT_SPAN, ISLAND_MAX_SPAN, ISLAND_MIN_SPAN, LayoutRow, Page, QuerySpec, jsonSchemaFor, lintManifest, validateManifest, type IslandError, type IslandType, type LayoutWarning } from "@openislands/schema";
 import { getAppStateStore, getContentStore } from "@openislands/storage";
 import { createCheckpointStore, isCheckpointId } from "./checkpoints.js";
 import { confineDatasetSource } from "./paths.js";
@@ -22,15 +22,42 @@ import { createProposalStore, hashManifest, type StoredProposal } from "./propos
 
 const MAX_ROWS_PER_ACTION = 100;
 
+/** Cap on retained rollback checkpoints — apply_edit auto-prunes to this so history can't grow unbounded. */
+const MAX_CHECKPOINTS = 25;
+
 /** Read from package.json so the MCP handshake version tracks the published release (the release
  * workflow bumps package.json; this follows automatically). */
 const SERVER_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
-/** Required fields, data binding, and description, derived from the island's Zod schema so they can never drift from it. */
-function islandContract(type: IslandType): { type: IslandType; required: string[]; bindsData: boolean; description: string } {
+interface IslandLayout {
+  minSpan: number;
+  recommendedSpan: number;
+  maxSpan: number;
+}
+
+const layoutFor = (type: IslandType): IslandLayout => ({
+  minSpan: ISLAND_MIN_SPAN[type],
+  recommendedSpan: ISLAND_DEFAULT_SPAN[type],
+  maxSpan: ISLAND_MAX_SPAN[type],
+});
+
+/** Layout guidance synthesized from an island's span bounds — kept generic so it tracks the
+ * schema's numbers rather than a hand-maintained prose table that would drift from them. */
+function layoutNotes(type: IslandType): string[] {
+  const { minSpan, recommendedSpan, maxSpan } = layoutFor(type);
+  const notes = [`Spans ${minSpan}–${maxSpan} columns; ${recommendedSpan} is the recommended width.`];
+  if (maxSpan < 12) notes.push(`A compact island — keep it ≤ ${maxSpan}; past ~${recommendedSpan} it only stretches into empty space.`);
+  if (maxSpan === 12) notes.push("Can run the full 12 columns when the data is dense.");
+  if (type === "metric.kpi") notes.push("Avoid a standalone KPI — group 2+ in a row, or use metric.scorecard for a tidy strip.");
+  return notes;
+}
+
+/** Required fields, data binding, description, and span range, derived from the island's Zod schema
+ * and span maps so they can never drift from them. */
+function islandContract(type: IslandType): { type: IslandType; required: string[]; bindsData: boolean; description: string } & IslandLayout {
   const schema = z.toJSONSchema(BUILTIN_ISLAND_SCHEMAS[type], { io: "input" }) as { required?: string[]; description: string };
   const required = (schema.required ?? []).filter((field) => field !== "type");
-  return { type, required, bindsData: required.includes("dataset"), description: schema.description };
+  return { type, required, bindsData: required.includes("dataset"), description: schema.description, ...layoutFor(type) };
 }
 
 const LAYOUT_ROW_CONTRACT = {
@@ -113,10 +140,12 @@ export function createServer(projectRoot: string): McpServer {
 
   const readManifest = async (): Promise<string> => (await content.readText("app/manifest.json")) ?? "{}";
 
-  /** Dry contract check: validate a proposed manifest and check islands against the live data. */
-  async function dryCheck(proposedRaw: unknown): Promise<{ ok: boolean; errors: (IslandError | string)[]; custom: string[] }> {
+  /** Dry contract check: validate a proposed manifest and check islands against the live data.
+   * `warnings` are advisory layout lints over any structurally-valid manifest — they never affect `ok`. */
+  async function dryCheck(proposedRaw: unknown): Promise<{ ok: boolean; errors: (IslandError | string)[]; warnings: LayoutWarning[]; custom: string[] }> {
     const v = validateManifest(proposedRaw);
-    if (!v.ok || !v.manifest) return { ok: false, errors: v.errors, custom: [] };
+    if (!v.ok || !v.manifest) return { ok: false, errors: v.errors, warnings: [], custom: [] };
+    const warnings = lintManifest(v.manifest);
 
     for (const [name, spec] of Object.entries(v.manifest.datasets)) {
       const ref = spec.sql ?? spec.source;
@@ -124,7 +153,7 @@ export function createServer(projectRoot: string): McpServer {
       try {
         confineDatasetSource(projectRoot, ref);
       } catch (e) {
-        return { ok: false, errors: [`dataset '${name}': ${(e as Error).message}`], custom: [] };
+        return { ok: false, errors: [`dataset '${name}': ${(e as Error).message}`], warnings, custom: [] };
       }
     }
 
@@ -143,7 +172,7 @@ export function createServer(projectRoot: string): McpServer {
       ...errors,
       ...queryErrors.map((e) => `query '${e.query}': ${e.message}`),
     ];
-    return { ok: allErrors.length === 0, errors: allErrors, custom: v.custom.map((c) => c.type) };
+    return { ok: allErrors.length === 0, errors: allErrors, warnings, custom: v.custom.map((c) => c.type) };
   }
 
   /** Serialize a proposed manifest, diff it against the base, dry-check it, and either return the
@@ -152,9 +181,10 @@ export function createServer(projectRoot: string): McpServer {
     const proposed = JSON.stringify(manifest, null, 2) + "\n";
     const diff = manifestDiff(base, proposed);
     const check = await dryCheck(manifest);
-    if (!check.ok) return { ok: false, errors: check.errors, diff };
+    if (!check.ok) return { ok: false, errors: check.errors, warnings: check.warnings, diff };
+    await proposals.discardStale(hashManifest(base));
     const stored: StoredProposal = { manifest: proposed, diff, baseHash: hashManifest(base) };
-    return { ok: true, proposal_id: await proposals.save(stored), custom_islands: check.custom, diff };
+    return { ok: true, proposal_id: await proposals.save(stored), custom_islands: check.custom, warnings: check.warnings, diff };
   }
 
   const server = new McpServer({ name: "openislands", version: SERVER_VERSION });
@@ -163,17 +193,20 @@ export function createServer(projectRoot: string): McpServer {
 
   server.registerTool(
     "list_islands",
-    { description: "List the built-in island types with their required fields and a short description." },
+    { description: "List the built-in island types with their required fields, a short description, and their span range (minSpan / recommendedSpan / maxSpan)." },
     async () => json([...BUILTIN_ISLAND_TYPES.map(islandContract), LAYOUT_ROW_CONTRACT]),
   );
 
   server.registerTool(
     "get_island_schema",
-    { description: "Get the JSON Schema for one island type — use it to ground an edit.", inputSchema: { type: z.string() } },
+    { description: "Get the JSON Schema for one island type plus its layout guidance (min/recommended/max span + notes) — use it to ground an edit and pick a sensible width.", inputSchema: { type: z.string() } },
     async ({ type }) => {
-      if (type === "layout.row") return json(z.toJSONSchema(LayoutRow));
+      if (type === "layout.row") {
+        return json({ type, schema: z.toJSONSchema(LayoutRow), layout: null, notes: ["A structural full-width row; it carries no span of its own — set spans on its child islands."] });
+      }
       if (!BUILTIN_ISLAND_TYPES.includes(type as IslandType)) return text(`Unknown built-in island '${type}'. Known: ${BUILTIN_ISLAND_TYPES.join(", ")}, layout.row`);
-      return json(jsonSchemaFor(type as IslandType));
+      const islandType = type as IslandType;
+      return json({ type: islandType, schema: jsonSchemaFor(islandType), layout: layoutFor(islandType), notes: layoutNotes(islandType) });
     },
   );
 
@@ -248,13 +281,25 @@ export function createServer(projectRoot: string): McpServer {
     async () => json(await checkpoints.list()),
   );
 
+  server.registerTool(
+    "cleanup_history",
+    {
+      description: `Trim the rollback history, keeping the newest \`keep\` checkpoints and deleting the rest (defaults to ${MAX_CHECKPOINTS}). Older checkpoints become unrecoverable. History is auto-trimmed to ${MAX_CHECKPOINTS} on every apply_edit; call this to reclaim space sooner or to keep fewer.`,
+      inputSchema: { keep: z.number().int().positive().optional() },
+    },
+    async ({ keep }) => {
+      const { kept, removed } = await checkpoints.prune(keep ?? MAX_CHECKPOINTS);
+      return json({ ok: true, kept, removed });
+    },
+  );
+
   // --- the one write pipeline ------------------------------------------------------
 
   server.registerTool(
     "propose_edit",
     {
       description:
-        "Propose a full manifest rewrite. Validates + checks data + returns a diff. Does NOT write — call apply_edit to commit. For adding/changing/removing individual datasets, actions, queries, connectors, or pages, prefer patch_manifest — it's incremental and far less error-prone than re-sending the whole manifest.",
+        "Replace the WHOLE manifest — for a full rewrite or a brand-new manifest. Validates + checks data + returns a diff (and advisory layout `warnings`). Does NOT write — call apply_edit to commit. For a small change prefer patch_manifest: sending a full-manifest payload just to edit one section is error-prone (easy to drop or mangle the parts you didn't mean to touch).",
       inputSchema: { manifest: manifestArg.describe("the full proposed manifest — pass a JSON object (preferred) or a JSON string") },
     },
     async ({ manifest }) => {
@@ -268,7 +313,7 @@ export function createServer(projectRoot: string): McpServer {
     "patch_manifest",
     {
       description:
-        "Incrementally edit the manifest by section — the preferred editor. Add, replace, or remove individual datasets, actions, queries, connectors, and pages WITHOUT re-sending the whole manifest. Record sections take a map of name → spec (or name → null to delete). Pages take full Page objects (upserted by id); remove_pages deletes by id. To change one island, send just its page in `pages`. The patch is merged into the current manifest, validated, checked against the data, and returned as a diff + proposal_id — nothing is written until apply_edit. Same safety pipeline as propose_edit, far less to get wrong.",
+        "The PREFERRED tool for incremental edits — send only the sections that change, so edits stay small and drift less. Add, replace, or remove individual datasets, actions, queries, connectors, and pages WITHOUT re-sending the whole manifest. Record sections take a map of name → spec (or name → null to delete). Pages upsert by id (full Page objects); remove_pages deletes by id. To change one island, send just its page in `pages`. The patch is merged into the current manifest, validated, checked against the data, and returned as a diff + proposal_id (plus advisory layout `warnings`) — nothing is written until apply_edit. Same safety pipeline as propose_edit, far less to get wrong.",
       inputSchema: {
         title: z.string().optional(),
         icon: z.string().optional().describe("workspace tile icon"),
@@ -308,6 +353,7 @@ export function createServer(projectRoot: string): McpServer {
       const checkpoint = (await content.exists("app/manifest.json")) ? await checkpoints.snapshotManifest(base) : null;
       await content.writeText("app/manifest.json", proposal.manifest);
       await proposals.remove(proposal_id);
+      await checkpoints.prune(MAX_CHECKPOINTS).catch(() => {});
 
       return json({ ok: true, checkpoint_id: checkpoint, applied: manifestPath });
     },

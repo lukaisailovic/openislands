@@ -519,6 +519,8 @@ function printErrors(errors: string[]): void {
   for (const e of errors) console.error(`  ${c.red("✗")} ${e}`);
 }
 function printWarnings(warnings: string[]): void {
+  if (warnings.length === 0) return;
+  console.log(c.yellow(`\n${warnings.length} layout suggestion(s) — advisory, the dashboard still renders:`));
   for (const w of warnings) console.log(`  ${c.yellow("!")} ${c.dim(w)}`);
 }
 

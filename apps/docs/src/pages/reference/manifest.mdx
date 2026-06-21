@@ -237,11 +237,13 @@ and each key must be one of the connector's declared outputs.
 ## Islands
 
 Each island in a page's `islands` (or a group's `islands`) is an object discriminated
-by its `type`. Below is every built-in type with its minimum grid span and the fields
+by its `type`. Below is every built-in type with its grid span range and the fields
 its config accepts. `id`, `title`, and `span` are common optional fields on every
-data-bound island; `span` is a 1–12 grid column count and must not fall below the
-island's minimum span. Bind an island only to fields that exist in its dataset; a
-missing field fails validation and names the island.
+data-bound island; `span` is a 1–12 grid column count that must sit within the island's
+`min`–`max` range (a value below min or above max is a named validation error), and
+defaults to the recommended width when omitted. Compact, single-value islands cap well
+below full width; data-dense ones run the full 12. Bind an island only to fields that
+exist in its dataset; a missing field fails validation and names the island.
 
 A `layout.row` is a structural wrapper: it holds other islands and forces them onto
 their own full-width grid row. It carries no `span`, `title`, or data binding, and it
@@ -253,7 +255,7 @@ cannot nest another `layout.row`.
 
 A single headline number, optionally with a delta vs the previous row or a target — use for at-a-glance KPIs.
 
-**Minimum span:** 2
+**Span:** min 2, recommended 4, max 6 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -272,7 +274,7 @@ A single headline number, optionally with a delta vs the previous row or a targe
 
 A compact scorecard of several KPIs off the last row — use for a tidy row of related numbers, each with an optional delta vs the previous row.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -287,7 +289,7 @@ A compact scorecard of several KPIs off the last row — use for a tidy row of r
 
 A line chart over time — use for trends; supports multiple y fields, a series split, and a goal line.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -305,7 +307,7 @@ A line chart over time — use for trends; supports multiple y fields, a series 
 
 A bar chart across categories — use to compare discrete groups; supports grouped or stacked bars.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -323,7 +325,7 @@ A bar chart across categories — use to compare discrete groups; supports group
 
 A dual-axis chart: bars on the primary axis, lines on a secondary axis — use to compare a level against a rate (revenue vs margin, volume vs price).
 
-**Minimum span:** 4
+**Span:** min 4, recommended 8, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -343,7 +345,7 @@ A dual-axis chart: bars on the primary axis, lines on a secondary axis — use t
 
 A waterfall / bridge chart — use for a P&L walk or variance: an opening anchor, signed +/− steps that accumulate, and closing anchors. Mark anchor rows via a kind field whose value is "total".
 
-**Minimum span:** 4
+**Span:** min 4, recommended 8, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -361,7 +363,7 @@ A waterfall / bridge chart — use for a P&L walk or variance: an opening anchor
 
 A treemap of part-to-whole composition — use to show how a total splits across (optionally hierarchical) parts.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -378,7 +380,7 @@ A treemap of part-to-whole composition — use to show how a total splits across
 
 A matrix heatmap — use to show one value across two categorical dimensions (x × y), shaded by a continuous color scale.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 8, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -396,7 +398,7 @@ A matrix heatmap — use to show one value across two categorical dimensions (x 
 
 A calendar heatmap — use to show a daily value over weeks and months, GitHub-contributions style; rows on the same day sum.
 
-**Minimum span:** 6
+**Span:** min 6, recommended 12, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -413,7 +415,7 @@ A calendar heatmap — use to show a daily value over weeks and months, GitHub-c
 
 A funnel of sequential stages — use for conversion or drop-off; each stage's width is its share, ordered by the rows unless sort is set.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 4, max 6 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -431,7 +433,7 @@ A funnel of sequential stages — use for conversion or drop-off; each stage's w
 
 A ranked Top-N list with proportional bars — use for leaderboards: top products, customers, errors, or movers.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -451,7 +453,7 @@ A ranked Top-N list with proportional bars — use for leaderboards: top product
 
 A radar (spider) chart — use to compare entities across several metrics at once; each metric is an axis, each row a polygon.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 6, max 8 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -469,7 +471,7 @@ A radar (spider) chart — use to compare entities across several metrics at onc
 
 A geographic choropleth — use to shade regions (world countries) by a value; region names must match the map's names. Local-first: the map ships as vendored GeoJSON, no network.
 
-**Minimum span:** 5
+**Span:** min 5, recommended 8, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -487,7 +489,7 @@ A geographic choropleth — use to shade regions (world countries) by a value; r
 
 A scatter or bubble plot of two numeric fields — use to explore correlation; split into series by a field and size points by a third.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -508,7 +510,7 @@ A scatter or bubble plot of two numeric fields — use to explore correlation; s
 
 A pie or donut chart of part-to-whole composition — use for one series' share across a handful of categories; set donut for a hole.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 4, max 8 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -526,7 +528,7 @@ A pie or donut chart of part-to-whole composition — use for one series' share 
 
 A paginated table of raw rows: use when exact values matter; supports column formats, click-to-open details, and collapsible groups.
 
-**Minimum span:** 5
+**Span:** min 5, recommended 8, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -545,7 +547,7 @@ A paginated table of raw rows: use when exact values matter; supports column for
 
 A reverse-chronological feed of events: use for logs and activity; supports detail dialogs and collapsible groups, and a rich row layout (header value, inline stats, meta footer) when highlight/stats/footer are set.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 7, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -569,7 +571,7 @@ A reverse-chronological feed of events: use for logs and activity; supports deta
 
 Up to four concentric progress rings read off the last row — use for tracking several goals or budgets at once.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 5, max 8 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -583,7 +585,7 @@ Up to four concentric progress rings read off the last row — use for tracking 
 
 One ring per goal comparing the last row's value to a goal or target band — use for numbers with a defined good range; within the band reads success-green, under amber, over danger-red. `size` sets the shared ring footprint so several share a row.
 
-**Minimum span:** 2
+**Span:** min 2, recommended 5, max 8 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -598,7 +600,7 @@ One ring per goal comparing the last row's value to a goal or target band — us
 
 One or more horizontal usage meters read off the last row — use for quota- or capacity-style values.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 4, max 8 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -612,7 +614,7 @@ One or more horizontal usage meters read off the last row — use for quota- or 
 
 A responsive grid of state tiles — use for service/check health on ops & status-page dashboards; each tile's tone comes from its state value.
 
-**Minimum span:** 4
+**Span:** min 4, recommended 8, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -630,7 +632,7 @@ A responsive grid of state tiles — use for service/check health on ops & statu
 
 A search box over a dataset — typing matches rows case-insensitively across `fields`, results drop down as an autocomplete; selecting a result opens the row's details.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -648,7 +650,7 @@ A search box over a dataset — typing matches rows case-insensitively across `f
 
 A static markdown card with no data binding — use for commentary, instructions, or context between islands; set `tone` to render it as an info/success/warning/danger callout.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -662,7 +664,7 @@ A static markdown card with no data binding — use for commentary, instructions
 
 An embedded file or external link (pdf, markdown, image, link) — use to surface source documents alongside the data; renders as a document card with a type icon, name, and open affordance.
 
-**Minimum span:** 2
+**Span:** min 2, recommended 4, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -679,7 +681,7 @@ An embedded file or external link (pdf, markdown, image, link) — use to surfac
 
 A full-page content workspace — browse and edit a directory of markdown files (and CSVs) Obsidian-style, with virtual folders and version history. Set exactly one of `file` (one doc) or `dir` (a tree). Binds no dataset and renders full-bleed.
 
-**Minimum span:** 6
+**Span:** min 6, recommended 12, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -697,7 +699,7 @@ A full-page content workspace — browse and edit a directory of markdown files 
 
 A data-entry form card bound to a manifest `action` — renders one typed input per action field, with a submit button in the bottom-right that inserts a row; the bound dataset's islands then refresh live. The human-facing mirror of the agent's run_action: it reuses the action's typing and so binds no dataset of its own.
 
-**Minimum span:** 3
+**Span:** min 3, recommended 5, max 8 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |

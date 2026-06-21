@@ -40,13 +40,35 @@ this lives in the docs site under `apps/docs/src/pages/`.
 ### Layout: spans, pages, groups
 
 `span` is a 1–12 grid column count; each group gets its own 12-column grid. Every island type
-has a minimum span below which it stops being legible (`ISLAND_MIN_SPAN` in
-`packages/schema/src/index.ts`): `metric.kpi`/`source.doc`/`gauge.goal` 2,
-`note.card`/`gauge.meter`/`search.box`/`category.pie`/`funnel.steps`/`metric.scorecard`/`form.entry` 3,
-`table.grid`/`map.choropleth` 5, `activity.calendar`/`content.editor` 6, everything else 4. An explicit `span` below its type's minimum is a named validation error
-(e.g. "span 1 is below the minimum 4 for timeseries.line"). The runtime additionally floors
-spans responsively — below ~640px every tile goes full-width, and in a middle band spans render
-at `max(span, 6)` — so a tile never renders narrower than its minimum usable width.
+carries three span bounds (all in `packages/schema/src/index.ts` — the source of truth for the
+exact numbers):
+
+- **`ISLAND_MIN_SPAN`** — the minimum below which the island stops being legible. An explicit
+  `span` below it is a named validation error (e.g. "span 1 is below the minimum 4 for
+  timeseries.line").
+- **`ISLAND_MAX_SPAN`** — the maximum above which it only stretches into dead space. An explicit
+  `span` above it is the mirror-image named error (e.g. "span 12 exceeds the maximum 6 for
+  funnel.steps — it only stretches into empty space past that width").
+- **`ISLAND_DEFAULT_SPAN`** — the recommended width, and what the island renders at when `span`
+  is omitted. Always sits inside `[min, max]`.
+
+The principle behind the caps: **compact, fixed-aspect, single-value islands** (a `metric.kpi`,
+`funnel.steps`, the gauges, `category.pie`, `compare.radar`, `form.entry`) max out well below full
+width — past their natural size they're just whitespace. **Data-dense islands** (tables,
+time-series, bar/combo/waterfall charts, heatmaps, treemaps, calendars, feeds, status grids, maps,
+notes, docs) run the full 12. Two canonical examples: `funnel.steps` is min 3, recommended 4, max
+6; `metric.kpi` is min 2, recommended 4, max 6.
+
+Between the recommended width and the hard maximum sits an **advisory layout linter**
+(`lintManifest`), run by `validate` and on the MCP edit path. It emits non-blocking **warnings**
+(the dashboard still renders) for composition smells: a **standalone `metric.kpi`** ("group 2+
+KPIs in a row, or switch to `metric.scorecard`") and a **compact island set wider than its
+recommended span**. The CLI prints these under "N layout suggestion(s)"; the MCP edit tools return
+them in a `warnings` array.
+
+The runtime additionally floors spans responsively — below ~640px every tile goes full-width, and
+in a middle band spans render at `max(span, 6)` — so a tile never renders narrower than its minimum
+usable width.
 
 Multiple pages render a sidebar (single-page apps stay chrome-free); groups render as tabs under
 the page header, deep-linked via `?group=<id>`. Island errors are indexed flat across a page's

@@ -20,10 +20,14 @@ export interface ProposalStore {
   save(proposal: StoredProposal): Promise<string>;
   load(id: string): Promise<StoredProposal | null>;
   remove(id: string): Promise<void>;
+  /** Drop staged proposals whose baseHash no longer matches `currentHash` — apply_edit
+   * already rejects those as stale, so they're dead weight. Returns how many it removed. */
+  discardStale(currentHash: string): Promise<number>;
 }
 
 const isProposalId = (id: string): boolean => /^prop-[0-9a-f]{12,}$/.test(id);
 const proposalKey = (id: string): string => `proposals/${id}.json`;
+const idFromFile = (name: string): string => name.slice(0, -".json".length);
 
 export function createProposalStore(store: AppStateStore): ProposalStore {
   return {
@@ -39,6 +43,20 @@ export function createProposalStore(store: AppStateStore): ProposalStore {
     },
     async remove(id) {
       if (isProposalId(id)) await store.delete(proposalKey(id));
+    },
+    async discardStale(currentHash) {
+      const entries = await store.list("proposals");
+      let removed = 0;
+      for (const entry of entries) {
+        const id = idFromFile(entry.name);
+        if (!isProposalId(id)) continue;
+        const raw = await store.getText(proposalKey(id));
+        if (raw === null) continue;
+        if ((JSON.parse(raw) as StoredProposal).baseHash === currentHash) continue;
+        await store.delete(proposalKey(id));
+        removed += 1;
+      }
+      return removed;
     },
   };
 }
