@@ -1,6 +1,6 @@
 {
   "name": "@openislands/mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "OpenIslands MCP server — read-many / write-one, so an agent edits your dashboard safely.",
   "type": "module",
   "license": "MIT",

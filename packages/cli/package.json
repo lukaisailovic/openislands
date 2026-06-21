@@ -1,6 +1,6 @@
 {
   "name": "openislands",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Agent-built dashboards over data you own, that don't rot. The OpenIslands CLI.",
   "type": "module",
   "license": "MIT",
