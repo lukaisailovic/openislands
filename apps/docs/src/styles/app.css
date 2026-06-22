@@ -16,6 +16,18 @@
 /* The site is dark-only; island `dark:` utilities follow the forced `.dark` class. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Reserve the scrollbar gutter on the page scroller (the root element) for every page.
+ * Short pages like the Introduction don't overflow, so on classic (space-consuming)
+ * scrollbars they'd render ~15px wider than the longer pages that do scroll — the whole
+ * centered grid (and the right-hand TOC) then jumps horizontally on navigation. Reserving
+ * the gutter always keeps the content width identical across pages, so there's no wobble.
+ * No-op where the OS uses overlay scrollbars.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
 @theme {
   --font-sans:
     "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
