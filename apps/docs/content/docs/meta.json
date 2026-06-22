@@ -1,0 +1,29 @@
+{
+  "pages": [
+    "---Guide---",
+    "introduction",
+    "getting-started",
+    "mcp",
+    "agents",
+    "cli",
+    "---Concepts---",
+    "concepts/manifest",
+    "concepts/data-contracts",
+    "concepts/sql-transforms",
+    "---Reading Data---",
+    "data/queries",
+    "---Writing Data---",
+    "data/actions",
+    "data/connectors",
+    "---Islands---",
+    "islands/overview",
+    "islands/metrics-and-gauges",
+    "islands/charts",
+    "islands/tables-and-feeds",
+    "islands/content-and-layout",
+    "islands/custom",
+    "---Reference---",
+    "reference/manifest",
+    "reference/value-formats"
+  ]
+}

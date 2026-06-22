@@ -1,0 +1,349 @@
+---
+title: Metrics & Gauges
+description: Six islands for at-a-glance state — a headline KPI, a multi-stat scorecard, three gauges, and a status grid of service/check tiles.
+---
+
+import { sampleData } from "@/components/sample-data";
+
+Six islands for at-a-glance state: a headline KPI, a multi-stat scorecard, three gauges, and a status
+grid of service/check tiles. Each previewed
+below is a real OpenIslands renderer: the same code a live dashboard runs, not a
+screenshot. For the full registry, see [Islands](/islands/overview).
+
+<Callout type="info" title="Tip">
+  Every gauge reads the **last row** of its dataset, so feed it data already aggregated to
+  the value you want shown: the most recent day, the current month-to-date, the running
+  total. The KPI reads the last row too, plus the row before it for the delta.
+</Callout>
+
+## metric.kpi
+
+A single headline number off the last row, with an optional delta versus the previous row
+and a sparkline drawn over the time axis it finds. Reach for it when one number (net worth,
+MRR, today's steps) deserves the top of a page.
+
+<LiveIsland
+  type="metric.kpi"
+  config={{ title: "Monthly revenue", value: "revenue_eur", compareTo: "prev", format: "eur" }}
+  data={sampleData(
+    [
+      { name: "month", type: "date" },
+      { name: "revenue_eur", type: "double" },
+    ],
+    [
+      { month: "2026-01-01", revenue_eur: 42_300 },
+      { month: "2026-02-01", revenue_eur: 45_100 },
+      { month: "2026-03-01", revenue_eur: 44_200 },
+      { month: "2026-04-01", revenue_eur: 49_800 },
+      { month: "2026-05-01", revenue_eur: 52_600 },
+      { month: "2026-06-01", revenue_eur: 56_400 },
+    ],
+    "revenue",
+  )}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "metric.kpi",
+  "title": "Monthly revenue",
+  "dataset": "revenue",
+  "value": "revenue_eur",
+  "compareTo": "prev",
+  "format": "eur"
+}
+```
+
+- `value`: the field holding the headline number (required).
+- `compareTo`: `"prev"` draws a delta against the previous row; a field name compares to
+  that column instead; `"none"` (the default) shows no delta.
+- `target`: a field holding a target to measure the value against.
+- `format`: any [value format](/reference/value-formats); `unit` appends a free-form suffix.
+- `color`: a 6-digit hex (e.g. `"#22C55E"`) for the sparkline, overriding the palette.
+
+## metric.scorecard
+
+A compact scorecard of several KPIs read off the last row, each with an optional delta
+versus the previous row. Reach for it when a handful of related numbers (MRR, active users,
+churn, NPS) belong together in one tidy tile instead of separate KPI cards.
+
+<LiveIsland
+  type="metric.scorecard"
+  config={{
+    title: "This month",
+    stats: [
+      { value: "mrr_eur", label: "MRR", format: "eur", compareTo: "prev" },
+      { value: "active_users", label: "Active users", format: "int", compareTo: "prev" },
+      { value: "churn", label: "Churn", format: "pct" },
+      { value: "nps", label: "NPS", format: "int" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "month", type: "varchar" },
+      { name: "mrr_eur", type: "double" },
+      { name: "active_users", type: "double" },
+      { name: "churn", type: "double" },
+      { name: "nps", type: "double" },
+    ],
+    [
+      { month: "2026-04", mrr_eur: 80_000, active_users: 1100, churn: 0.042, nps: 42 },
+      { month: "2026-05", mrr_eur: 92_000, active_users: 1240, churn: 0.031, nps: 48 },
+    ],
+    "saas_metrics",
+  )}
+  height={150}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "metric.scorecard",
+  "title": "This month",
+  "dataset": "saas_metrics",
+  "stats": [
+    { "value": "mrr_eur", "label": "MRR", "format": "eur", "compareTo": "prev" },
+    { "value": "active_users", "label": "Active users", "format": "int", "compareTo": "prev" },
+    { "value": "churn", "label": "Churn", "format": "pct" },
+    { "value": "nps", "label": "NPS", "format": "int" }
+  ]
+}
+```
+
+- `stats`: the list of numbers to show (at least one), each reading its `value` off the last row.
+- `stats[].label` defaults to the field name; a [value format](/reference/value-formats) (`format`)
+  or free-form `unit` styles the value; `compareTo: "prev"` adds a delta badge versus the previous row.
+- `columns`: a fixed grid column count (1-6); omitted, the grid is responsive.
+
+## gauge.rings
+
+Up to four concentric progress rings read off the last row: the dashboard view when
+several goals or budgets share one tile. Each ring fills toward its `max` (a column or a
+fixed number); the center shows the outermost ring's percentage.
+
+<LiveIsland
+  type="gauge.rings"
+  config={{
+    title: "Today's targets",
+    rings: [
+      { value: "calories", max: "calorie_goal", label: "Calories" },
+      { value: "protein_g", max: "protein_goal", label: "Protein" },
+      { value: "water_ml", max: "water_goal", label: "Water" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "calories", type: "bigint" },
+      { name: "calorie_goal", type: "bigint" },
+      { name: "protein_g", type: "bigint" },
+      { name: "protein_goal", type: "bigint" },
+      { name: "water_ml", type: "bigint" },
+      { name: "water_goal", type: "bigint" },
+    ],
+    [
+      {
+        day: "2026-06-13",
+        calories: 1_840,
+        calorie_goal: 2_200,
+        protein_g: 118,
+        protein_goal: 140,
+        water_ml: 1_500,
+        water_goal: 2_000,
+      },
+    ],
+    "daily_targets",
+  )}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "gauge.rings",
+  "title": "Today's targets",
+  "dataset": "daily_targets",
+  "rings": [
+    { "value": "calories", "max": "calorie_goal", "label": "Calories" },
+    { "value": "protein_g", "max": "protein_goal", "label": "Protein" },
+    { "value": "water_ml", "max": "water_goal", "label": "Water" }
+  ]
+}
+```
+
+- `rings`: one to four rings, outermost first (required). Each is
+  `{ value, max, label?, color?, direction? }`.
+- `max`: a column name or a fixed number; the goal the ring fills toward.
+- `direction`: `atLeast` (default, fills toward a goal) or `atMost` (a budget: crossing
+  the limit turns the ring danger-red).
+- `color`: a CSS color per ring; defaults to a built-in palette.
+
+## gauge.goal
+
+One ring per goal, each comparing the last row's value to a goal or a target band. Reach for it
+when a number has a defined good range: within the band reads success-green, under it amber, over
+it danger-red. The three rings below hit all three tones at once — heart rate over its band, sleep
+clear of its floor, activity short of it.
+
+<LiveIsland
+  type="gauge.goal"
+  config={{
+    title: "Today vs goals",
+    size: "small",
+    goals: [
+      { value: "rhr", goal: { min: 50, max: 60 }, label: "Resting HR", unit: "bpm", format: "int" },
+      { value: "sleep_h", goal: { min: 7 }, label: "Sleep", unit: "h", format: "int" },
+      { value: "active_min", goal: { min: 30 }, label: "Active", unit: "min", format: "int" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "rhr", type: "bigint" },
+      { name: "sleep_h", type: "double" },
+      { name: "active_min", type: "bigint" },
+    ],
+    [
+      { day: "2026-06-12", rhr: 55, sleep_h: 7.5, active_min: 42 },
+      { day: "2026-06-13", rhr: 66, sleep_h: 8, active_min: 18 },
+    ],
+    "vitals",
+  )}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "gauge.goal",
+  "title": "Today vs goals",
+  "dataset": "vitals",
+  "size": "small",
+  "goals": [
+    { "value": "rhr", "goal": { "min": 50, "max": 60 }, "label": "Resting HR", "unit": "bpm", "format": "int" },
+    { "value": "sleep_h", "goal": { "min": 7 }, "label": "Sleep", "unit": "h", "format": "int" },
+    { "value": "active_min", "goal": { "min": 30 }, "label": "Active", "unit": "min", "format": "int" }
+  ]
+}
+```
+
+- `goals`: one to six goals, each its own ring side by side in a row that wraps (required).
+  Each is `{ value, goal, label?, unit?, format? }`, read off the last row.
+- `goal`: at least one of `min` / `max`, each a column or a number; supplying both makes a
+  target band, the value reads green inside it, amber below, red above.
+- `value`: the field holding the ring's current number; `format` is any
+  [value format](/reference/value-formats), `unit`/`label` annotate the ring.
+- `size`: the footprint shared by every ring — `small`, `medium` (the default), or `large`.
+  `small` packs several rings across a row and swaps each badge for a compact status dot;
+  `large` emphasizes one or two.
+
+<Callout type="info" title="Note">
+  Each goal needs at least one bound: a `goal` with neither `min` nor `max` is a named
+  validation error, so a misconfigured ring fails the build rather than rendering blank.
+</Callout>
+
+## gauge.meter
+
+One or more horizontal usage bars read off the last row: the quota- or capacity-style
+view. Each meter shows `value / max` and fills proportionally in its own color.
+
+<LiveIsland
+  type="gauge.meter"
+  config={{
+    title: "Plan usage",
+    meters: [
+      { value: "storage_gb", max: "storage_cap", label: "Storage (GB)" },
+      { value: "seats_used", max: "seat_cap", label: "Seats" },
+      { value: "api_calls", max: "api_cap", label: "API calls" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "storage_gb", type: "bigint" },
+      { name: "storage_cap", type: "bigint" },
+      { name: "seats_used", type: "bigint" },
+      { name: "seat_cap", type: "bigint" },
+      { name: "api_calls", type: "bigint" },
+      { name: "api_cap", type: "bigint" },
+    ],
+    [
+      {
+        day: "2026-06-13",
+        storage_gb: 64,
+        storage_cap: 100,
+        seats_used: 18,
+        seat_cap: 25,
+        api_calls: 82_000,
+        api_cap: 100_000,
+      },
+    ],
+    "plan_usage",
+  )}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "gauge.meter",
+  "title": "Plan usage",
+  "dataset": "plan_usage",
+  "meters": [
+    { "value": "storage_gb", "max": "storage_cap", "label": "Storage (GB)" },
+    { "value": "seats_used", "max": "seat_cap", "label": "Seats" },
+    { "value": "api_calls", "max": "api_cap", "label": "API calls" }
+  ]
+}
+```
+
+- `meters`: one or more bars, top to bottom (required). Each is
+  `{ value, max, label?, color? }`.
+- `max`: a column name or a fixed number; the capacity the bar fills against.
+- `color`: a CSS color per meter; defaults to a built-in palette.
+
+## status.grid
+
+A responsive grid of state tiles, one per row: the ops & status-page view for service or check
+health. Each tile labels an entity, badges its state, and can show a metric underneath; the badge
+tone comes from the state value.
+
+<LiveIsland
+  type="status.grid"
+  config={{
+    title: "Service status",
+    label: "service",
+    state: "status",
+    value: "p95_ms",
+    format: "int",
+    tones: { maintenance: "warning" },
+  }}
+  data={sampleData(
+    [
+      { name: "service", type: "varchar" },
+      { name: "status", type: "varchar" },
+      { name: "p95_ms", type: "bigint" },
+    ],
+    [
+      { service: "gateway", status: "degraded", p95_ms: 340 },
+      { service: "auth", status: "healthy", p95_ms: 90 },
+      { service: "payments", status: "maintenance", p95_ms: 150 },
+      { service: "search", status: "down", p95_ms: 0 },
+    ],
+    "services",
+  )}
+  height={150}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "status.grid",
+  "title": "Service status",
+  "dataset": "services",
+  "label": "service",
+  "state": "status",
+  "value": "p95_ms",
+  "format": "int",
+  "tones": { "maintenance": "warning" }
+}
+```
+
+- `label`: the field naming each entity — a service, check, or host (required).
+- `state`: the field holding each entity's status value, shown as the tile's badge (required).
+- `value`: an optional metric shown under the label; `format` is any [value format](/reference/value-formats).
+- `tones`: a `state → tone` map (`success` / `warning` / `danger` / `neutral`) to override the
+  tone of specific state values. Unmapped values fall back to a keyword convention:
+  `up` / `ok` / `healthy` / `online` → success, `warn` / `degraded` / `pending` → warning,
+  `down` / `error` / `critical` / `fail` → danger, anything else → neutral.

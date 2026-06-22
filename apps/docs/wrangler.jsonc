@@ -1,0 +1,15 @@
+{
+  // OpenIslands docs — fully static (SPA + prerender) output served as Cloudflare
+  // Workers static assets. There is no server: `vite build` prerenders every page,
+  // the per-page markdown (`/introduction.md`), the LLM indexes (`/llms.txt`,
+  // `/llms-full.txt`), and the Orama search index (`/api/search`) into .output/public,
+  // and Workers serves that directory. Deploy with `pnpm deploy` (build + wrangler).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "openislands-docs",
+  "compatibility_date": "2026-06-22",
+  "assets": {
+    "directory": "./.output/public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "single-page-application"
+  }
+}

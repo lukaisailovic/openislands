@@ -1,0 +1,136 @@
+---
+title: CLI
+description: The keyboard path — every move an agent makes over MCP you can make by hand with the openislands command, with the same validation.
+---
+
+`openislands` is the keyboard path. Every move the agent makes over [MCP](/mcp) you can make
+by hand — same validation, same files, same refusal to write something that won't render.
+Reach for it to bootstrap a project, drive a quick change without an agent in the loop, or wire
+a connector into cron.
+
+<Callout type="info" title="Tip">
+
+No global install needed: `npx openislands <command>` runs the latest published CLI. Install it
+(`npm i -g openislands`) once you're using it daily.
+
+</Callout>
+
+## The everyday loop
+
+Most sessions are the same rhythm: **infer fast, formalize immediately**. See a file's shape with
+no commitment, then bind it, add an island, and validate.
+
+<Steps>
+
+<Step>
+### Infer a file's shape
+
+Drop a CSV (or JSON / JSONL / Parquet) into `data/` and ask what's in it:
+
+```bash
+npx openislands infer data/spending.csv
+```
+
+You get the inferred columns and types, a proposed dataset contract, and a few suggested
+islands. Nothing is written — it's a read-only look.
+</Step>
+
+<Step>
+### Bind it, then add an island
+
+Re-run with `--bind` to write the dataset into the manifest, then scaffold an island:
+
+```bash
+npx openislands infer data/spending.csv --bind
+npx openislands add category.bar
+```
+
+`--bind` re-validates before saving, so a bad write is refused, not persisted. Then open
+`app/manifest.json`, set the island's `dataset`, and fill in its required fields from the
+columns `infer` showed you.
+</Step>
+
+<Step>
+### Validate
+
+```bash
+npx openislands validate
+```
+
+Green means the dashboard renders. A binding to a field that doesn't exist fails here and
+**names the island** — the same check the agent's `propose_edit` runs.
+</Step>
+
+</Steps>
+
+## Commands
+
+### `init`
+
+```bash
+openislands init [dir] --template <finance|health|operations>
+```
+
+Scaffolds a complete, working project into `dir` (default: the current directory). `--template`
+(`-t`) picks the starting point and defaults to `finance` — net worth, allocation, holdings, and
+transactions as typed islands over CSVs you own. `health` and `operations` are the other two.
+
+### `serve`
+
+```bash
+openislands serve [dir] [--port 4321] [--host 127.0.0.1]
+```
+
+Boots your dashboard as a long-running local app (the TanStack Start SSR runtime), querying your
+files on every request. It validates first and **refuses to boot a manifest that can't render**,
+naming what's wrong. It binds to loopback by default — this is your data. Leave it running: edit
+a file and the page live-updates over SSE.
+
+Point `serve` at a directory of projects instead of one, and it serves them all as a workspace.
+
+### `infer`
+
+```bash
+openislands infer <file> [dir] [--bind]
+```
+
+Reads a data file through the same DuckDB core the runtime uses and prints its columns, a
+proposed dataset contract, and suggested islands. Read-only by default; `--bind` writes the
+dataset into `app/manifest.json` (re-validating first). The file must live inside the project —
+move it under `data/` before binding.
+
+### `add`
+
+```bash
+openislands add <island-type> [dir]
+```
+
+Appends an island skeleton to the first page, then validates before writing — if the skeleton
+wouldn't render, nothing is saved. Fill in its `dataset` and fields afterward. Any built-in type
+works; see the [island registry](/islands/overview).
+
+### `validate`
+
+```bash
+openislands validate [dir]
+```
+
+Compiles the manifest and checks every island's binding against the live data. On failure it
+names the page, the island, and the missing field, and exits non-zero — the safety net behind
+every edit, agent or human.
+
+### `sync`
+
+```bash
+openislands sync [dir] [connector]
+```
+
+Pulls configured [connectors](/data/connectors) once and writes their datasets — name one
+connector or sync them all. Cron this for headless refresh; an OAuth connector needs to be
+authorized once from the running dashboard first.
+
+## Next
+
+- [MCP Server](/mcp): the same surface, driven by an agent.
+- [The Manifest](/concepts/manifest): the JSON these commands read and write.
+- [Islands](/islands/overview): the building blocks `add` scaffolds.

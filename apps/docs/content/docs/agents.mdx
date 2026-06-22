@@ -1,0 +1,188 @@
+---
+title: Agent Setup
+description: Any agent that speaks the Model Context Protocol can drive OpenIslands — this page covers wiring up Hermes, OpenClaw, Claude Code, and Codex CLI.
+---
+
+OpenIslands is built for an AI agent to own a dashboard. Any agent that speaks the
+**Model Context Protocol** can drive it — this page covers connecting four of them:
+[Hermes](#hermes), [OpenClaw](#openclaw), [Claude Code](#claude-code), and
+[Codex CLI](#codex-cli).
+
+## What's common to all of them
+
+Every agent drives the **same MCP edit loop**. OpenIslands ships a standard **stdio** MCP server,
+`@openislands/mcp`, and `init` scaffolds everything an agent needs to find it:
+
+- a `.mcp.json` wiring the server (pointed at the project root that holds `app/manifest.json`),
+- an `AGENTS.md` pointing the agent at the conventions,
+- the OpenIslands skill under `.agents/skills/openislands/`.
+
+So the agent reads the live contract, stages a validated `patch_manifest` / `propose_edit`, applies
+it, and can roll it back — the tools and guarantees are identical whichever agent you use. See the
+[MCP Server](/mcp) page for the full tool list and the read-many/write-one model; this page only
+covers the per-agent **wiring**.
+
+The server invocation is always the same — `npx -y @openislands/mcp <project-root>` over stdio — so
+if an agent isn't listed below, point its MCP config at that command and drop an `AGENTS.md` (or its
+own project-instructions file) at the project root.
+
+```jsonc title=".mcp.json"
+{
+  "mcpServers": {
+    "openislands": {
+      "command": "npx",
+      "args": ["-y", "@openislands/mcp", "."]
+    }
+  }
+}
+```
+
+## Hermes
+
+[Hermes](https://hermes-agent.nousresearch.com) is Nous Research's self-hosted autonomous agent —
+it runs on your own hardware, writes and runs code, and calls external tools over MCP.
+
+**Wire up the server.** Hermes reads its config from `~/.hermes/config.yaml`, under an
+`mcp_servers` map (or run `hermes mcp add openislands` to add it interactively):
+
+```yaml title="~/.hermes/config.yaml"
+mcp_servers:
+  openislands:
+    command: npx
+    args: ["-y", "@openislands/mcp", "/path/to/your/project"]
+```
+
+**Project guidance.** Hermes loads an `AGENTS.md` from the working directory into its system prompt
+at session start — the one `init` already wrote. Point it at your project directory and it picks up
+the conventions; the skill under `.agents/skills/` documents the full edit loop.
+
+**Tips.**
+
+- Hermes is a long-running autonomous agent, so lean on the safety boundary: every manifest change
+  is staged, diffed, and reversible. Let it propose and apply through the MCP rather than touching
+  files directly.
+- Since it self-hosts, the `npx` invocation needs Node ≥ 20 available in the environment Hermes runs
+  in.
+
+<Callout type="info" title="Verify the exact config shape">
+
+Hermes's MCP config schema (the `mcp_servers` map and its `command` / `args` / `env` keys) is taken
+from the [Hermes docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp); the
+generic stdio invocation above is what matters. If a Hermes release changes the YAML shape, follow
+its docs and keep the same `npx -y @openislands/mcp <project>` command.
+
+</Callout>
+
+## OpenClaw
+
+[OpenClaw](https://docs.openclaw.ai) is an open-source personal agent that runs anywhere and
+connects to external tools over MCP (it integrates `mcporter`).
+
+**Wire up the server.** OpenClaw reads `~/.openclaw/openclaw.json`. Note its MCP servers live under
+a **nested** `mcp.servers` key (not Claude Code's top-level `mcpServers`):
+
+```json title="~/.openclaw/openclaw.json"
+{
+  "mcp": {
+    "servers": {
+      "openislands": {
+        "command": "npx",
+        "args": ["-y", "@openislands/mcp", "/path/to/your/project"]
+      }
+    }
+  }
+}
+```
+
+Or add it from the CLI with `openclaw mcp add` (check `openclaw mcp --help` for the current flag
+spelling), then `openclaw mcp doctor openislands` to confirm it launches.
+
+**Project guidance.** OpenClaw reads `AGENTS.md` as its project rules — the same file `init` drops.
+It also honors a sibling `CLAUDE.md`, so the convention of symlinking `CLAUDE.md → AGENTS.md` keeps
+one source of truth.
+
+**Tips.**
+
+- Mind the nesting: `mcp.servers`, not `mcpServers`. It's the easiest thing to get wrong moving a
+  config over from Claude Code.
+- Confirm the connection with `openclaw mcp doctor` before driving it — a misnested key fails
+  silently otherwise.
+
+<Callout type="info" title="Verify the exact config shape">
+
+OpenClaw's config path and the `mcp.servers` nesting come from the
+[OpenClaw docs](https://docs.openclaw.ai/cli/mcp); confirm the CLI flag spelling against the live
+page before scripting `openclaw mcp add`. The stdio command itself —
+`npx -y @openislands/mcp <project>` — is stable.
+
+</Callout>
+
+## Claude Code
+
+[Claude Code](https://code.claude.com) is Anthropic's agentic coding CLI, and the default OpenIslands
+target — `init`'s scaffold is already shaped for it.
+
+**Wire up the server.** Claude Code reads project-scoped MCP servers from **`.mcp.json` at the
+project root** — exactly the file `init` writes, so there's nothing to do:
+
+```jsonc title=".mcp.json"
+{
+  "mcpServers": {
+    "openislands": {
+      "command": "npx",
+      "args": ["-y", "@openislands/mcp", "."]
+    }
+  }
+}
+```
+
+To add it by hand, `claude mcp add --transport stdio openislands --scope project -- npx -y @openislands/mcp .`
+writes the same project-scoped entry. (Claude Code prompts to approve a project `.mcp.json` server
+on first use.)
+
+**Project guidance.** Claude Code reads `CLAUDE.md` as project memory and discovers skills under
+`.agents/skills/`. The scaffold ships the OpenIslands skill, so it loads automatically whenever you
+edit a project that has an `app/manifest.json`. (`AGENTS.md` is conventionally symlinked to
+`CLAUDE.md`.)
+
+**Tips.**
+
+- Just open the scaffolded folder — project-scoped `.mcp.json` and the skill are picked up with no
+  manual MCP setup.
+- The skill's edit loop is the contract: prefer `patch_manifest`, pass JSON objects, and never work
+  around a binding error.
+
+## Codex CLI
+
+[Codex CLI](https://developers.openai.com/codex) is OpenAI's coding agent CLI. It reads `AGENTS.md`
+natively, so the scaffold's conventions apply out of the box.
+
+**Wire up the server.** Codex configures MCP servers in `~/.codex/config.toml`, as
+`[mcp_servers.<name>]` TOML tables:
+
+```toml title="~/.codex/config.toml"
+[mcp_servers.openislands]
+command = "npx"
+args = ["-y", "@openislands/mcp", "/path/to/your/project"]
+```
+
+Or add it from the CLI: `codex mcp add openislands -- npx -y @openislands/mcp /path/to/your/project`.
+(Environment variables go in a `[mcp_servers.openislands.env]` sub-table — not the unrelated
+`env_vars` allowlist key.)
+
+**Project guidance.** Codex reads `AGENTS.md` — the file `init` writes. It merges `AGENTS.md` files
+from your home directory down to the working directory, concatenated root-to-cwd with the
+closest-to-cwd file taking precedence, so the project's `AGENTS.md` lands on top.
+
+**Tips.**
+
+- Codex's MCP config is global (`~/.codex/config.toml`), not per-project, so pass an **absolute**
+  project path in `args` rather than `.`.
+- The project `AGENTS.md` points at the skill under `.agents/skills/openislands/` — read it for the
+  full edit loop and CRUD recipes.
+
+## Where to go next
+
+- [MCP Server](/mcp) — the full tool set and the read-many/write-one safety model every agent shares.
+- [Getting Started](/getting-started) — scaffold a project and drive your first edit.
+- [The Manifest](/concepts/manifest) — what every edit validates against.

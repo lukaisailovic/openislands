@@ -1,4 +1,7 @@
 node_modules/
 dist/
-.vocs/
-src/pages.gen.ts
+.output/
+.nitro/
+.tanstack/
+.source/
+

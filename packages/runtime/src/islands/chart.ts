@@ -3,9 +3,19 @@ import type { KumoChartOption } from "@cloudflare/kumo";
 import type { ValueFormat } from "@openislands/schema";
 import { formatValue } from "./format.js";
 
-/** Tracks the OS color scheme on the client. Returns false during SSR. */
+/**
+ * Tracks the OS color scheme on the client. Returns false during SSR; on the client it
+ * reads `matchMedia` from the very first render (lazy initializer) so a chart never
+ * paints a light frame before an effect flips it to dark. Islands are client-only
+ * (lazy + Suspense), so there is no server-rendered island markup to mismatch.
+ */
 export function usePrefersDark(): boolean {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     setDark(mq.matches);

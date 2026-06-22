@@ -6,9 +6,5 @@ packages:
 allowBuilds:
   es5-ext: false
   esbuild: true
-
-minimumReleaseAgeExclude:
-  - vocs@2.0.13
-
-patchedDependencies:
-  vocs: patches/vocs.patch
+  sharp: false
+  workerd: true

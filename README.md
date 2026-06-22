@@ -175,7 +175,7 @@ publish/sync tier may come later.
 - [Agent edit loop](./docs/agent-edit-loop.md): the read-many/write-one MCP loop, actions, queries, and connectors.
 - [Contributing](./CONTRIBUTING.md): adding an island, the PR gate, releases.
 
-The full docs site lives in [`apps/docs`](./apps/docs) (built with Vocs).
+The full docs site lives in [`apps/docs`](./apps/docs) (built with Fumadocs on TanStack Start, deployed static to Cloudflare Workers).
 
 ## Develop
 

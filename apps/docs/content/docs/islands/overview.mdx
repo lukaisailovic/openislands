@@ -1,0 +1,85 @@
+---
+title: Islands
+description: An island is a reusable, typed visual block — declare it in the manifest, bind it to fields that exist in your data, and the runtime renders it.
+---
+
+import { netWorthByMonth } from "@/components/sample-data";
+
+An **island** is a reusable, typed visual block. You don't write rendering code. You declare
+an island in the manifest, bind it to fields that exist in your data, and the runtime renders
+it. The same renderers the runtime ships power the live previews below:
+each tile is a real OpenIslands island, not a screenshot.
+
+## A metric, live
+
+A `metric.kpi` reads the last row of its dataset for the value, the row before it for the
+delta, and draws a sparkline over the time axis it finds.
+
+<LiveIsland
+  type="metric.kpi"
+  config={{ title: "Net worth", value: "net_worth_eur", compareTo: "prev", format: "eur" }}
+  data={netWorthByMonth}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "metric.kpi",
+  "title": "Net worth",
+  "dataset": "net_worth",
+  "value": "net_worth_eur",
+  "compareTo": "prev",
+  "format": "eur"
+}
+```
+
+## A note, live
+
+A `note.card` renders Markdown and binds to no data, handy for context, captions, and links
+right inside a dashboard.
+
+<LiveIsland
+  type="note.card"
+  config={{ markdown: "## Hello\nLive island." }}
+  height={120}
+/>
+
+## The island registry
+
+Every built-in island and the fields it requires. Pick the built-in that fits before
+reaching for a custom renderer.
+
+Each type links to its section with a live preview and full configuration.
+
+| Type | Required fields | What it is |
+| --- | --- | --- |
+| [`metric.kpi`](/islands/metrics-and-gauges#metrickpi) | `dataset`, `value` | A single number off the last row, with an optional delta and sparkline. |
+| [`metric.scorecard`](/islands/metrics-and-gauges#metricscorecard) | `dataset`, `stats` | A compact scorecard of several KPIs off the last row. |
+| [`gauge.rings`](/islands/metrics-and-gauges#gaugerings) | `dataset`, `rings` | Concentric goal rings off the last row. |
+| [`gauge.goal`](/islands/metrics-and-gauges#gaugegoal) | `dataset`, `goals` | One ring per goal, each measured against a goal or band. |
+| [`gauge.meter`](/islands/metrics-and-gauges#gaugemeter) | `dataset`, `meters` | Horizontal usage bars off the last row. |
+| [`status.grid`](/islands/metrics-and-gauges#statusgrid) | `dataset`, `label`, `state` | A responsive grid of service/check status tiles. |
+| [`timeseries.line`](/islands/charts#timeseriesline) | `dataset`, `x`, `y` | A line chart over time; `y` may be one field or many. |
+| [`category.bar`](/islands/charts#categorybar) | `dataset`, `x`, `y` | A bar chart, optionally grouped or stacked. |
+| [`category.combo`](/islands/charts#categorycombo) | `dataset`, `x`, `bars`, `lines` | Bars on a primary axis and lines on a secondary one. |
+| [`waterfall.bars`](/islands/charts#waterfallbars) | `dataset`, `label`, `value` | A waterfall of signed steps to a running total. |
+| [`rank.list`](/islands/charts#ranklist) | `dataset`, `label`, `value` | A ranked Top-N list with proportional bars. |
+| [`breakdown.treemap`](/islands/charts#breakdowntreemap) | `dataset`, `label`, `value` | A treemap of parts of a whole. |
+| [`category.pie`](/islands/charts#categorypie) | `dataset`, `label`, `value` | A pie or donut of one series' share across a few categories. |
+| [`correlation.scatter`](/islands/charts#correlationscatter) | `dataset`, `x`, `y` | A scatter or bubble plot of two numeric fields. |
+| [`distribution.heatmap`](/islands/charts#distributionheatmap) | `dataset`, `x`, `y`, `value` | A matrix heatmap of a value across two category axes. |
+| [`activity.calendar`](/islands/charts#activitycalendar) | `dataset`, `date`, `value` | A GitHub-style calendar heatmap of a daily value. |
+| [`funnel.steps`](/islands/charts#funnelsteps) | `dataset`, `label`, `value` | A conversion funnel of sequential stages. |
+| [`compare.radar`](/islands/charts#compareradar) | `dataset`, `metrics` | A radar chart comparing rows across several metrics. |
+| [`map.choropleth`](/islands/charts#mapchoropleth) | `dataset`, `region`, `value` | A geographic choropleth shading regions by a value. |
+| [`table.grid`](/islands/tables-and-feeds#tablegrid) | `dataset` | A data table with optional details, grouping, and drilldown. |
+| [`timeline.feed`](/islands/tables-and-feeds#timelinefeed) | `dataset`, `ts`, `titleField` | A chronological feed of rows, plain or rich. |
+| [`search.box`](/islands/tables-and-feeds#searchbox) | `dataset`, `fields`, `titleField` | A client-side search over a dataset. |
+| [`note.card`](/islands/content-and-layout#notecard) | `markdown` | Markdown content; no data. |
+| [`source.doc`](/islands/content-and-layout#sourcedoc) | (none) | An embedded document or link (`file` or `href`). |
+| [`content.editor`](/islands/content-and-layout#contenteditor) | (none) | A full-page workspace to browse and edit markdown files (`file` or `dir`); no data. |
+| [`layout.row`](/islands/content-and-layout#layoutrow) | `islands` | A full-width structural row holding other islands. |
+| [`form.entry`](/islands/content-and-layout#formentry) | `action` | A data-entry form bound to an action; one typed input per field inserts a row. No data binding of its own. |
+
+Browse the per-category pages for the full picture: [Metrics & Gauges](/islands/metrics-and-gauges),
+[Charts](/islands/charts), [Tables & Feeds](/islands/tables-and-feeds),
+[Content & Layout](/islands/content-and-layout), and [Custom Islands](/islands/custom).
