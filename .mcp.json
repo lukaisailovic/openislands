@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "vocs": {
-      "type": "sse",
-      "url": "https://vocs.dev/api/mcp"
-    }
-  }
-}
