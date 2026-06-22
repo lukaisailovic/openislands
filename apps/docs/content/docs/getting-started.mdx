@@ -1,0 +1,126 @@
+---
+title: Getting Started
+description: The path from nothing to an agent-maintained dashboard — scaffold a project, connect your agent over MCP, and drive it with prompts.
+---
+
+OpenIslands is built for an **agent** to own a dashboard over months — but you bootstrap it. You
+scaffold a project, connect your agent to it over MCP, then drive it with prompts. From there the
+agent reads your data, proposes a change, validates it, and applies it — and can undo any of it.
+Here's the path from nothing to an agent-maintained dashboard.
+
+<Callout type="info" title="The one-paste start">
+
+Already have a coding agent open? Paste this and let it take the wheel — it reads a short briefing,
+scaffolds a project, and starts building:
+
+```
+Read https://openislands.sh/start.md then help me build my first agent-maintained dashboard.
+```
+
+The steps below are that same path, done by hand.
+
+</Callout>
+
+<Steps>
+
+<Step>
+### Scaffold a project
+
+`init` drops a complete, working project in the target directory. With no flag it scaffolds the
+`empty` template — a blank starter with one welcome note and an empty `data/`, so you and your
+agent build it up from your own files.
+
+```bash
+npx openislands init my-dashboard
+cd my-dashboard
+```
+
+Want a populated example instead? Pass `--template`:
+
+```bash
+npx openislands init my-dashboard --template finance
+```
+
+`finance` is the flagship — net worth, allocation, holdings, and transactions as typed islands over
+CSVs you own. `health` and `operations` are there too.
+</Step>
+
+<Step>
+### Connect your agent over MCP
+
+`init` already did this. The scaffold ships a local `.mcp.json` wiring the `@openislands/mcp`
+server, an `AGENTS.md`, and the OpenIslands skill under `.agents/skills/openislands/` — so any
+agent that reads the project picks up the tools and the conventions. Open the folder in your agent
+and you're connected.
+
+If you're wiring it into a project by hand, this is the config it expects, pointed at the directory
+that holds `app/manifest.json`:
+
+```jsonc title=".mcp.json"
+{
+  "mcpServers": {
+    "openislands": {
+      "command": "npx",
+      "args": ["-y", "@openislands/mcp", "."]
+    }
+  }
+}
+```
+
+`npx` runs the latest published server on demand; its `-y` flag skips the install prompt, so
+there's nothing to install globally. The last argument is the project directory — `.` if your
+agent runs from inside it.
+
+To add the skill to a project that doesn't have it (or to your own agent setup):
+
+```bash
+npx skills add lukaisailovic/openislands --skill openislands
+```
+</Step>
+
+<Step>
+### Serve it so you can watch
+
+```bash
+npx openislands serve
+```
+
+This renders the dashboard at [127.0.0.1:4321](http://127.0.0.1:4321), querying your files on
+every request. Leave it running — each edit the agent applies live-updates the page over SSE.
+</Step>
+
+<Step>
+### Prompt the agent
+
+Now just ask. The agent grounds itself first (it reads the manifest, the dataset schema, and real
+rows), proposes the change so you see a diff before anything is written, applies it with a snapshot
+of the prior version, and rolls back if the result is wrong. A binding to a column that doesn't
+exist comes back as a named error, so a broken dashboard never ships.
+
+Prompts that work well:
+
+> Drop `data/spending.csv` into the project and add a page that charts monthly spend by category.
+
+> Give the net-worth KPI a delta against last month, and add a gauge for my savings-rate goal.
+</Step>
+
+</Steps>
+
+That loop runs as long as you keep the agent pointed at the project: it adds islands, wires in new
+files, and fixes bindings without the app rotting. The same surface drives data writes
+([actions](/data/actions)) and provider syncs ([connectors](/data/connectors)), reversible through
+the same snapshots.
+
+<Callout type="info" title="Tip">
+
+Read [MCP Server](/mcp) for the full tool surface and the safety posture behind it. Prefer to
+drive it by hand? The [CLI](/cli) mirrors every step.
+
+</Callout>
+
+## Where to go next
+
+- [MCP Server](/mcp): the agent edit loop in full, and why each guarantee is structural.
+- [CLI](/cli): the keyboard path — `init`, `serve`, `infer`, `add`, `validate`, `sync`.
+- [The Manifest](/concepts/manifest): the mental model behind that JSON file.
+- [Islands](/islands/overview): the visual building blocks, with live previews.

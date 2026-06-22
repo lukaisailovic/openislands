@@ -26,7 +26,7 @@ packages/mcp-server  # the MCP edit loop (@openislands/mcp): read-many + patch_m
 templates/           # empty (default), finance, health, operations — each ships .mcp.json + AGENTS.md + the skill; scaffolded by `init`
 skills/openislands/  # the installable agent skill (npx skills add lukaisailovic/openislands --skill openislands); synced into every template
 apps/examples/       # dogfood workspace (multi-app serve)
-apps/docs/           # the docs site (Vocs); apps/docs/public/start.md is the raw agent-onboarding doc served at /start.md
+apps/docs/           # the docs site (Fumadocs on TanStack Start, static → Cloudflare Workers); apps/docs/public/start.md is the raw agent-onboarding doc served at /start.md
 ```
 
 ## Invariants (don't break these)
@@ -73,8 +73,9 @@ Node ≥ 20.
 - **Animating UI?** Use `/transitions-dev` for production-ready CSS transitions.
 - **Reviewing UI?** Run `/web-interface-guidelines` against the changed components.
 - **Verifying a served dashboard?** Drive it with `/agent-browser` rather than guessing.
-- **Editing the docs site (`apps/docs`)?** It's built with Vocs — use the **vocs MCP**
-  (`search_docs` / `read_page`) to look up Vocs components and config.
+- **Editing the docs site (`apps/docs`)?** It's built with Fumadocs on TanStack Start — MDX
+  content in `content/docs/` (sidebar via `content/docs/meta.json`), prerendered to static and
+  served on Cloudflare Workers. See https://fumadocs.dev for component/config reference.
 - **Before committing**, run `/simplify` on the changed code, then `pnpm build && pnpm typecheck && pnpm test && pnpm lint`.
 
 ## Deeper reference (read on demand)
@@ -83,5 +84,5 @@ Node ≥ 20.
   custom islands, workspaces.
 - `docs/agent-edit-loop.md` — the MCP read-many/write-one loop, actions (data writes), queries (parameterized reads), connectors.
 - `CONTRIBUTING.md` — adding an island, the PR gate, releases.
-- `apps/docs/src/pages/` — the public docs (manifest, data contracts, islands, MCP).
+- `apps/docs/content/docs/` — the public docs MDX (manifest, data contracts, islands, MCP).
 - `packages/schema/src/index.ts` — the exact, authoritative island config schemas.

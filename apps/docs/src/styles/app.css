@@ -1,0 +1,550 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+@import "@cloudflare/kumo/styles";
+
+/*
+ * The live islands are the runtime's own renderers, styled with Tailwind utilities
+ * (including arbitrary values) that live in the runtime + Kumo sources — outside this
+ * app's auto-scanned tree. Scan them so every class an island uses is generated here
+ * too; without this, renderer-only utilities silently drop and an island's spacing,
+ * type scale, and list markers diverge from the real dashboard.
+ */
+@source "../../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
+@source "../../../../packages/runtime/src/**/*.{ts,tsx}";
+
+/* The site is dark-only; island `dark:` utilities follow the forced `.dark` class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/*
+ * OpenIslands brand: the runtime's dark surface with a tide-teal accent. Dark is the
+ * only scheme, so the `.dark` overrides are what actually render. Teal drives links,
+ * the active sidebar item, and primary buttons.
+ */
+.dark {
+  --color-fd-background: hsl(220 13% 6%);
+  --color-fd-card: hsl(220 13% 8%);
+  --color-fd-popover: hsl(220 13% 8%);
+  --color-fd-muted: hsl(220 12% 12%);
+  --color-fd-border: hsl(220 11% 16%);
+  --color-fd-primary: #2dd4bf;
+  --color-fd-primary-foreground: hsl(180 60% 6%);
+  --color-fd-accent: hsl(220 12% 14%);
+  --color-fd-accent-foreground: hsl(170 80% 85%);
+  --color-fd-ring: #2dd4bf;
+}
+
+/*
+ * Kumo dialogs (an island's source button, a table's "expand" view) portal into a
+ * `[data-base-ui-portal]` wrapper whose popup + backdrop are `position: fixed` with no
+ * z-index, so they can open behind the docs chrome. Promote the portal wrapper to its
+ * own stacking context above the chrome; the fixed parts inside then paint over
+ * everything. `position: relative` keeps the fixed children anchored to the viewport.
+ */
+[data-base-ui-portal] {
+  position: relative;
+  z-index: 100;
+}
+
+/* A mermaid diagram fills its column and never overflows the prose width. */
+.oi-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/*
+ * The docs sidebar footer holds a single GitHub icon in a `bg-fd-secondary` pill.
+ * The footer is a column flex, so the pill stretches to full width — reading as a big
+ * empty box with a tiny clickable icon. Un-stretch it so it's a compact icon button.
+ */
+[class*="bg-fd-secondary"]:has(> a[href*="github.com"]) {
+  align-self: flex-start;
+}
+
+/*
+ * Fumadocs callouts (fumadocs-ui/components/callout) render their body in a
+ * `.prose-no-margin` wrapper at 13px with a near-1.0 line-height, so the two text
+ * lines crowd and inline `<code>` badges collide with the line above. Scope by the
+ * callout's `--callout-color`-carrying root so only callout bodies get the looser
+ * leading; the code badge keeps a tight line box so it doesn't grow the line.
+ */
+[style*="--callout-color"] .prose-no-margin {
+  line-height: 1.6;
+}
+
+[style*="--callout-color"] .prose-no-margin p {
+  margin-block: 0;
+  line-height: 1.6;
+}
+
+[style*="--callout-color"] .prose-no-margin p + p {
+  margin-top: 0.5rem;
+}
+
+[style*="--callout-color"] .prose-no-margin code {
+  line-height: 1.2;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Landing page (src/routes/index.tsx → components/home.tsx).
+ *
+ * Themed with the OpenIslands brand tokens — the Fumadocs dark surface variables
+ * plus the tide-teal accent — so the landing matches the runtime's own dark look.
+ * It owns its typography and spacing (Fumadocs' HomeLayout supplies only the nav).
+ * ───────────────────────────────────────────────────────────────────────── */
+.oi-home {
+  --oi-edge: var(--color-fd-border);
+  --oi-surface: var(--color-fd-card);
+  --oi-heading: var(--color-fd-foreground);
+  --oi-body: color-mix(in oklab, var(--color-fd-foreground) 82%, var(--color-fd-muted-foreground));
+  --oi-muted: var(--color-fd-muted-foreground);
+  --oi-accent: var(--color-fd-primary);
+  --oi-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
+  padding: 0 1rem 4rem;
+  color: var(--oi-body);
+}
+
+.oi-home section {
+  width: 100%;
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+/* Hero — centered lockup with a faint accent tide behind the title. */
+.oi-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.15rem;
+  max-width: 60rem;
+  margin-inline: auto;
+  padding-block: 3.5rem 1.5rem;
+}
+
+.oi-hero::before {
+  content: "";
+  position: absolute;
+  inset: -10% 0 auto 0;
+  height: 22rem;
+  z-index: -1;
+  background: radial-gradient(
+    60% 70% at 50% 0%,
+    color-mix(in oklab, var(--oi-accent) 16%, transparent),
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.oi-hero-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.oi-hero-mark {
+  width: 60px;
+  height: 60px;
+}
+
+.oi-hero-word {
+  margin: 0;
+  font-size: clamp(2.5rem, 6vw, 3.75rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--oi-heading);
+}
+
+.oi-hero-tagline {
+  margin: 0;
+  max-width: 38rem;
+  font-size: clamp(1.2rem, 1rem + 1.2vw, 1.6rem);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  color: var(--oi-heading);
+}
+
+.oi-hero-desc {
+  margin: 0;
+  max-width: 40rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--oi-body);
+}
+
+.oi-hero-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+/* Buttons + the agent-prompt copy button all share one resting style. */
+.oi-btn,
+.oi-copy-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: 1px solid var(--oi-edge);
+  border-radius: 0.5rem;
+  background: var(--color-fd-muted);
+  color: var(--oi-heading);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.oi-btn:hover,
+.oi-copy-prompt:hover {
+  background: var(--color-fd-accent);
+}
+
+.oi-btn:focus-visible,
+.oi-copy-prompt:focus-visible {
+  outline: 2px solid var(--oi-accent);
+  outline-offset: 2px;
+}
+
+.oi-btn-accent {
+  background: var(--oi-accent);
+  border-color: transparent;
+  color: var(--color-fd-primary-foreground);
+}
+
+.oi-btn-accent:hover {
+  background: color-mix(in oklab, var(--oi-accent) 88%, black);
+}
+
+.oi-copy-prompt[data-copied] {
+  border-color: color-mix(in oklab, var(--oi-accent) 60%, var(--oi-edge));
+  color: var(--oi-accent);
+}
+
+.oi-copy-prompt-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Content sections below the hero. */
+.oi-section {
+  padding-block: 4.5rem 1rem;
+}
+
+.oi-eyebrow {
+  margin: 0 0 0.75rem;
+  font-family: var(--oi-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  color: var(--oi-accent);
+}
+
+.oi-eyebrow::before {
+  content: "// ";
+  opacity: 0.6;
+}
+
+.oi-section-title {
+  margin: 0 0 2.25rem;
+  max-width: 36rem;
+  font-size: clamp(1.55rem, 1rem + 2.2vw, 2.2rem);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: var(--oi-heading);
+}
+
+/* The signature: manifest (left) renders into a live island (right). */
+.oi-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.oi-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--oi-edge);
+  border-radius: 0.875rem;
+  background: var(--oi-surface);
+  overflow: hidden;
+}
+
+.oi-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--oi-edge);
+  font-family: var(--oi-mono);
+  font-size: 0.75rem;
+  color: var(--oi-muted);
+}
+
+.oi-code {
+  margin: 0;
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  font-family: var(--oi-mono);
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--oi-body);
+  background: none;
+}
+
+.oi-code code {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  white-space: pre;
+}
+
+/* A live island rendered bare (LiveIsland framed={false}) inside an .oi-panel: the
+ * panel already supplies the frame and a custom header, so the island just fills the
+ * space below it. */
+.oi-island-bare {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 1rem 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.oi-island-bare > * {
+  min-width: 0;
+  flex: 1;
+}
+
+.oi-seam {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--oi-muted);
+}
+
+.oi-seam-arrow {
+  font-family: var(--oi-mono);
+  font-size: 2.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--oi-heading);
+}
+
+.oi-caption {
+  margin: 1rem 0 0;
+  max-width: 34rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--oi-muted);
+}
+
+.oi-panel-wide {
+  margin-top: 2rem;
+}
+
+/* Why it holds up — four traits. */
+.oi-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oi-card {
+  padding: 1.4rem 1.5rem;
+  border: 1px solid var(--oi-edge);
+  border-radius: 0.875rem;
+  background: var(--oi-surface);
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.oi-card:hover {
+  border-color: color-mix(in oklab, var(--oi-accent) 45%, var(--oi-edge));
+  transform: translateY(-2px);
+}
+
+.oi-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.6rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--oi-heading);
+}
+
+.oi-card-title::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0.15rem;
+  background: var(--oi-accent);
+}
+
+.oi-card-body {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--oi-body);
+}
+
+/* The safe edit loop — a real, ordered pipeline rendered as a connected list. */
+.oi-loop-section {
+  padding-block: 4.5rem 1rem;
+}
+
+.oi-lede {
+  margin: -1.25rem 0 2.25rem;
+  max-width: 38rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--oi-body);
+}
+
+.oi-loop {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--oi-edge);
+}
+
+.oi-loop-step {
+  position: relative;
+  padding: 0 0 1.5rem 1.75rem;
+}
+
+.oi-loop-step:last-child {
+  padding-bottom: 0;
+}
+
+.oi-loop-step::before {
+  content: "";
+  position: absolute;
+  left: -0.36rem;
+  top: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--oi-accent);
+  box-shadow: 0 0 0 0.25rem var(--color-fd-background);
+}
+
+.oi-loop-name {
+  font-family: var(--oi-mono);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--oi-heading);
+}
+
+.oi-loop-body {
+  margin: 0.25rem 0 0;
+  max-width: 40rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--oi-muted);
+}
+
+/* Closing call to action. */
+.oi-cta {
+  margin-block: 3rem 1rem;
+  padding: 3rem 2rem;
+  border: 1px solid var(--oi-edge);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(
+      120% 140% at 50% 0%,
+      color-mix(in oklab, var(--oi-accent) 10%, transparent),
+      transparent 60%
+    ),
+    var(--oi-surface);
+  text-align: center;
+}
+
+.oi-cta-title {
+  margin: 0 auto 1.75rem;
+  max-width: 32rem;
+  font-size: clamp(1.5rem, 1rem + 2vw, 2rem);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: var(--oi-heading);
+}
+
+.oi-cta-buttons {
+  margin-top: 0;
+}
+
+.oi-meta {
+  margin: 1.5rem 0 0;
+  font-family: var(--oi-mono);
+  font-size: 0.8125rem;
+  color: var(--oi-muted);
+}
+
+@media (min-width: 640px) {
+  .oi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Below the split's comfortable width, stack the panels and turn the seam arrow
+ * downward so the manifest → island story still reads top to bottom. */
+@media (max-width: 720px) {
+  .oi-split {
+    grid-template-columns: 1fr;
+  }
+
+  .oi-seam-arrow {
+    display: block;
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oi-card,
+  .oi-btn,
+  .oi-copy-prompt {
+    transition: none;
+  }
+
+  .oi-card:hover {
+    transform: none;
+  }
+}

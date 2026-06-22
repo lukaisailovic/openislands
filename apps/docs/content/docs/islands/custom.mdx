@@ -1,0 +1,123 @@
+---
+title: Custom Islands
+description: When no built-in island fits, register your own — a React renderer that lives in your project, gets a typed config, and is checked by the same validator.
+---
+
+When no [built-in island](/islands/overview) fits, you register your own. A custom island is a
+React renderer that lives in *your* project, gets a typed config like a built-in, and is checked
+by the same validator. It isn't a second-class escape hatch. Several built-ins started here:
+`gauge.rings` shipped as a custom island before it was promoted into the core registry.
+
+## The shape
+
+A custom island is a directory under `components/custom/`. The directory name **is** the island
+type, so a `heatmap.calendar` island lives at `components/custom/heatmap.calendar/`:
+
+```text
+components/custom/heatmap.calendar/
+  index.tsx    # default-exports the React component
+  schema.ts    # default-exports a Zod object for the config
+```
+
+Reference the type from the manifest exactly like a built-in; `validate` and the runtime resolve
+it to your component:
+
+```jsonc title="app/manifest.json"
+{
+  "type": "heatmap.calendar",
+  "title": "Activity",
+  "dataset": "commits",
+  "date": "day",
+  "value": "count"
+}
+```
+
+## `index.tsx`
+
+Default-export a React component. It receives the **same** props the built-ins get: `config` (the
+manifest island, including your custom fields) and `data` (the query result: `{ dataset, columns,
+rows }`, absent until the client query resolves).
+
+```tsx title="components/custom/heatmap.calendar/index.tsx"
+import type { ReactNode } from "react";
+
+interface CalendarConfig {
+  date: string;
+  value: string;
+}
+
+interface QueryData {
+  columns: { name: string; type: string }[];
+  rows: Record<string, unknown>[];
+}
+
+export default function HeatmapCalendar({
+  config,
+  data,
+}: {
+  config: CalendarConfig & { type: string };
+  data?: QueryData;
+}): ReactNode {
+  const rows = data?.rows ?? [];
+  if (rows.length === 0) return <div>No data</div>;
+
+  const max = Math.max(...rows.map((r) => Number(r[config.value] ?? 0)));
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+      {rows.map((row, i) => {
+        const intensity = max === 0 ? 0 : Number(row[config.value] ?? 0) / max;
+        return (
+          <div
+            key={i}
+            title={`${String(row[config.date])}: ${String(row[config.value])}`}
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 2,
+              background: `rgba(34, 197, 94, ${0.15 + intensity * 0.85})`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+```
+
+## `schema.ts`
+
+Default-export a Zod object describing the config. Import from `"zod"`; the runtime bundles
+against its own copy, so you don't add a dependency. This is what makes a bad custom config a
+*named* error instead of a silent placeholder:
+
+```ts title="components/custom/heatmap.calendar/schema.ts"
+import { z } from "zod";
+
+export default z.object({
+  date: z.string().describe("date column, one cell per day"),
+  value: z.string().describe("numeric column driving cell intensity"),
+});
+```
+
+## How the runtime treats it
+
+- **Bundled on demand.** `serve` compiles `index.tsx` to ESM the first time the island is
+  requested, with no build step and no `node_modules` in your project. React resolves to the
+  runtime's own copy.
+- **Validated like a built-in.** `validate` (and `propose_edit`) check the manifest config against
+  `schema.ts` with the *same* machinery that guards the built-ins. A config that violates the
+  schema is a named compile error: it names the page, island index, and type, just like a missing
+  built-in binding.
+- **Hot reload.** Editing anything under `components/` remounts the island on the next live-reload
+  event; you don't restart `serve`.
+
+<Callout type="info" title="Tip">
+A custom type **without** `index.tsx` still validates and renders the built-in placeholder, handy
+for sketching a manifest before the renderer exists. A type **without** `schema.ts` is accepted but
+*unchecked*, so its config isn't validated. Ship both to get the full safety net.
+</Callout>
+
+<Callout type="info" title="Note">
+The directory name is the island type verbatim, so a dotted name like `heatmap.calendar` maps to a
+`heatmap.calendar` directory. The type must be a safe path segment, with no slashes or `..`.
+</Callout>

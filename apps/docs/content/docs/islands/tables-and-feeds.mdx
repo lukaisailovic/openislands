@@ -1,0 +1,215 @@
+---
+title: Tables & Feeds
+description: Three islands for rows you read one at a time — a table when exact values matter, a feed for things that happened in order, and a search box to find one row in many.
+---
+
+import { sampleData } from "@/components/sample-data";
+
+Three islands for rows you read one at a time: a **table** when exact values matter, a
+**feed** for things that happened in order, and a **search box** to find one row in many.
+Each is a real island below: bind it to fields in your data and the runtime renders it. See
+the [islands overview](/islands/overview) for the full registry.
+
+## `table.grid`
+
+**What it is.** A paginated table of raw rows. **When to use it:** when the exact numbers
+matter and a chart would hide them: positions, transactions, line items. It needs only a
+`dataset`; with no `columns` it shows every column in the data.
+
+<LiveIsland
+  type="table.grid"
+  config={{
+    title: "Positions",
+    columns: [
+      { field: "ticker", label: "Ticker" },
+      { field: "shares", label: "Shares", format: "int" },
+      { field: "value_eur", label: "Value", format: "eur" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "ticker", type: "varchar" },
+      { name: "shares", type: "bigint" },
+      { name: "value_eur", type: "double" },
+    ],
+    [
+      { ticker: "VWCE", shares: 312, value_eur: 38_400 },
+      { ticker: "AAPL", shares: 80, value_eur: 16_120 },
+      { ticker: "MSFT", shares: 45, value_eur: 19_850 },
+      { ticker: "NVDA", shares: 30, value_eur: 33_900 },
+      { ticker: "BRK.B", shares: 22, value_eur: 9_240 },
+    ],
+    "positions",
+  )}
+  height={300}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "table.grid",
+  "title": "Positions",
+  "dataset": "positions",
+  "columns": [
+    { "field": "ticker", "label": "Ticker" },
+    { "field": "shares", "label": "Shares", "format": "int" },
+    { "field": "value_eur", "label": "Value", "format": "eur" }
+  ]
+}
+```
+
+**Key options.**
+
+- `columns: [{ field, label?, format? }]`: pick and order the columns and set each column's
+  [value format](/reference/value-formats). Omit it to show every column.
+- `details: [{ field, label?, format? }]`: fields *hidden* from the row and revealed in a
+  click-to-open dialog, each with its own optional [value format](/reference/value-formats).
+  Declaring `details` makes each row clickable.
+- `groupBy: { field, titleField?, subtitleField? }`: render rows as collapsible sections by
+  `field`; the section title and subtitle read from each group's first row.
+- `drilldown: { island, match }`: embed another island in the row-details dialog, its rows
+  filtered by `match` (a map of *drilldown-dataset column* → *clicked-row field*). One level
+  deep: a drilldown island has no drilldown of its own.
+- `expand: false`: drop the see-all dialog and render every row inline (default `true`).
+
+<Callout type="info" title="Tip">
+`details` and `drilldown` only do something once a row is clickable. A row becomes clickable
+the moment you declare `details` (or a `drilldown`), so a table that's just for scanning needs
+neither.
+</Callout>
+
+## `timeline.feed`
+
+**What it is.** A reverse-chronological feed of rows. **When to use it:** logs, activity
+streams, a journal, anything that reads as "what happened, newest first." It needs a `ts`
+(the timestamp) and a `titleField`; the runtime sorts so the newest row is on top and renders
+each timestamp smartly (a date-only value as `Jun 11, 2026`, a real timestamp as
+`Jun 11, 21:30`).
+
+<LiveIsland
+  type="timeline.feed"
+  config={{
+    title: "Activity",
+    ts: "ts",
+    titleField: "action",
+    detail: "actor",
+  }}
+  data={sampleData(
+    [
+      { name: "ts", type: "varchar" },
+      { name: "action", type: "varchar" },
+      { name: "actor", type: "varchar" },
+    ],
+    [
+      { ts: "2026-06-09 09:14", action: "Bought 30 NVDA", actor: "rebalance" },
+      { ts: "2026-06-10 11:02", action: "Dividend received", actor: "VWCE" },
+      { ts: "2026-06-11 16:48", action: "Sold 12 AAPL", actor: "manual" },
+      { ts: "2026-06-12 08:30", action: "Rebalanced portfolio", actor: "rule" },
+      { ts: "2026-06-13 10:05", action: "Deposited €2,000", actor: "transfer" },
+    ],
+    "activity",
+  )}
+  height={300}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "timeline.feed",
+  "title": "Activity",
+  "dataset": "activity",
+  "ts": "ts",
+  "titleField": "action",
+  "detail": "actor"
+}
+```
+
+**Key options.**
+
+- `detail`: a secondary string shown next to the title. `kind`: a category string.
+- `details` / `drilldown` / `expand`: exactly as on `table.grid` (click-to-open dialog,
+  embedded filtered island, render-all toggle).
+- `groupBy: { field, titleField?, subtitleField? }`: collapsible sections, same shape as on
+  the table.
+- **Rich rows.** Setting any of `highlight`, `stats`, or `footer` switches a row from a single
+  line to a header/stats/footer layout:
+  - `highlight: { field, format?, unit? }`: an emphasized value pinned to the right of the title.
+  - `stats: [{ field, label?, format?, unit?, color? }]`: labeled inline stats under the title;
+    labels default to a palette, `color` pins one.
+  - `footer: [{ field, label?, format?, unit?, pill? }]`: a meta line led by the timestamp;
+    `pill: true` renders the value as a badge.
+
+  Each of these takes an optional [value format](/reference/value-formats) (`format`) or
+  free-form `unit` to style its value.
+
+```jsonc title="app/manifest.json"
+{
+  "type": "timeline.feed",
+  "title": "Workouts",
+  "dataset": "workouts",
+  "ts": "ts",
+  "titleField": "name",
+  "highlight": { "field": "strain", "format": "int" },
+  "stats": [
+    { "field": "avg_hr", "label": "HR", "unit": "bpm" },
+    { "field": "kcal", "label": "Cal", "unit": "kcal" }
+  ],
+  "footer": [{ "field": "sport", "pill": true }]
+}
+```
+
+## `search.box`
+
+**What it is.** A client-side search input over a dataset. **When to use it:** the dataset is
+large enough that you'd rather look a row up than scroll. Typing matches rows case-insensitively
+across `fields`; results drop down as an autocomplete showing `titleField`, and selecting one
+opens that row's full details.
+
+<LiveIsland
+  type="search.box"
+  config={{
+    fields: ["name", "category"],
+    titleField: "name",
+    detail: "category",
+    placeholder: "Search foods…",
+  }}
+  data={sampleData(
+    [
+      { name: "name", type: "varchar" },
+      { name: "category", type: "varchar" },
+      { name: "kcal", type: "bigint" },
+    ],
+    [
+      { name: "Greek yogurt", category: "Dairy", kcal: 59 },
+      { name: "Rolled oats", category: "Grains", kcal: 389 },
+      { name: "Banana", category: "Fruit", kcal: 89 },
+      { name: "Chicken breast", category: "Protein", kcal: 165 },
+      { name: "Almonds", category: "Nuts", kcal: 579 },
+      { name: "Spinach", category: "Vegetable", kcal: 23 },
+    ],
+    "ingredients",
+  )}
+  height={140}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "search.box",
+  "dataset": "ingredients",
+  "fields": ["name", "category"],
+  "titleField": "name",
+  "detail": "category",
+  "placeholder": "Search foods…"
+}
+```
+
+**Key options.**
+
+- `fields: [...]`: the columns a query matches against (substring, case-insensitive).
+- `titleField`: what each result row shows; `detail`: an optional secondary line under it.
+- `placeholder?`: the input's placeholder text.
+- `limit?`: the maximum number of visible results (default `10`).
+
+<Callout type="info" title="Note">
+`search.box` matches with a plain client-side substring over the rows already loaded; it isn't
+a SQL `LIKE` and doesn't page through the whole dataset. For a huge table, shape a narrower
+`sql` dataset for it to search.
+</Callout>

@@ -1,0 +1,276 @@
+---
+title: Content & Layout
+description: The islands that aren't charts of your data — a note for prose, a source doc for a file or link, a content editor for a workspace of markdown, a form for adding rows, and a layout row.
+---
+
+The islands that aren't charts of your data: a **note** for prose, a **source doc** for a file
+or link, a **content editor** for a whole workspace of markdown files, a **form entry** for adding
+rows by hand, and a **layout row** to control how a page wraps. See the
+[islands overview](/islands/overview) for the full registry.
+
+## `note.card`
+
+**What it is.** A static Markdown card with no data binding. **When to use it:** commentary, a
+caption, instructions, or a link, dropped right between data islands. It renders `markdown`:
+headings, lists, inline code, bold/italic, and links all render. Set a `tone` to turn it into a
+callout that stands out from the prose around it.
+
+<LiveIsland
+  type="note.card"
+  config={{
+    markdown:
+      "The top row tracks **net worth**; the table below lists every position.\n\n- Values update live as the source files change\n- See the [manifest reference](/reference/manifest) for the schema",
+  }}
+  height={160}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "note.card",
+  "title": "How to read this page",
+  "markdown": "The top row tracks **net worth**..."
+}
+```
+
+**Key options.**
+
+- `markdown`: the only required field; no `dataset`. Use `\n\n` between blocks and `\n` for a
+  soft break inside one.
+- `tone: "info" | "success" | "warning" | "danger"` (optional): renders the note as a callout —
+  a tinted panel with a colored left accent and a matching icon. Omit it for plain prose.
+
+**Tones.** Reach for a tone when the note is an aside the reader shouldn't miss — a caveat next
+to a metric, a heads-up about stale data, a confirmation. Without one, the note reads as quiet
+commentary.
+
+<LiveIsland
+  type="note.card"
+  config={{
+    tone: "warning",
+    markdown:
+      "Balances settle overnight, so **today's row updates after midnight UTC**. Treat the latest day as provisional.",
+  }}
+  height={140}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "note.card",
+  "title": "Heads up",
+  "tone": "warning",
+  "markdown": "Balances settle overnight, so **today's row updates after midnight UTC**."
+}
+```
+
+<Callout type="info" title="Tip">
+`note.card` is the lightest island, perfect for explaining a dashboard to whoever opens it next.
+Its minimum span is `3`, so it sits comfortably beside a metric or a small chart.
+</Callout>
+
+## `source.doc`
+
+**What it is.** A document card that surfaces a source right next to the data it backs: a PDF
+statement, a Markdown brief, an image, or a plain link out. **When to use it:** when a reader will
+want the underlying file. Every card shows a type icon, a readable name, and an **Open** button
+that opens the source in a new tab. Set `kind` to choose how it renders, and give it either a
+`file` (a path inside the project) or an `href` (an external URL).
+
+<LiveIsland
+  type="source.doc"
+  config={{
+    kind: "link",
+    label: "OpenIslands on GitHub",
+    description: "Source, issues, and the manifest schema",
+    href: "https://github.com/lukaisailovic/openislands",
+  }}
+  height={120}
+/>
+
+```jsonc title="app/manifest.json"
+{
+  "type": "source.doc",
+  "title": "Methodology",
+  "kind": "link",
+  "label": "OpenIslands on GitHub",
+  "description": "Source, issues, and the manifest schema",
+  "href": "https://github.com/lukaisailovic/openislands"
+}
+```
+
+**Key options.**
+
+- `kind: "pdf" | "markdown" | "image" | "link"` (default `link`): how the source renders. `pdf`
+  embeds the file in a viewer below the card header, `markdown` renders it inline, `image` shows a
+  preview that opens full size, `link` is an external link out.
+- `file`: a path relative to the project root; it resolves through the runtime's confined file
+  route. `href` is an external URL used as-is.
+- `label`: the name shown on the card. Without it, the card falls back to the file's name or the
+  link's host — never the raw file URL.
+- `description`: a short line under the name explaining what the document is.
+
+<Callout type="info" title="Note">
+A `file`-based doc needs a real file in the project (resolved through the runtime's `/api/file`
+route), so it can't be previewed here in the docs. The live example above uses `kind: "link"`
+with an `href`, which renders the same everywhere.
+</Callout>
+
+## `content.editor`
+
+**What it is.** A full-page, Obsidian-style content workspace. **When to use it:** when the page
+*is* a body of documents — a knowledge base, a set of runbooks, a notebook — rather than a chart of
+your data. It's the one island that binds **no dataset** and runs no SQL: it reads and writes
+markdown files on disk directly. It renders full-bleed (no card header or title bar) and wants a
+full-width `span` of `12`; its minimum is `6`.
+
+Point it at **either** a single `file` or a whole `dir` — exactly one, never both:
+
+```jsonc title="app/manifest.json"
+{
+  "type": "content.editor",
+  "title": "Runbook",
+  "span": 12,
+  "file": "data/docs/oncall.md"
+}
+```
+
+```jsonc title="app/manifest.json"
+{
+  "type": "content.editor",
+  "title": "Docs",
+  "span": 12,
+  "dir": "data",
+  "csv": true,
+  "groups": [
+    { "id": "specs", "label": "Specs", "icon": "files", "match": ["specs/**", "architecture.md"] },
+    { "id": "runbooks", "label": "Runbooks", "icon": "list-bullets", "match": ["runbooks/**", "incident-*.md"] },
+    { "id": "notes", "label": "Notes", "icon": "folder", "match": ["notes/**", "roadmap.md"] }
+  ]
+}
+```
+
+**Key options.**
+
+- `file` / `dir`: the source, and exactly one is required — `file` is one document under
+  `data/` or `docs/`, `dir` is a directory (recursed). Both, or neither, is a named validation error.
+- `include` (`dir` only): globs of files to surface; defaults to markdown (`**/*.md`,
+  `**/*.markdown`).
+- `csv` (`dir` only, default `false`): also surface `.csv` files alongside the markdown. CSVs open
+  as an **editable table** — edit cells, add and delete rows, and Save writes valid CSV back to the
+  file. They're read-only only when `readOnly` is set. (Adding or removing columns is out of scope;
+  edit the header in your own editor.)
+- `groups` (`dir` only): virtual folders, each `{ id, label?, icon?, match }`. See below.
+- `readOnly` (default `false`): make the whole workspace a viewer — no editing, no saving.
+
+Setting `include`, `csv`, or `groups` together with `file` (rather than `dir`) is a named
+validation error.
+
+**Editing and version history.** Unless `readOnly` is set, edits **autosave** about a second after
+you stop typing — no Save click needed, though Save and ⌘S still force one. The header shows a
+*Saving…* / *Saved* hint as it goes. The file on disk stays the source of truth — change it in your
+own editor and the open workspace refreshes within a second or two (unsaved edits in the browser are
+never clobbered). Every save also records a restorable snapshot in a per-app SQLite store at
+`.openislands/editor.sqlite`; the workspace surfaces that history and lets you roll a file back to
+any earlier version, so edits are never lossy.
+
+**Virtual folders (`groups`).** A `dir` is browsed as its real tree by default. `groups` overlay
+**virtual folders** that gather scattered files into tidy sidebar buckets regardless of where they
+live on disk: each group's `match` is an array of globs relative to `dir`, `label` names it (it
+defaults to the `id`), and `icon` is a [Phosphor](https://phosphoricons.com) name (e.g. `files`,
+`folder`) that falls back to a folder icon. Files matching no group collect in an **Ungrouped**
+bucket, so nothing is hidden. The New-note dialog picks the folder a note starts in, and you can
+move a note between folders later — drag it onto a group or use its move menu — which renames it on
+disk into that folder and carries its version history along.
+
+<Callout type="info" title="Note">
+There's no live preview for `content.editor` here: it reads and writes real files through the
+runtime's file routes and fills the whole page, so it only means something inside a served app. The
+[`knowledge` example](https://github.com/lukaisailovic/openislands/tree/main/apps/examples/knowledge)
+is a full workspace bound to a `data/` tree with an editable CSV and the three virtual folders above.
+</Callout>
+
+## `form.entry`
+
+**What it is.** A data-entry form card bound to a manifest [action](/data/actions). **When to use
+it:** when a human, not just an agent, should add rows — log an incident, record a meal, file an
+expense — right next to the data it feeds. It's the human-facing mirror of the agent's `run_action`:
+you don't re-declare fields, you point it at an action and it derives one typed input per field from
+that action's resolved row schema. So it binds **no dataset** of its own — the action already names
+the target.
+
+The card renders a text, number, or date input per field, a dropdown for an `enum` field, and a
+checkbox for a boolean, with a submit button in the bottom-right. A field is required unless the
+action gives it a `default`. On submit it inserts a row through the **same path** as the MCP
+`run_action` — the row is validated, snapshotted to history for `rollback`, then inserted — and the
+bound dataset's islands refresh live.
+
+```jsonc title="app/manifest.json"
+{
+  "type": "form.entry",
+  "title": "Report incident",
+  "action": "log_incident",
+  "submitLabel": "Report"
+}
+```
+
+**Key options.**
+
+- `action`: the only required field; the name of a manifest `actions` entry this form writes to. Its
+  inputs — types, `enum` dropdowns, `min`/`max`, `default`s, and field descriptions — all come from
+  that action's resolved row schema, so the form stays in step with the data.
+- `fields` (optional): the action's columns to render, in this order. Omit it to render every
+  insertable column; each name must be a real column of the action's dataset, checked at compile.
+- `submitLabel` (optional, default `"Add"`): the text on the submit button.
+
+<Callout type="info" title="Note">
+There's no live preview for `form.entry` here: submitting writes a real row through the action's
+checkpointed insert path, so it only means something inside a served app bound to an action. See
+[Actions](/data/actions) for the write path it shares with the agent.
+</Callout>
+
+## `layout.row`
+
+**What it is.** A structural full-width row that holds other islands. **When to use it:** when
+you want a group of islands to sit on their *own* grid row rather than flowing into the page's
+column packing. It carries no `span`, no `title`, no `dataset`, and can't be nested; it exists
+purely to arrange its children.
+
+Its children render on their own fresh 12-column grid row, each sized by its own `span`. The row
+itself is transparent to island indexing: a validation error names the child island, not the
+row.
+
+```jsonc title="app/manifest.json"
+{
+  "type": "layout.row",
+  "islands": [
+    {
+      "type": "metric.kpi",
+      "title": "Net worth",
+      "dataset": "net_worth",
+      "value": "net_worth_eur",
+      "format": "eur",
+      "span": 6
+    },
+    {
+      "type": "metric.kpi",
+      "title": "Cash",
+      "dataset": "net_worth",
+      "value": "cash_eur",
+      "format": "eur",
+      "span": 6
+    }
+  ]
+}
+```
+
+**Key points.**
+
+- `islands`: the only field; one or more child islands, each a normal built-in island with its
+  own `span`.
+- No `span`, `title`, or data binding on the row itself.
+- No nesting: a `layout.row` can't contain another `layout.row`.
+
+<Callout type="info" title="Tip">
+There's no live preview for `layout.row` because it's a layout primitive, not a visual; it only
+means something in the context of a full page grid. Reach for it when two or three tiles should
+always share a row regardless of what comes before them.
+</Callout>
