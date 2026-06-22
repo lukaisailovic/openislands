@@ -63,7 +63,7 @@ Now a `breakdown.treemap` can bind cleanly to `allocation` with `label: "class"`
 
 ## The contract check
 
-This is the safety net. When you run `validate` (or an agent calls `propose_edit`), the
+This is the safety net. When you run `validate` (or an agent calls `replace_manifest`), the
 compiler materializes each dataset, asks DuckDB for its columns and types, and checks every
 island binding against that live schema:
 

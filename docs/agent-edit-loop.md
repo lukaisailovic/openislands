@@ -14,19 +14,19 @@ validated, snapshotted proposal-and-apply pipeline.
 actions/queries/connectors + the checkpoint count, in one call — the orientation entry point that
 saves a per-dataset `get_data_schema` + `list_*` fan-out), `list_islands` (built-in types +
 required fields), `get_island_schema(type)`,
-`get_manifest`, `get_data_schema(dataset)`, `query_data({ dataset } | { sql }, limit)` — pass a
+`get_manifest`, `get_data_schema(dataset)`, `run_sql({ dataset } | { sql }, limit)` — pass a
 `dataset` name for a whole dataset *or* a read-only `sql` SELECT over the registered dataset
 views, not both — `list_queries`/`run_query` (declared parameterized reads, see Queries below),
 `validate_manifest`, and `list_checkpoints` (rollback points, newest last).
 
-**The manifest write path:** `propose_edit(manifest)` takes the **full** manifest, validates it
+**The manifest write path:** `replace_manifest(manifest)` takes the **full** manifest, validates it
 + checks every binding against the live data, and returns a `diff` — but does **not** write. If the
 data check fails it returns `{ ok: false, errors }` (each error names the page, island index, type,
 and missing field) with **no** `proposal_id`; fix the binding and propose again. On success it
 returns a `proposal_id`. Review the diff, then `apply_edit(proposal_id)` writes the manifest and
 snapshots the prior version as a checkpoint — its result includes `checkpoint_id`. A proposal is
 rejected if unknown or **stale** (the manifest on disk changed since it was proposed); re-run
-`propose_edit`. `rollback(checkpoint_id?)` restores a checkpoint byte-for-byte (latest if omitted) —
+`replace_manifest`. `rollback(checkpoint_id?)` restores a checkpoint byte-for-byte (latest if omitted) —
 it restores manifest *and* data checkpoints; the id encodes the target file. There is no raw
 file-write tool and no git dependency by design — rollback safety is `.openislands/history/`
 snapshots (count + byte capped, oldest pruned first).
@@ -77,9 +77,9 @@ Discover with `list_queries` (each query's `name`, `description`, `params` as JS
 row-capped. Success is `{ ok: true, rowCount, columns, rows }`; a bad param is
 `{ ok: false, errors }` (all-or-nothing), an unknown name or query error is `{ ok: false, error }`.
 
-Because the spec is plain JSON, an agent **authors** a query through the normal `propose_edit` →
+Because the spec is plain JSON, an agent **authors** a query through the normal `replace_manifest` →
 `apply_edit` loop (the write path only ever writes the manifest) — it creates a read tool, not
-just runs one. `propose_edit`/`validate` check the same thing as an island binding: the `dataset`
+just runs one. `replace_manifest`/`validate` check the same thing as an island binding: the `dataset`
 exists and every `field` (in `where`/`select`/`groupBy`/`orderBy`) is a real column (else a named
 error).
 

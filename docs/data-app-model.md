@@ -82,7 +82,7 @@ A page's optional `filters` declare shared controls rendered in the page header.
 `bind` maps a dataset to the column the filter applies to; islands on the page bound to one of
 those datasets re-query together when the filter changes, and every other island ignores it.
 Every bound column is validated against the live data exactly like an island binding — a
-missing column fails `validate`/`propose_edit` naming the page, filter id, dataset, and column.
+missing column fails `validate`/`replace_manifest` naming the page, filter id, dataset, and column.
 Two kinds:
 
 **`daterange`** — a shared date range. State lives in `?from=&to=` as `YYYY-MM-DD`. The range
