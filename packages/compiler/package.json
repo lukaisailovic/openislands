@@ -1,6 +1,6 @@
 {
   "name": "@openislands/compiler",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "OpenIslands compiler — turns local files into typed data contracts and build-time snapshots.",
   "type": "module",
   "license": "MIT",
