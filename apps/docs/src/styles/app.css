@@ -252,6 +252,165 @@
   flex-shrink: 0;
 }
 
+/* Hero terminal — a two-tab get-started block (humans / agents) over a command box. */
+.oi-hero-terminal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 40rem;
+  margin-top: 0.75rem;
+}
+
+.oi-tabs {
+  display: inline-flex;
+  align-items: center;
+}
+
+.oi-tabs-divider {
+  width: 1px;
+  height: 0.85rem;
+  margin-inline: 0.6rem;
+  background: var(--oi-edge);
+}
+
+.oi-tab {
+  padding: 0.25rem 0.15rem;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--oi-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.oi-tab:hover {
+  color: var(--oi-body);
+}
+
+.oi-tab[aria-pressed="true"] {
+  font-weight: 600;
+  color: var(--oi-heading);
+}
+
+.oi-tab:focus-visible {
+  outline: 2px solid var(--oi-accent);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* The hero row: command box grows, the Read docs button sits beside it. */
+.oi-terminal-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.oi-terminal-row .oi-terminal {
+  flex: 1;
+}
+
+/* The shared command box: a `$` prompt, the mono command, and a copy button. */
+.oi-terminal {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.5rem 0.5rem 0.5rem 0.85rem;
+  border: 1px solid var(--oi-edge);
+  border-radius: 0.5rem;
+  background: var(--color-fd-muted);
+  text-align: left;
+  transition: border-color 0.15s ease;
+}
+
+.oi-terminal[data-copied] {
+  border-color: color-mix(in oklab, var(--oi-accent) 60%, var(--oi-edge));
+}
+
+.oi-terminal-prompt {
+  flex-shrink: 0;
+  font-family: var(--oi-mono);
+  font-size: 0.875rem;
+  color: var(--oi-muted);
+  user-select: none;
+}
+
+.oi-terminal-command {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  font-family: var(--oi-mono);
+  font-size: 0.875rem;
+  color: var(--oi-heading);
+  background: none;
+  white-space: nowrap;
+  overflow-x: auto;
+  /* Scroll a command too long to fit without the scrollbar stealing vertical space
+   * and shoving the line up. The right-edge fade signals there's more; it lands on
+   * empty space (so it's invisible) for any command that fits. */
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.25rem), transparent);
+}
+
+.oi-terminal-command::-webkit-scrollbar {
+  display: none;
+}
+
+.oi-terminal-copy {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--oi-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.oi-terminal-copy:hover {
+  background: var(--color-fd-accent);
+  color: var(--oi-heading);
+}
+
+.oi-terminal-copy[data-copied] {
+  color: var(--oi-accent);
+}
+
+.oi-terminal-copy:focus-visible {
+  outline: 2px solid var(--oi-accent);
+  outline-offset: 2px;
+}
+
+/* The one-paste agent prompt, kept quieter than a button below the terminal. */
+.oi-hero-prompt .oi-copy-prompt {
+  padding: 0.35rem 0.5rem;
+  border-color: transparent;
+  background: none;
+  color: var(--oi-muted);
+  font-size: 0.8125rem;
+}
+
+.oi-hero-prompt .oi-copy-prompt:hover {
+  background: none;
+  color: var(--oi-body);
+}
+
 /* Content sections below the hero. */
 .oi-section {
   padding-block: 4.5rem 1rem;
@@ -508,19 +667,178 @@
 }
 
 .oi-cta-buttons {
-  margin-top: 0;
+  margin-top: 1.5rem;
 }
 
-.oi-meta {
-  margin: 1.5rem 0 0;
+/* The copy-and-go install command inside the CTA, centered under the title. */
+.oi-cta-command {
+  display: flex;
+  justify-content: center;
+}
+
+.oi-cta-command .oi-terminal {
+  width: 100%;
+  max-width: 24rem;
+}
+
+/* Site footer — brand lockup on the left, link columns on the right, then a bottom bar. */
+.oi-footer {
+  width: 100%;
+  margin-top: 3.5rem;
+  padding-top: 2.5rem;
+}
+
+.oi-footer-top {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.oi-footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 18rem;
+}
+
+.oi-footer-lockup {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.oi-footer-word {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--oi-heading);
+}
+
+.oi-footer-tagline {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--oi-muted);
+}
+
+.oi-footer-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem 1.5rem;
+}
+
+.oi-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.oi-footer-heading {
+  margin: 0 0 0.2rem;
+  font-family: var(--oi-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--oi-muted);
+}
+
+.oi-footer-link {
+  font-size: 0.9rem;
+  line-height: 1.3;
+  color: var(--oi-body);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.oi-footer-link:hover {
+  color: var(--oi-accent);
+}
+
+.oi-footer-link:focus-visible {
+  outline: 2px solid var(--oi-accent);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+.oi-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--oi-edge);
+}
+
+.oi-footer-legal {
+  margin: 0;
   font-family: var(--oi-mono);
   font-size: 0.8125rem;
   color: var(--oi-muted);
 }
 
+.oi-footer-github {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: 0.375rem;
+  color: var(--oi-muted);
+  transition: color 0.15s ease;
+}
+
+.oi-footer-github:hover {
+  color: var(--oi-heading);
+}
+
+.oi-footer-github:focus-visible {
+  outline: 2px solid var(--oi-accent);
+  outline-offset: 2px;
+}
+
 @media (min-width: 640px) {
   .oi-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  /* Footer: brand left, columns right; three columns across. */
+  .oi-footer-top {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 3rem;
+  }
+
+  .oi-footer-columns {
+    grid-template-columns: repeat(3, minmax(0, auto));
+    gap: 2rem 3rem;
+  }
+}
+
+/* On a phone the command box and Read docs button crowd each other on one line,
+ * so stack them: the command takes the full width, the button sits below it. */
+@media (max-width: 560px) {
+  .oi-terminal-row {
+    flex-wrap: wrap;
+  }
+
+  .oi-terminal-row .oi-terminal {
+    flex-basis: 100%;
+  }
+
+  .oi-terminal-row .oi-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Grow the touch targets on phones to the 44px guideline. */
+  .oi-terminal-copy {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .oi-hero-prompt .oi-copy-prompt {
+    padding-block: 0.7rem;
   }
 }
 
@@ -540,7 +858,12 @@
 @media (prefers-reduced-motion: reduce) {
   .oi-card,
   .oi-btn,
-  .oi-copy-prompt {
+  .oi-copy-prompt,
+  .oi-tab,
+  .oi-terminal,
+  .oi-terminal-copy,
+  .oi-footer-link,
+  .oi-footer-github {
     transition: none;
   }
 
