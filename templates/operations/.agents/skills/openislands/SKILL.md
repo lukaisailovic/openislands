@@ -17,7 +17,11 @@ is written until you apply a validated proposal, and every write is snapshotted 
 
 ## The loop
 
-1. **Read** — `get_manifest`, `list_islands`, `get_island_schema`, `get_data_schema`, `query_data`.
+1. **Read** — start with **`get_overview`**: it returns the manifest, every dataset's live columns,
+   and the declared actions / queries / connectors (plus the rollback checkpoint count) in **one
+   call**, so you don't fan out across `get_manifest` + a `get_data_schema` per dataset. Then ground
+   a specific island edit with `list_islands` / `get_island_schema`, and use `query_data` /
+   `validate_sql` for ad-hoc data checks.
 2. **Edit** — `patch_manifest` for one section at a time (preferred), or `propose_edit` for a full
    rewrite. Both return a `proposal_id` + a diff and write **nothing** yet.
 3. **It already validated** — the edit tools dry-run the result against the live data. If `ok` is
