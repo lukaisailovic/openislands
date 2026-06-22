@@ -4,4 +4,5 @@ dist/
 .nitro/
 .tanstack/
 .source/
+.wrangler/
 
