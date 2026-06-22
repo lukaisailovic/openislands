@@ -1,65 +1,54 @@
-import type { ComponentType } from "react";
+import { type ComponentType, lazy } from "react";
 import type { IslandType } from "@openislands/schema";
 import type { IslandRenderProps } from "../types.js";
 import { setDrilldownResolver } from "./drilldownRenderer.js";
-import { ActivityCalendar } from "./ActivityCalendar.js";
-import { BreakdownTreemap } from "./BreakdownTreemap.js";
-import { CategoryBar } from "./CategoryBar.js";
-import { CategoryCombo } from "./CategoryCombo.js";
-import { CategoryPie } from "./CategoryPie.js";
-import { CompareRadar } from "./CompareRadar.js";
-import { ContentEditor } from "./ContentEditor.js";
-import { CorrelationScatter } from "./CorrelationScatter.js";
 import { CustomPlaceholder } from "./CustomPlaceholder.js";
-import { DistributionHeatmap } from "./DistributionHeatmap.js";
-import { FormEntry } from "./FormEntry.js";
-import { FunnelSteps } from "./FunnelSteps.js";
-import { GaugeGoal } from "./GaugeGoal.js";
-import { GaugeMeter } from "./GaugeMeter.js";
-import { GaugeRings } from "./GaugeRings.js";
-import { MapChoropleth } from "./MapChoropleth.js";
-import { MetricKpi } from "./MetricKpi.js";
-import { MetricScorecard } from "./MetricScorecard.js";
-import { NoteCard } from "./NoteCard.js";
-import { RankList } from "./RankList.js";
-import { SearchBox } from "./SearchBox.js";
-import { SourceDoc } from "./SourceDoc.js";
-import { StatusGrid } from "./StatusGrid.js";
-import { TableGrid } from "./TableGrid.js";
-import { TimelineFeed } from "./TimelineFeed.js";
-import { TimeseriesLine } from "./TimeseriesLine.js";
-import { WaterfallBars } from "./WaterfallBars.js";
 
 export type IslandRenderer = ComponentType<IslandRenderProps>;
 
+/**
+ * Wrap a renderer module behind {@link lazy} so it lands in its own chunk.
+ * The islands carry the bulk of the runtime's weight — echarts (every chart
+ * island), Lexical (`content.editor`), the world map (`map.choropleth`) — and a
+ * static import of this registry used to drag all of it into every caller's
+ * bundle. Loading on demand means a page downloads only the renderers it mounts;
+ * every render site already sits behind a Suspense boundary for the gap.
+ */
+function lazyIsland<Module, Name extends keyof Module>(
+  load: () => Promise<Module>,
+  name: Name,
+): IslandRenderer {
+  return lazy(async () => ({ default: (await load())[name] as IslandRenderer }));
+}
+
 /** A `null` slot is a built-in island with no renderer yet; it falls back to the placeholder. */
 const REGISTRY: Record<IslandType, IslandRenderer | null> = {
-  "note.card": NoteCard,
-  "source.doc": SourceDoc,
-  "table.grid": TableGrid,
-  "timeline.feed": TimelineFeed,
-  "metric.kpi": MetricKpi,
-  "metric.scorecard": MetricScorecard,
-  "timeseries.line": TimeseriesLine,
-  "category.bar": CategoryBar,
-  "category.combo": CategoryCombo,
-  "waterfall.bars": WaterfallBars,
-  "category.pie": CategoryPie,
-  "correlation.scatter": CorrelationScatter,
-  "breakdown.treemap": BreakdownTreemap,
-  "distribution.heatmap": DistributionHeatmap,
-  "activity.calendar": ActivityCalendar,
-  "funnel.steps": FunnelSteps,
-  "rank.list": RankList,
-  "compare.radar": CompareRadar,
-  "map.choropleth": MapChoropleth,
-  "gauge.rings": GaugeRings,
-  "gauge.goal": GaugeGoal,
-  "gauge.meter": GaugeMeter,
-  "status.grid": StatusGrid,
-  "search.box": SearchBox,
-  "content.editor": ContentEditor,
-  "form.entry": FormEntry,
+  "note.card": lazyIsland(() => import("./NoteCard.js"), "NoteCard"),
+  "source.doc": lazyIsland(() => import("./SourceDoc.js"), "SourceDoc"),
+  "table.grid": lazyIsland(() => import("./TableGrid.js"), "TableGrid"),
+  "timeline.feed": lazyIsland(() => import("./TimelineFeed.js"), "TimelineFeed"),
+  "metric.kpi": lazyIsland(() => import("./MetricKpi.js"), "MetricKpi"),
+  "metric.scorecard": lazyIsland(() => import("./MetricScorecard.js"), "MetricScorecard"),
+  "timeseries.line": lazyIsland(() => import("./TimeseriesLine.js"), "TimeseriesLine"),
+  "category.bar": lazyIsland(() => import("./CategoryBar.js"), "CategoryBar"),
+  "category.combo": lazyIsland(() => import("./CategoryCombo.js"), "CategoryCombo"),
+  "waterfall.bars": lazyIsland(() => import("./WaterfallBars.js"), "WaterfallBars"),
+  "category.pie": lazyIsland(() => import("./CategoryPie.js"), "CategoryPie"),
+  "correlation.scatter": lazyIsland(() => import("./CorrelationScatter.js"), "CorrelationScatter"),
+  "breakdown.treemap": lazyIsland(() => import("./BreakdownTreemap.js"), "BreakdownTreemap"),
+  "distribution.heatmap": lazyIsland(() => import("./DistributionHeatmap.js"), "DistributionHeatmap"),
+  "activity.calendar": lazyIsland(() => import("./ActivityCalendar.js"), "ActivityCalendar"),
+  "funnel.steps": lazyIsland(() => import("./FunnelSteps.js"), "FunnelSteps"),
+  "rank.list": lazyIsland(() => import("./RankList.js"), "RankList"),
+  "compare.radar": lazyIsland(() => import("./CompareRadar.js"), "CompareRadar"),
+  "map.choropleth": lazyIsland(() => import("./MapChoropleth.js"), "MapChoropleth"),
+  "gauge.rings": lazyIsland(() => import("./GaugeRings.js"), "GaugeRings"),
+  "gauge.goal": lazyIsland(() => import("./GaugeGoal.js"), "GaugeGoal"),
+  "gauge.meter": lazyIsland(() => import("./GaugeMeter.js"), "GaugeMeter"),
+  "status.grid": lazyIsland(() => import("./StatusGrid.js"), "StatusGrid"),
+  "search.box": lazyIsland(() => import("./SearchBox.js"), "SearchBox"),
+  "content.editor": lazyIsland(() => import("./ContentEditor.js"), "ContentEditor"),
+  "form.entry": lazyIsland(() => import("./FormEntry.js"), "FormEntry"),
 };
 
 export function registerIsland(type: IslandType, renderer: IslandRenderer): void {

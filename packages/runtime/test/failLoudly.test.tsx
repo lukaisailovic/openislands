@@ -50,11 +50,11 @@ describe("fail-loudly error card", () => {
     expect(screen.getByText(/unknown dataset/)).toBeInTheDocument();
   });
 
-  it("a data-free island renders without firing a query", () => {
+  it("a data-free island renders without firing a query", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     render(withQuery(<IslandTile config={{ type: "note.card", markdown: "hello" }} />));
-    expect(screen.getByText("hello")).toBeInTheDocument();
+    expect(await screen.findByText("hello")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

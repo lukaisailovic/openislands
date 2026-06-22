@@ -23,6 +23,7 @@ import { editorToMarkdown, editorToMarkdownRaw, markdownToEditor } from "../src/
 import type { EditorFile, EditorHandle } from "../src/islands/editor/types.js";
 import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
 import { ContentEditor } from "../src/islands/ContentEditor.js";
+import { loadLazyRenderer } from "./lazyRenderer.js";
 
 function file(path: string, ext = "md"): EditorFile {
   const name = path.split("/").at(-1) ?? path;
@@ -383,8 +384,8 @@ describe("dirty detection (a trailing blank paragraph still counts as a change)"
 });
 
 describe("registry wiring", () => {
-  it("resolves content.editor to the ContentEditor renderer", () => {
-    expect(resolveRenderer("content.editor")).toBe(ContentEditor);
+  it("resolves content.editor to the ContentEditor renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("content.editor"))).toBe(ContentEditor);
   });
 
   it("marks content.editor as self-fetching (needs no dataset query)", () => {

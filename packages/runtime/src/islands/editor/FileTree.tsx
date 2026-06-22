@@ -1,7 +1,7 @@
 import { Button, Collapsible, Popover, Text, cn } from "@cloudflare/kumo";
-import { CaretRight, DotsThreeVertical, FileCsv, FileText, Folder, type Icon } from "@phosphor-icons/react";
-import * as PhosphorIcons from "@phosphor-icons/react";
+import { CaretRight, DotsThreeVertical, FileCsv, FileText, type Icon } from "@phosphor-icons/react";
 import { useState } from "react";
+import { pageIcon } from "../../components/pageIcons.js";
 import { groupFiles, groupTargetPath, UNGROUPED } from "./grouping.js";
 import type { EditorFile, EditorGroup } from "./types.js";
 
@@ -16,17 +16,6 @@ interface MoveContext {
 
 function basename(path: string): string {
   return path.split("/").at(-1) ?? path;
-}
-
-/** Resolve a Phosphor icon name (e.g. "files", "folder-open") to its component, falling back to a folder. */
-function groupIcon(name: string | undefined): Icon {
-  if (!name) return Folder;
-  const pascal = name
-    .split(/[-_\s]+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
-  const icons = PhosphorIcons as unknown as Record<string, Icon | undefined>;
-  return icons[pascal] ?? Folder;
 }
 
 function fileIcon(ext: string): Icon {
@@ -133,7 +122,7 @@ function GroupSection({
 }) {
   const [open, setOpen] = useState(true);
   const [dropping, setDropping] = useState(false);
-  const GroupGlyph = groupIcon(group.icon);
+  const GroupGlyph = pageIcon(group.icon);
 
   const dropHandlers = move
     ? {

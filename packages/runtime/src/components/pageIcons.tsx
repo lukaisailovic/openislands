@@ -34,6 +34,12 @@ const ICONS: Record<PageIcon, Icon> = {
   flask: Flask,
 };
 
-export function pageIcon(name: PageIcon | undefined): Icon {
-  return name ? ICONS[name] : Folder;
+/**
+ * Resolve a curated icon by its kebab name, falling back to a folder for unknown
+ * or missing names. Lenient on input (page icons are typed {@link PageIcon};
+ * content.editor group icons are a free-form string) but the rendered set stays
+ * the curated {@link ICONS} map — a tree-shaken handful, never the whole barrel.
+ */
+export function pageIcon(name: string | undefined): Icon {
+  return (name && ICONS[name as PageIcon]) || Folder;
 }
