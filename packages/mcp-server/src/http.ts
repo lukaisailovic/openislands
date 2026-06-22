@@ -75,6 +75,11 @@ export function createMcpHttpHandler(projectRoot: string): McpHttpHandler {
         transports.set(id, transport);
       },
     });
+    // The SDK Transport exposes `onclose` as a property setter, not an EventTarget, so
+    // addEventListener doesn't apply. We don't use the `onsessionclosed` constructor option
+    // because it fires only on an explicit DELETE — `onclose` also covers a client
+    // disconnecting, which is what keeps the session map from leaking.
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener
     transport.onclose = () => {
       if (transport.sessionId) transports.delete(transport.sessionId);
     };
