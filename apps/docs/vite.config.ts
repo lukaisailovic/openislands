@@ -57,7 +57,13 @@ export default defineConfig({
     }),
     react(),
     // See https://tanstack.com/start/latest/docs/framework/react/guide/hosting#nitro
-    nitro(),
+    // Pin the preset. Nitro otherwise auto-detects the deploy target from CI env vars
+    // (std-env), and Cloudflare Workers Builds sets `WORKERS_CI=1` → nitro switches to the
+    // `cloudflare-module` preset, which builds a Worker, ignores our assets-only wrangler
+    // config, and prerenders through a watch-mode wrangler dev server that never exits —
+    // hanging the build. We deploy `.output/public` as static assets; this preset's prerender
+    // writes that dir and exits, and its server bundle is left unused by the assets-only deploy.
+    nitro({ preset: "node-server" }),
   ],
   // Ship source maps for first-party chunks so Lighthouse `valid-source-maps` passes.
   build: {
