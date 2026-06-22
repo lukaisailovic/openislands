@@ -26,6 +26,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   release:
     name: Bump, publish & tag
@@ -34,6 +38,8 @@ jobs:
     permissions:
       contents: write # bump commit, tag, push, GitHub release
       id-token: write # npm OIDC trusted publishing + provenance
+      packages: write # push versioned + :latest images to GHCR
+      attestations: write # image build provenance
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,6 +74,7 @@ jobs:
           {
             echo "version=$version"
             echo "tag=v$version"
+            echo "major_minor=${version%.*}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Preflight — refuse to clobber an existing release
@@ -122,3 +129,53 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: gh release create "${TAG}" --generate-notes --verify-tag --title "${TAG}" --latest
+
+      # Multi-arch image (amd64 + arm64 — a NAS may be ARM) for the versioned + :latest
+      # tags. Runs AFTER the npm publish on purpose: npm is the source of truth, so a
+      # docker failure here leaves a published, tagged release rather than stranding an
+      # un-tagged npm publish behind a half-built image. Skipped entirely on dry_run.
+      - name: Set up QEMU
+        if: ${{ !inputs.dry_run }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: ${{ !inputs.dry_run }}
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ !inputs.dry_run }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        if: ${{ !inputs.dry_run }}
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=${{ steps.version.outputs.major_minor }}
+            type=raw,value=latest
+
+      - name: Build and push image
+        id: push
+        if: ${{ !inputs.dry_run }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Attest image provenance
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true

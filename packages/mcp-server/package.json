@@ -13,9 +13,21 @@
   "bin": {
     "openislands-mcp": "./dist/index.mjs"
   },
+  "exports": {
+    "./http": {
+      "types": "./src/http.ts",
+      "default": "./src/http.ts"
+    }
+  },
   "publishConfig": {
     "bin": {
       "openislands-mcp": "./dist/index.mjs"
+    },
+    "exports": {
+      "./http": {
+        "types": "./dist/http.d.mts",
+        "default": "./dist/http.mjs"
+      }
     }
   },
   "files": [
@@ -23,7 +35,7 @@
     "!dist/**/*.map"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm",
+    "build": "tsdown src/index.ts src/http.ts --format esm --dts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsx src/index.ts"

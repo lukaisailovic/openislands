@@ -180,6 +180,9 @@ importers:
       '@openislands/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@openislands/mcp':
+        specifier: workspace:*
+        version: link:../mcp-server
       '@openislands/runtime':
         specifier: workspace:*
         version: link:../runtime

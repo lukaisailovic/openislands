@@ -14,3 +14,5 @@ apps
 *.log
 .DS_Store
 PLAN.md
+Dockerfile
+docker-compose.yml

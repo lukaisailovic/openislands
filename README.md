@@ -162,6 +162,24 @@ domain-specific hacks:
 - **`health`:** macros, biomarkers, and wearables (pairs with [health-mcp](https://github.com/lukaisailovic/health-mcp)).
 - **`operations`:** a non-personal template that proves the breadth of the island set.
 
+## Self-host with Docker
+
+Want it always-on — on a home server or NAS, reachable by a remote agent? Run the published
+image. One process serves the dashboard **and** the MCP server (over Streamable HTTP) on a single
+port. Mount a single app or a workspace dir at `/project`:
+
+```bash
+# MCP is a write surface, so off-loopback it needs a token:
+docker run -d -p 127.0.0.1:4321:4321 \
+  -e OPENISLANDS_MCP_TOKEN="$(openssl rand -hex 32)" \
+  -v "$PWD/my-dashboard:/project" \
+  ghcr.io/lukaisailovic/openislands:latest
+```
+
+Then open [127.0.0.1:4321](http://127.0.0.1:4321). To reach it across your LAN, bind `0.0.0.0` and
+keep the token set; for a dashboard-only container with no agent write path, set `OPENISLANDS_MCP=0`
+to boot token-free. See [Self-hosting](https://openislands.sh/self-hosting) for the full guide.
+
 ## Status
 
 Alpha, and live-first. The schema, compiler, runtime, CLI, MCP server, and all three
