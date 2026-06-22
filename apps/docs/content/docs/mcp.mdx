@@ -62,6 +62,7 @@ An agent grounds itself before it ever proposes a change. These tools are all re
 
 | Tool | What it returns |
 | --- | --- |
+| `get_overview` | **Start here.** The manifest, every dataset's live columns, and the declared actions / queries / connectors (with status), plus the rollback checkpoint count — one call instead of a `get_manifest` + a `get_data_schema` per dataset + `list_actions` / `list_queries` / `list_connectors` fan-out. |
 | `list_islands` | The built-in island types, the fields each requires, and each one's `minSpan` / `recommendedSpan` / `maxSpan`. |
 | `get_island_schema(type)` | The exact config schema for one island type, plus its `layout` (`{ minSpan, recommendedSpan, maxSpan }`) and `notes` — so the sizing rules reach you at discovery time. |
 | `get_manifest` | The current manifest. |

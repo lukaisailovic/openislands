@@ -10,6 +10,9 @@ safe edit loop, and CRUD recipes for datasets, islands, pages, actions, and quer
 
 The short version:
 
+- **Orient in one call.** `get_overview` returns the manifest, every dataset's live columns, and the
+  declared actions / queries / connectors (plus checkpoint state) — start there instead of fanning
+  out across `get_manifest` and a `get_data_schema` per dataset.
 - **Edit through the MCP.** Use `patch_manifest` to change one section at a time (datasets, actions,
   queries, connectors, pages), or `propose_edit` for a full rewrite — then `apply_edit`, and `rollback`
   if it's wrong. Every edit is validated against the live data before it's written, and a binding error

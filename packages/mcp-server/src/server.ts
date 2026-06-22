@@ -14,7 +14,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createTwoFilesPatch } from "diff";
 import { z } from "zod";
 import { ActionValidationError, actionRowSchema, insertRows, checkManifestContracts, checkQueries, inferSchema, inspectManifestDatasets, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery, validateSql } from "@openislands/compiler";
-import { ActionSpec, BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, ConnectorSpec, DatasetSpec, ISLAND_DEFAULT_SPAN, ISLAND_MAX_SPAN, ISLAND_MIN_SPAN, LayoutRow, Page, QuerySpec, jsonSchemaFor, lintManifest, validateManifest, type IslandError, type IslandType, type LayoutWarning } from "@openislands/schema";
+import { ActionSpec, BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, ConnectorSpec, DatasetSpec, ISLAND_DEFAULT_SPAN, ISLAND_MAX_SPAN, ISLAND_MIN_SPAN, LayoutRow, Page, QuerySpec, jsonSchemaFor, lintManifest, validateManifest, type IslandError, type IslandType, type LayoutWarning, type Manifest } from "@openislands/schema";
 import { getAppStateStore, getContentStore } from "@openislands/storage";
 import { createCheckpointStore, isCheckpointId } from "./checkpoints.js";
 import { confineDatasetSource } from "./paths.js";
@@ -67,8 +67,35 @@ const LAYOUT_ROW_CONTRACT = {
   description: (z.toJSONSchema(LayoutRow) as { description: string }).description,
 };
 
+/**
+ * Server-level usage guidance, surfaced to the model at connect time (MCP `instructions`).
+ * This is the one place the read-many/write-one loop reaches a *generic* MCP client — the
+ * richer SKILL.md / AGENTS.md only ship to Claude Code. Keep it tight; it's always in context.
+ */
+const INSTRUCTIONS = `OpenIslands maintains a typed dashboard ("manifest") of visual islands bound to local data files.
+
+Read many, write one: read freely, but every change funnels through one validated, snapshotted pipeline — there is no raw file write.
+
+ORIENT (cheapest first): get_overview returns the manifest, each dataset's live columns, and the declared actions/queries/connectors in ONE call — start here. Then ground island edits with list_islands and get_island_schema(type).
+
+EDIT THE MANIFEST: patch_manifest (preferred — send only the sections that change) or propose_edit (full rewrite). Both validate against the live data and return a unified diff + a proposal_id, and write NOTHING. If the result is ok:false, each error names the page/island/field — fix the binding and retry; never work around it. Then apply_edit({proposal_id}) writes the manifest and returns a checkpoint_id. rollback({checkpoint_id?}) undoes it byte-for-byte (latest if omitted).
+
+DATA: list_actions -> run_action(name, rows) appends typed rows; list_queries -> run_query(name, params?) runs a declared typed read; query_data / validate_sql are ad-hoc read-only SELECTs over the dataset views.
+
+CONNECTORS: list_connectors -> run_sync(name). Authorizing a connector is human-only (the Connect button in the dashboard); if one isn't connected, tell the user — do not try to sync.
+
+Bind islands only to columns that exist; validate is the safety net, not an obstacle.`;
+
 const text = (s: string) => ({ content: [{ type: "text" as const, text: s }] });
 const json = (v: unknown) => text(JSON.stringify(v, null, 2));
+
+/** Annotations shared by every read/introspection tool: no mutation, repeatable, local-only.
+ * The MCP spec's hints let a client auto-approve safe reads and gate the mutating tools. */
+const READ_ONLY = { readOnlyHint: true, idempotentHint: true, openWorldHint: false } as const;
+
+/** Mutations that delete or overwrite prior state (rollback, history pruning) — flagged
+ * destructive so a client can gate them; idempotent because re-running lands the same state. */
+const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false } as const;
 
 function parseManifest(raw: string): { raw: unknown } | { error: string } {
   try {
@@ -187,19 +214,93 @@ export function createServer(projectRoot: string): McpServer {
     return { ok: true, proposal_id: await proposals.save(stored), custom_islands: check.custom, warnings: check.warnings, diff };
   }
 
-  const server = new McpServer({ name: "openislands", version: SERVER_VERSION });
+  /** Declared actions + their resolved row JSON Schema (live data merged with `fields` overrides).
+   * The grounding for run_action; shared by list_actions and get_overview. Assumes a reset engine. */
+  async function describeActions(manifest: Manifest) {
+    const out = [];
+    for (const [name, spec] of Object.entries(manifest.actions ?? {})) {
+      out.push({ name, dataset: spec.dataset, mode: spec.mode, description: spec.description, rowSchema: z.toJSONSchema(await actionRowSchema(projectRoot, name)) });
+    }
+    return out;
+  }
+
+  /** Declared queries + their params JSON Schema and result columns. The grounding for run_query;
+   * shared by list_queries and get_overview. A query that fails to resolve is surfaced by validate. */
+  async function describeQueries(manifest: Manifest) {
+    const out = [];
+    for (const [name, spec] of Object.entries(manifest.queries ?? {})) {
+      let params: unknown = {};
+      let columns: unknown[] = [];
+      try {
+        params = z.toJSONSchema(await queryParamSchema(projectRoot, name));
+      } catch {
+        /* surfaced by validate */
+      }
+      try {
+        columns = await queryColumns(projectRoot, name);
+      } catch {
+        /* surfaced by validate */
+      }
+      out.push({ name, description: spec.description, params, columns });
+    }
+    return out;
+  }
+
+  const server = new McpServer({ name: "openislands", version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
 
   // --- read-only introspection ----------------------------------------------------
 
   server.registerTool(
+    "get_overview",
+    {
+      description:
+        "START HERE. One-call orientation for the whole dashboard: the manifest, every dataset's live DuckDB-inferred columns, and the declared actions (with row schema), queries (with params + result columns), and connectors (with live status), plus the rollback checkpoint count. Replaces a get_manifest + a get_data_schema per dataset + list_actions + list_queries + list_connectors fan-out. Then ground a specific island edit with list_islands / get_island_schema.",
+      annotations: READ_ONLY,
+    },
+    async () => {
+      const raw = await readManifest();
+      const parsed = parseManifest(raw);
+      if ("error" in parsed) return json({ ok: false, error: `manifest is not valid JSON: ${parsed.error}`, manifest_raw: raw });
+
+      const checkpointIds = await checkpoints.list();
+      const checkpointsSummary = { count: checkpointIds.length, latest: checkpointIds.at(-1) ?? null };
+
+      const v = validateManifest(parsed.raw);
+      if (!v.ok || !v.manifest) return json({ ok: false, errors: v.errors, manifest: parsed.raw, checkpoints: checkpointsSummary });
+
+      const { columns, failures } = await inspectManifestDatasets(projectRoot, v.manifest);
+      const datasets = Object.fromEntries(
+        Object.entries(v.manifest.datasets).map(([name, spec]) => [
+          name,
+          { source: spec.source ?? null, sql: spec.sql ?? null, description: spec.description, columns: columns.get(name) ?? null, error: failures.get(name) ?? null },
+        ]),
+      );
+
+      resetEngine(projectRoot);
+      return json({
+        ok: true,
+        title: v.manifest.title,
+        icon: v.manifest.icon ?? null,
+        pages: v.manifest.pages,
+        datasets,
+        actions: await describeActions(v.manifest),
+        queries: await describeQueries(v.manifest),
+        connectors: await listConnectorStatuses(projectRoot),
+        custom_islands: v.custom.map((c) => c.type),
+        checkpoints: checkpointsSummary,
+      });
+    },
+  );
+
+  server.registerTool(
     "list_islands",
-    { description: "List the built-in island types with their required fields, a short description, and their span range (minSpan / recommendedSpan / maxSpan)." },
+    { description: "List the built-in island types with their required fields, a short description, and their span range (minSpan / recommendedSpan / maxSpan).", annotations: READ_ONLY },
     async () => json([...BUILTIN_ISLAND_TYPES.map(islandContract), LAYOUT_ROW_CONTRACT]),
   );
 
   server.registerTool(
     "get_island_schema",
-    { description: "Get the JSON Schema for one island type plus its layout guidance (min/recommended/max span + notes) — use it to ground an edit and pick a sensible width.", inputSchema: { type: z.string() } },
+    { description: "Get the JSON Schema for one island type plus its layout guidance (min/recommended/max span + notes) — use it to ground an edit and pick a sensible width.", inputSchema: { type: z.string() }, annotations: READ_ONLY },
     async ({ type }) => {
       if (type === "layout.row") {
         return json({ type, schema: z.toJSONSchema(LayoutRow), layout: null, notes: ["A structural full-width row; it carries no span of its own — set spans on its child islands."] });
@@ -210,11 +311,11 @@ export function createServer(projectRoot: string): McpServer {
     },
   );
 
-  server.registerTool("get_manifest", { description: "Return the current app manifest." }, async () => text(await readManifest()));
+  server.registerTool("get_manifest", { description: "Return the current app manifest.", annotations: READ_ONLY }, async () => text(await readManifest()));
 
   server.registerTool(
     "get_data_schema",
-    { description: "Columns and inferred types for a dataset (from the live data).", inputSchema: { dataset: z.string() } },
+    { description: "Columns and inferred types for a dataset (from the live data).", inputSchema: { dataset: z.string() }, annotations: READ_ONLY },
     async ({ dataset }) => {
       resetEngine(projectRoot);
       try {
@@ -235,6 +336,7 @@ export function createServer(projectRoot: string): McpServer {
         sql: z.string().optional().describe("a single read-only SELECT over the dataset views"),
         limit: z.number().int().positive().max(500).default(50),
       },
+      annotations: READ_ONLY,
     },
     async ({ dataset, sql, limit }) => {
       if (dataset && sql) return text("Pass either `dataset` or `sql`, not both.");
@@ -254,6 +356,7 @@ export function createServer(projectRoot: string): McpServer {
     {
       description: "Dry-run validate a manifest (a JSON object or string, or the current one if omitted) and check island bindings against the data.",
       inputSchema: { manifest: manifestArg.optional() },
+      annotations: READ_ONLY,
     },
     async ({ manifest }) => {
       const parsed = manifest === undefined ? parseManifest(await readManifest()) : coerceManifest(manifest);
@@ -268,6 +371,7 @@ export function createServer(projectRoot: string): McpServer {
       description:
         "Dry-run a read-only SELECT against the registered dataset views WITHOUT running it for real — returns the result columns if valid, or the exact DuckDB error (catalog / parse / type) if not. Author a `sql` transform body here and confirm it binds before wiring it into a dataset, or sanity-check a query_data SELECT.",
       inputSchema: { sql: z.string().describe("a single read-only SELECT over the dataset views") },
+      annotations: READ_ONLY,
     },
     async ({ sql }) => {
       resetEngine(projectRoot);
@@ -277,7 +381,7 @@ export function createServer(projectRoot: string): McpServer {
 
   server.registerTool(
     "list_checkpoints",
-    { description: "List rollback checkpoints (prior manifests), newest last." },
+    { description: "List rollback checkpoints (prior manifests), newest last.", annotations: READ_ONLY },
     async () => json(await checkpoints.list()),
   );
 
@@ -286,6 +390,7 @@ export function createServer(projectRoot: string): McpServer {
     {
       description: `Trim the rollback history, keeping the newest \`keep\` checkpoints and deleting the rest (defaults to ${MAX_CHECKPOINTS}). Older checkpoints become unrecoverable. History is auto-trimmed to ${MAX_CHECKPOINTS} on every apply_edit; call this to reclaim space sooner or to keep fewer.`,
       inputSchema: { keep: z.number().int().positive().optional() },
+      annotations: DESTRUCTIVE,
     },
     async ({ keep }) => {
       const { kept, removed } = await checkpoints.prune(keep ?? MAX_CHECKPOINTS);
@@ -301,6 +406,7 @@ export function createServer(projectRoot: string): McpServer {
       description:
         "Replace the WHOLE manifest — for a full rewrite or a brand-new manifest. Validates + checks data + returns a diff (and advisory layout `warnings`). Does NOT write — call apply_edit to commit. For a small change prefer patch_manifest: sending a full-manifest payload just to edit one section is error-prone (easy to drop or mangle the parts you didn't mean to touch).",
       inputSchema: { manifest: manifestArg.describe("the full proposed manifest — pass a JSON object (preferred) or a JSON string") },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ manifest }) => {
       const parsed = coerceManifest(manifest);
@@ -324,6 +430,7 @@ export function createServer(projectRoot: string): McpServer {
         pages: z.array(Page).optional().describe("full Page objects, upserted by id (a matching id is replaced, a new id is appended)"),
         remove_pages: z.array(z.string()).optional().describe("page ids to remove"),
       },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async (patch) => {
       const base = await readManifest();
@@ -339,7 +446,7 @@ export function createServer(projectRoot: string): McpServer {
 
   server.registerTool(
     "apply_edit",
-    { description: "Write a previously-proposed edit (from propose_edit or patch_manifest). Rejects stale/unknown proposals. Snapshots the current manifest first for rollback.", inputSchema: { proposal_id: z.string() } },
+    { description: "Write a previously-proposed edit (from propose_edit or patch_manifest). Rejects stale/unknown proposals. Snapshots the current manifest first for rollback.", inputSchema: { proposal_id: z.string() }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } },
     async ({ proposal_id }) => {
       const proposal = await proposals.load(proposal_id);
       if (!proposal) return json({ ok: false, error: `Unknown proposal '${proposal_id}'. Call propose_edit first.` });
@@ -361,7 +468,7 @@ export function createServer(projectRoot: string): McpServer {
 
   server.registerTool(
     "rollback",
-    { description: "Restore a prior checkpoint byte-for-byte — a manifest edit or a data-action append (latest if none given).", inputSchema: { checkpoint_id: z.string().optional() } },
+    { description: "Restore a prior checkpoint byte-for-byte — a manifest edit or a data-action append (latest if none given).", inputSchema: { checkpoint_id: z.string().optional() }, annotations: DESTRUCTIVE },
     async ({ checkpoint_id }) => {
       const available = await checkpoints.list();
       if (available.length === 0) return json({ ok: false, error: "no history yet", available });
@@ -379,22 +486,11 @@ export function createServer(projectRoot: string): McpServer {
 
   server.registerTool(
     "list_actions",
-    { description: "List the manifest's declared data actions with their resolved row JSON Schema — the agent's grounding for run_action." },
+    { description: "List the manifest's declared data actions with their resolved row JSON Schema — the agent's grounding for run_action.", annotations: READ_ONLY },
     async () => {
       const manifest = await readProjectManifest(projectRoot);
-      const actions = manifest.actions ?? {};
       resetEngine(projectRoot);
-      const out = [];
-      for (const [name, spec] of Object.entries(actions)) {
-        out.push({
-          name,
-          dataset: spec.dataset,
-          mode: spec.mode,
-          description: spec.description,
-          rowSchema: z.toJSONSchema(await actionRowSchema(projectRoot, name)),
-        });
-      }
-      return json(out);
+      return json(await describeActions(manifest));
     },
   );
 
@@ -403,6 +499,7 @@ export function createServer(projectRoot: string): McpServer {
     {
       description: "Append typed rows through a declared action. Validates every row against the action schema (all-or-nothing); on success snapshots the file and returns a rollback checkpoint_id.",
       inputSchema: { name: z.string(), rows: z.array(z.record(z.string(), z.unknown())) },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ name, rows }) => {
       const manifest = await readProjectManifest(projectRoot);
@@ -436,28 +533,11 @@ export function createServer(projectRoot: string): McpServer {
 
   server.registerTool(
     "list_queries",
-    { description: "List the manifest's declared read queries with their params JSON Schema and result columns — the agent's grounding for run_query." },
+    { description: "List the manifest's declared read queries with their params JSON Schema and result columns — the agent's grounding for run_query.", annotations: READ_ONLY },
     async () => {
       const manifest = await readProjectManifest(projectRoot);
-      const queries = manifest.queries ?? {};
       resetEngine(projectRoot);
-      const out = [];
-      for (const [name, spec] of Object.entries(queries)) {
-        let params: unknown = {};
-        let columns: unknown[] = [];
-        try {
-          params = z.toJSONSchema(await queryParamSchema(projectRoot, name));
-        } catch {
-          /* surfaced by validate */
-        }
-        try {
-          columns = await queryColumns(projectRoot, name);
-        } catch {
-          /* surfaced by validate */
-        }
-        out.push({ name, description: spec.description, params, columns });
-      }
-      return json(out);
+      return json(await describeQueries(manifest));
     },
   );
 
@@ -470,6 +550,7 @@ export function createServer(projectRoot: string): McpServer {
         params: z.record(z.string(), z.unknown()).optional(),
         limit: z.number().int().positive().max(500).optional(),
       },
+      annotations: READ_ONLY,
     },
     async ({ name, params, limit }) => {
       const manifest = await readProjectManifest(projectRoot);
@@ -496,6 +577,7 @@ export function createServer(projectRoot: string): McpServer {
     {
       description:
         "List the manifest's declared connectors with their live status: auth kind, whether they're connected, any missing secrets, schedule, last sync/error. This is how you discover that a connector needs authorizing — authorizing it is human-only (the Connect button in the dashboard / `openislands serve`), so when `connected` is false surface that to the user rather than trying to sync.",
+      annotations: READ_ONLY,
     },
     async () => json(await listConnectorStatuses(projectRoot)),
   );
@@ -506,6 +588,7 @@ export function createServer(projectRoot: string): McpServer {
       description:
         "Run one connector sync now: pulls from the provider and writes rows into its `source` datasets through the checkpointed write path (covered by rollback). Returns per-dataset rows/mode/checkpoint. Fails if the connector isn't connected — check list_connectors first.",
       inputSchema: { name: z.string() },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ name }) => {
       try {

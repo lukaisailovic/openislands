@@ -10,7 +10,10 @@ user-facing version lives in `apps/docs/src/pages/mcp.mdx`.
 Read-many / write-one. An agent reads everything, but every change funnels through a single
 validated, snapshotted proposal-and-apply pipeline.
 
-**Read first:** `list_islands` (built-in types + required fields), `get_island_schema(type)`,
+**Read first:** `get_overview` (the manifest + every dataset's live columns + the declared
+actions/queries/connectors + the checkpoint count, in one call — the orientation entry point that
+saves a per-dataset `get_data_schema` + `list_*` fan-out), `list_islands` (built-in types +
+required fields), `get_island_schema(type)`,
 `get_manifest`, `get_data_schema(dataset)`, `query_data({ dataset } | { sql }, limit)` — pass a
 `dataset` name for a whole dataset *or* a read-only `sql` SELECT over the registered dataset
 views, not both — `list_queries`/`run_query` (declared parameterized reads, see Queries below),

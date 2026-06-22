@@ -71,6 +71,58 @@ describe("read tools", () => {
   });
 });
 
+describe("get_overview — one-call orientation", () => {
+  it("returns the manifest, dataset columns, actions, queries, connectors and checkpoint state in one call", async () => {
+    const client = await connect(freshProject());
+    const ov = (await call(client, "get_overview")) as {
+      ok: boolean;
+      title: string;
+      datasets: Record<string, { source: string | null; columns: { name: string }[] | null; error: string | null }>;
+      actions: { name: string; dataset: string; mode: string }[];
+      queries: unknown[];
+      connectors: unknown[];
+      pages: { id: string }[];
+      checkpoints: { count: number; latest: string | null };
+    };
+    expect(ov.ok).toBe(true);
+    expect(ov.title).toBe("Finance Overview");
+    expect(Object.keys(ov.datasets).toSorted()).toEqual(["allocation", "net_worth_monthly", "notes"]);
+    expect(ov.datasets.allocation!.columns!.map((c) => c.name).toSorted()).toEqual(["class", "value_eur"]);
+    expect(ov.datasets.allocation!.error).toBeNull();
+    expect(ov.actions).toHaveLength(1);
+    expect(ov.actions[0]!.name).toBe("log_allocation");
+    expect(ov.queries).toEqual([]);
+    expect(ov.connectors).toEqual([]);
+    expect(ov.pages.map((p) => p.id)).toEqual(["overview"]);
+    expect(ov.checkpoints).toEqual({ count: 0, latest: null });
+  });
+
+  it("reflects a checkpoint after an apply_edit", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const next = JSON.parse(validManifest(root));
+    next.title = "Edited";
+    const proposed = (await call(client, "propose_edit", { manifest: next })) as { proposal_id: string };
+    await call(client, "apply_edit", { proposal_id: proposed.proposal_id });
+    const ov = (await call(client, "get_overview")) as { title: string; checkpoints: { count: number; latest: string | null } };
+    expect(ov.title).toBe("Edited");
+    expect(ov.checkpoints.count).toBe(1);
+    expect(ov.checkpoints.latest).toMatch(/^ckpt-\d+$/);
+  });
+
+  it("still orients on a structurally-invalid manifest (ok:false with errors)", async () => {
+    const root = freshProject();
+    const m = JSON.parse(validManifest(root));
+    m.version = "not-a-number";
+    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    const client = await connect(root);
+    const ov = (await call(client, "get_overview")) as { ok: boolean; errors: unknown[]; checkpoints: { count: number } };
+    expect(ov.ok).toBe(false);
+    expect(ov.errors.length).toBeGreaterThan(0);
+    expect(ov.checkpoints.count).toBe(0);
+  });
+});
+
 describe("edit pipeline state machine", () => {
   it("propose → apply writes the manifest", async () => {
     const root = freshProject();
