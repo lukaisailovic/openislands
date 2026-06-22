@@ -4,4 +4,4 @@ dist/
 .nitro/
 .tanstack/
 .source/
-src/routeTree.gen.ts
+
