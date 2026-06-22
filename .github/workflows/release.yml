@@ -46,10 +46,15 @@ jobs:
       packages: write # push versioned + :latest images to GHCR
       attestations: write # image build provenance
     steps:
+      # Checkout over SSH with a write deploy key. `main` is protected by the `prod`
+      # ruleset (required PR + status checks); the deploy key is on that ruleset's
+      # bypass list, so the bump commit + tag can be pushed directly. persist-credentials
+      # keeps the SSH config so the later `git push` reuses the key.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: true
+          ssh-key: ${{ secrets.RELEASE_SSH_KEY }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
