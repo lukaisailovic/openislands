@@ -18,6 +18,7 @@ import { Command } from "commander";
 import { compile, inferFile, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
 import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
+import { assertMcpHostSafe, envFlag, handleServeRequest, type McpConfig, type McpHttpHandler } from "./serve.js";
 import { datasetNameFromFile, islandSkeleton, suggestIslands } from "./scaffold.js";
 
 interface FetchServer {
@@ -88,8 +89,15 @@ program
   )
   .option("-p, --port <port>", "port", "4321")
   .option("--host <host>", "bind address (loopback by default — this is your data)", "127.0.0.1")
-  .action(async (dir: string | undefined, opts: { port: string; host: string }) => {
+  .option("--mcp", "also mount the MCP server over Streamable HTTP on the same port")
+  .option("--mcp-token <token>", "bearer token required on MCP requests (also $OPENISLANDS_MCP_TOKEN)")
+  .action(async (dir: string | undefined, opts: { port: string; host: string; mcp?: boolean; mcpToken?: string }) => {
     const root = resolve(dir ?? ".");
+    const port = Number(process.env.OPENISLANDS_PORT ?? opts.port);
+    const host = process.env.OPENISLANDS_HOST ?? opts.host;
+    const mcpEnabled = opts.mcp || envFlag(process.env.OPENISLANDS_MCP);
+    const mcpToken = opts.mcpToken ?? process.env.OPENISLANDS_MCP_TOKEN ?? null;
+    assertMcpHostSafe(host, mcpEnabled, mcpToken);
 
     if (existsSync(join(root, "app", "manifest.json"))) {
       const report = await compile(root);
@@ -99,7 +107,8 @@ program
         process.exit(1);
       }
       console.log(`${c.green("✓")} ${c.bold(report.manifest!.title)} is valid`);
-      await bootRuntime({ OPENISLANDS_PROJECT_DIR: root }, opts.host, Number(opts.port));
+      const mcp = mcpEnabled ? { token: mcpToken, mounts: [{ basePath: "/mcp", projectDir: root }] } : undefined;
+      await bootRuntime({ OPENISLANDS_PROJECT_DIR: root }, host, port, mcp);
       return;
     }
 
@@ -118,7 +127,10 @@ program
       else console.log(`${c.red("✗")} ${c.bold(app)} ${c.dim(`(${report.errors.length} error(s) — serving in error state)`)}`);
     }
     writeDefaultWorkspaceConfig(root, apps);
-    await bootRuntime({ OPENISLANDS_WORKSPACE_DIR: root }, opts.host, Number(opts.port));
+    const mcp = mcpEnabled
+      ? { token: mcpToken, mounts: apps.map((app) => ({ basePath: `/mcp/${app}`, projectDir: join(root, app) })) }
+      : undefined;
+    await bootRuntime({ OPENISLANDS_WORKSPACE_DIR: root }, host, port, mcp);
   });
 
 program
@@ -443,6 +455,7 @@ async function bootRuntime(
   env: { OPENISLANDS_PROJECT_DIR: string } | { OPENISLANDS_WORKSPACE_DIR: string },
   host: string,
   port: number,
+  mcp?: McpConfig,
 ): Promise<void> {
   Object.assign(process.env, env);
   const mod = (await import("@openislands/runtime/server")) as { default: FetchServer };
@@ -450,10 +463,12 @@ async function bootRuntime(
   const serverEntry = fileURLToPath(import.meta.resolve("@openislands/runtime/server"));
   const clientDir = join(dirname(serverEntry), "..", "client");
   const origin = `http://${host}:${port}`;
+  const mcpHandlers = new Map<string, McpHttpHandler>();
 
   const server = createServer((req, res) => {
     void (async () => {
       try {
+        if (handleServeRequest(mcp, mcpHandlers, req, res)) return;
         if (serveClientAsset(clientDir, req, res)) return;
         const response = await handler.fetch(await toWebRequest(req, origin));
         await writeWebResponse(response, res);
@@ -472,20 +487,26 @@ async function bootRuntime(
     });
   });
   server.on("error", (err) => console.error(c.red(`runtime server error: ${friendlyMessage(err)}`)));
-  installGracefulShutdown(server);
+  installGracefulShutdown(server, mcpHandlers);
 
   console.log(
     `${c.green("●")} OpenIslands runtime → ${c.bold(origin)}  ${c.dim("live SSR · Ctrl-C to stop")}`,
   );
+  if (mcp) {
+    const routes = mcp.mounts.map((m) => m.basePath).join(", ");
+    const auth = mcp.token ? "token-protected" : "loopback (no token)";
+    console.log(`${c.green("●")} MCP over HTTP → ${c.bold(routes)}  ${c.dim(`${auth} · Ctrl-C to stop`)}`);
+  }
 }
 
 /** On Ctrl-C / SIGTERM, stop accepting connections and exit cleanly instead of being killed mid-request. */
-function installGracefulShutdown(server: Server): void {
+function installGracefulShutdown(server: Server, mcpHandlers: Map<string, McpHttpHandler>): void {
   let closing = false;
   const shutdown = (signal: NodeJS.Signals) => {
     if (closing) return;
     closing = true;
     console.log(c.dim(`\n${signal} — shutting down.`));
+    void Promise.all([...mcpHandlers.values()].map((h) => h.close())).catch(() => {});
     server.close(() => process.exit(0));
     // Long-lived SSE streams keep close() from ever completing — don't hang on them.
     setTimeout(() => process.exit(0), 2000).unref();

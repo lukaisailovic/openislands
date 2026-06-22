@@ -46,6 +46,16 @@ The first positional argument is the project root: the server reads and writes t
 data, and history under it. `npx` fetches and runs the latest published server on demand; its
 `-y` flag skips the install prompt, so there's nothing to install globally.
 
+## Running over HTTP
+
+The config above runs the server over **stdio** — the client spawns it as a child process. For a
+remote or always-on setup, the same server also speaks **Streamable HTTP** (the modern MCP
+transport): `openislands serve --mcp`, or the [Docker image](/self-hosting), mounts it on the
+dashboard's port at `POST/GET/DELETE /mcp` (or `/mcp/<app>` in a multi-app workspace). An
+HTTP-aware client points its `url:` at that endpoint instead of spawning a command; the tool
+surface below is identical either way. Off loopback it requires a bearer token — see
+[Self-hosting](/self-hosting) for the full deployment and security story.
+
 ## The read tools
 
 An agent grounds itself before it ever proposes a change. These tools are all read-only:

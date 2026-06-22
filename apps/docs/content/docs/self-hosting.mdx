@@ -1,0 +1,172 @@
+---
+title: Self-hosting
+description: Run OpenIslands as an always-on Docker container on a server or home NAS — the dashboard and the MCP server over HTTP in one process, from the ghcr image, with a token guarding the write surface off loopback.
+---
+
+`openislands serve` is already a long-running local app. To keep a dashboard always-on — on a
+home server or NAS, reachable by a remote agent — run the published Docker image. One Node
+process serves **both** surfaces on one port:
+
+- the **dashboard** at `/`, and
+- the **MCP server** over [Streamable HTTP](/mcp#running-over-http) at `/mcp` (or `/mcp/<app>` in
+  a multi-app workspace).
+
+Because both share the process, an MCP edit and the live dashboard stay in lockstep: when an agent
+applies a change, the file watcher fires and the open page live-updates over SSE — no second
+service, no second port. stdio stays available for local agent configs; HTTP is the addition for
+remote, always-on use.
+
+<Callout type="info" title="Still local-first">
+
+This is your data on your hardware — one process, one port, one volume you mount. It is not a
+hosted tier or a multi-tenant service; it's the same engine you run with `serve`, packaged to stay
+up.
+
+</Callout>
+
+## Quick start
+
+The image is published to `ghcr.io/lukaisailovic/openislands`. Mount a project at `/project` — a
+single app (a directory with `app/manifest.json`) **or** a workspace directory of such apps; `serve`
+auto-detects which.
+
+<Steps>
+
+<Step>
+### Generate a token
+
+The container binds `0.0.0.0` so its port is reachable, and ships with MCP **on**. MCP is a write
+surface (it can edit your manifest and insert rows), so the server **refuses to start** off loopback
+without a token. Make one:
+
+```bash
+export OPENISLANDS_MCP_TOKEN=$(openssl rand -hex 32)
+```
+
+Running dashboard-only with no agent write path? Skip the token and set `OPENISLANDS_MCP=0` instead
+(see [Security](#security)).
+</Step>
+
+<Step>
+### Run it
+
+With Docker directly:
+
+```bash
+docker run -d --name openislands \
+  -p 127.0.0.1:4321:4321 \
+  -e OPENISLANDS_MCP_TOKEN \
+  -v "$PWD/my-dashboard:/project" \
+  ghcr.io/lukaisailovic/openislands:latest
+```
+
+Or with Compose — drop this `docker-compose.yml` next to a `./project` directory and bring it up:
+
+```yaml title="docker-compose.yml"
+services:
+  openislands:
+    image: ghcr.io/lukaisailovic/openislands:latest
+    container_name: openislands
+    restart: unless-stopped
+    ports:
+      - "${OPENISLANDS_BIND:-127.0.0.1}:${OPENISLANDS_HOST_PORT:-4321}:4321"
+    environment:
+      OPENISLANDS_MCP_TOKEN: ${OPENISLANDS_MCP_TOKEN:-}
+    volumes:
+      - ./project:/project
+```
+
+```bash
+docker compose up -d
+```
+
+The mounted `/project` must be **writable by uid 1000** — the container runs as a non-root `node`
+user and writes app state under `.openislands/` there.
+</Step>
+
+<Step>
+### Open it
+
+Visit [127.0.0.1:4321](http://127.0.0.1:4321). Edit a file under the mounted project and the page
+live-updates, exactly like local `serve`.
+</Step>
+
+</Steps>
+
+## Configuration
+
+Everything is environment-driven (CLI flags win if you also pass them):
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `OPENISLANDS_BIND` | `127.0.0.1` | Host interface the port maps to. Set `0.0.0.0` to reach it across your LAN/NAS *(compose only — the host side of the port mapping)*. |
+| `OPENISLANDS_HOST_PORT` | `4321` | Host port that maps to the container's `4321` *(compose only)*. |
+| `OPENISLANDS_MCP` | `1` | `1`/`true` mounts the MCP HTTP endpoint(s). Set `0` for a dashboard-only container. |
+| `OPENISLANDS_MCP_TOKEN` | *(unset)* | Bearer token required on MCP requests. Required to bind off loopback with MCP on. |
+| `OPENISLANDS_PORT` | `4321` | Port the server listens on **inside** the container. |
+| `OPENISLANDS_HOST` | `0.0.0.0` | Interface the server binds **inside** the container. Leave as is. |
+
+## Security
+
+Two boundaries, both yours to set:
+
+- **The port mapping is the network boundary.** It defaults to `127.0.0.1`, so nothing is exposed
+  beyond the host until you set `OPENISLANDS_BIND=0.0.0.0` (or publish the port directly with
+  `docker run -p`).
+- **The token is the auth boundary on the MCP write surface.** Binding off loopback with MCP on
+  **requires** `OPENISLANDS_MCP_TOKEN` or the server exits with a clear error — loopback alone is
+  local trust (parity with stdio), but a write surface on the network is not. Generate one with
+  `openssl rand -hex 32`.
+
+<Callout type="warn" title="Off-loopback needs a token">
+
+To expose OpenIslands on your LAN or NAS, set **both** `OPENISLANDS_BIND=0.0.0.0` **and**
+`OPENISLANDS_MCP_TOKEN=$(openssl rand -hex 32)`. Want the dashboard reachable but no agent write
+path at all? Set `OPENISLANDS_MCP=0` and the container boots token-free — the `/mcp` endpoint is
+simply not mounted.
+
+</Callout>
+
+## Connecting an HTTP MCP client
+
+Point an HTTP-aware MCP client at the endpoint and pass the token as a bearer header:
+
+- **Single app:** `http://<host>:4321/mcp`
+- **Multi-app workspace:** `http://<host>:4321/mcp/<app>` — one endpoint per app id. A bare
+  `/mcp` in a workspace returns a `404` listing the valid app ids, so a client can self-discover.
+
+A client that takes a server URL — for example Nous Research's Hermes Agent, via its `url:` server
+config — connects like this:
+
+```jsonc
+{
+  "mcpServers": {
+    "openislands": {
+      "url": "http://<host>:4321/mcp",
+      "headers": { "Authorization": "Bearer <your-token>" }
+    }
+  }
+}
+```
+
+A missing or wrong token returns `401`. The same read-many/write-one tool surface and safety
+posture from the [MCP page](/mcp) apply — the transport is the only thing that changes.
+
+<Callout type="info" title="`mcp` is a reserved path">
+
+The MCP endpoint owns the `/mcp` path. In a workspace, an app whose id is literally `mcp` is
+shadowed by the endpoint — rename it.
+
+</Callout>
+
+## Image tags
+
+| Tag | Platforms | Use |
+| --- | --- | --- |
+| `:latest`, `:X.Y.Z`, `:X.Y` | `linux/amd64`, `linux/arm64` | The artifact to deploy. ARM builds cover ARM NAS boxes and Apple silicon. |
+| `:main`, `:sha-<commit>` | `linux/amd64` | Rolling build of the tip, for tracking development. |
+
+## Related
+
+- [MCP Server](/mcp): the tool surface and safety posture, identical over HTTP.
+- [CLI](/cli): `serve --mcp` runs the same thing without Docker.

@@ -78,7 +78,7 @@ transactions as typed islands over CSVs you own. `health` and `operations` are t
 ### `serve`
 
 ```bash
-openislands serve [dir] [--port 4321] [--host 127.0.0.1]
+openislands serve [dir] [--port 4321] [--host 127.0.0.1] [--mcp] [--mcp-token <token>]
 ```
 
 Boots your dashboard as a long-running local app (the TanStack Start SSR runtime), querying your
@@ -87,6 +87,13 @@ naming what's wrong. It binds to loopback by default — this is your data. Leav
 a file and the page live-updates over SSE.
 
 Point `serve` at a directory of projects instead of one, and it serves them all as a workspace.
+
+`--mcp` also mounts the MCP server over Streamable HTTP on the same port (at `/mcp`, or
+`/mcp/<app>` per app in a workspace), so a remote agent can drive the dashboard. `--mcp-token`
+sets the bearer token it requires — mandatory when binding off loopback, since MCP is a write
+surface. Every flag has an environment equivalent (`OPENISLANDS_PORT`, `OPENISLANDS_HOST`,
+`OPENISLANDS_MCP`, `OPENISLANDS_MCP_TOKEN`), which is how the [Docker image](/self-hosting) is
+configured; flags win when both are set. See [Self-hosting](/self-hosting) for the container story.
 
 ### `infer`
 

@@ -1,0 +1,33 @@
+# Self-host the dashboard + MCP server (one process, one port) over a project you
+# mount at /project. See /self-hosting in the docs for the full guide.
+#
+#   # generate a token once (required to expose MCP off loopback), then bring it up:
+#   export OPENISLANDS_MCP_TOKEN=$(openssl rand -hex 32)
+#   docker compose up -d
+#   # → dashboard + MCP at http://127.0.0.1:4321 (MCP at /mcp, or /mcp/<app> in a workspace)
+#
+# To reach it from other machines on your LAN/NAS, set OPENISLANDS_BIND=0.0.0.0.
+# Binding off loopback REQUIRES OPENISLANDS_MCP_TOKEN (MCP is a write surface) — or
+# set OPENISLANDS_MCP=0 for a dashboard-only, token-free container.
+
+services:
+  openislands:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: openislands:local
+    # image: ghcr.io/lukaisailovic/openislands:latest   # use the published image instead of building
+    container_name: openislands
+    restart: unless-stopped
+    ports:
+      # host bind defaults to loopback; host port defaults to 4321. Container always 4321.
+      - "${OPENISLANDS_BIND:-127.0.0.1}:${OPENISLANDS_HOST_PORT:-4321}:4321"
+    environment:
+      OPENISLANDS_HOST: 0.0.0.0
+      OPENISLANDS_PORT: "4321"
+      OPENISLANDS_MCP: "1"
+      OPENISLANDS_MCP_TOKEN: ${OPENISLANDS_MCP_TOKEN:-} # required to bind off loopback
+    volumes:
+      # a single app (a dir with app/manifest.json) OR a workspace dir of such apps.
+      # must be writable by uid 1000 — serve writes app state under .openislands/.
+      - ./project:/project
