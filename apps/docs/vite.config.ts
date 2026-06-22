@@ -59,6 +59,10 @@ export default defineConfig({
     // See https://tanstack.com/start/latest/docs/framework/react/guide/hosting#nitro
     nitro(),
   ],
+  // Ship source maps for first-party chunks so Lighthouse `valid-source-maps` passes.
+  build: {
+    sourcemap: true,
+  },
   resolve: {
     tsconfigPaths: true,
     alias: {
