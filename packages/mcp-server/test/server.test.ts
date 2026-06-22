@@ -45,29 +45,30 @@ const validManifest = (root: string) => readFileSync(join(root, "app", "manifest
 describe("read tools", () => {
   it("list_islands returns contracts with required fields", async () => {
     const client = await connect(freshProject());
-    const islands = (await call(client, "list_islands")) as { type: string; required: string[] }[];
+    const { islands } = (await call(client, "list_islands")) as { islands: { type: string; required: string[] }[] };
     const kpi = islands.find((i) => i.type === "metric.kpi");
     expect(kpi?.required).toEqual(["dataset", "value"]);
     const note = islands.find((i) => i.type === "note.card");
     expect(note?.required).toEqual(["markdown"]);
   });
 
-  it("query_data reads a dataset", async () => {
+  it("run_sql reads a dataset", async () => {
     const client = await connect(freshProject());
-    const rows = (await call(client, "query_data", { dataset: "net_worth_monthly", limit: 2 })) as unknown[];
+    const { rows } = (await call(client, "run_sql", { dataset: "net_worth_monthly", limit: 2 })) as { rows: unknown[] };
     expect(rows.length).toBe(2);
   });
 
-  it("query_data runs a read-only SQL SELECT over the views", async () => {
+  it("run_sql runs a read-only SQL SELECT over the views", async () => {
     const client = await connect(freshProject());
-    const rows = (await call(client, "query_data", { sql: "SELECT class, value_eur FROM allocation ORDER BY value_eur DESC", limit: 1 })) as { class: string }[];
+    const { rows } = (await call(client, "run_sql", { sql: "SELECT class, value_eur FROM allocation ORDER BY value_eur DESC", limit: 1 })) as { rows: { class: string }[] };
     expect(rows[0]!.class).toBe("BTC");
   });
 
-  it("query_data rejects non-SELECT SQL", async () => {
+  it("run_sql rejects non-SELECT SQL", async () => {
     const client = await connect(freshProject());
-    const out = await call(client, "query_data", { sql: "DROP TABLE allocation" });
-    expect(String(out)).toMatch(/read-only|failed/i);
+    const out = (await call(client, "run_sql", { sql: "DROP TABLE allocation" })) as { ok: boolean; error: string };
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/read-only|failed/i);
   });
 });
 
@@ -102,7 +103,7 @@ describe("get_overview — one-call orientation", () => {
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.title = "Edited";
-    const proposed = (await call(client, "propose_edit", { manifest: next })) as { proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: next })) as { proposal_id: string };
     await call(client, "apply_edit", { proposal_id: proposed.proposal_id });
     const ov = (await call(client, "get_overview")) as { title: string; checkpoints: { count: number; latest: string | null } };
     expect(ov.title).toBe("Edited");
@@ -129,7 +130,7 @@ describe("edit pipeline state machine", () => {
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.title = "Edited";
-    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id: string };
     expect(proposed.ok).toBe(true);
     const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id })) as { ok: boolean };
     expect(applied.ok).toBe(true);
@@ -141,13 +142,13 @@ describe("edit pipeline state machine", () => {
     const client = await connect(root);
     const bad = JSON.parse(validManifest(root));
     bad.pages[0].islands[0].value = "does_not_exist";
-    const rejected = (await call(client, "propose_edit", { manifest: JSON.stringify(bad) })) as { ok: boolean; errors: unknown[] };
+    const rejected = (await call(client, "replace_manifest", { manifest: JSON.stringify(bad) })) as { ok: boolean; errors: unknown[] };
     expect(rejected.ok).toBe(false);
     expect(rejected.errors.length).toBeGreaterThan(0);
 
     const good = JSON.parse(validManifest(root));
     good.title = "Fixed";
-    const ok = (await call(client, "propose_edit", { manifest: JSON.stringify(good) })) as { ok: boolean; proposal_id: string };
+    const ok = (await call(client, "replace_manifest", { manifest: JSON.stringify(good) })) as { ok: boolean; proposal_id: string };
     expect(ok.ok).toBe(true);
     const applied = (await call(client, "apply_edit", { proposal_id: ok.proposal_id })) as { ok: boolean };
     expect(applied.ok).toBe(true);
@@ -159,7 +160,7 @@ describe("edit pipeline state machine", () => {
     const original = validManifest(root);
     const next = JSON.parse(original);
     next.title = "Changed";
-    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { proposal_id: string };
     await call(client, "apply_edit", { proposal_id: proposed.proposal_id });
     expect(validManifest(root)).not.toBe(original);
 
@@ -173,7 +174,7 @@ describe("edit pipeline state machine", () => {
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.title = "Once";
-    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { proposal_id: string };
     const first = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id })) as { ok: boolean };
     expect(first.ok).toBe(true);
     const second = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id })) as { ok: boolean; error: string };
@@ -192,11 +193,11 @@ describe("edit pipeline state machine", () => {
     const client = await connect(root);
     const a = JSON.parse(validManifest(root));
     a.title = "A";
-    const propA = (await call(client, "propose_edit", { manifest: JSON.stringify(a) })) as { proposal_id: string };
+    const propA = (await call(client, "replace_manifest", { manifest: JSON.stringify(a) })) as { proposal_id: string };
 
     const b = JSON.parse(validManifest(root));
     b.title = "B";
-    const propB = (await call(client, "propose_edit", { manifest: JSON.stringify(b) })) as { proposal_id: string };
+    const propB = (await call(client, "replace_manifest", { manifest: JSON.stringify(b) })) as { proposal_id: string };
     await call(client, "apply_edit", { proposal_id: propB.proposal_id });
 
     const stale = (await call(client, "apply_edit", { proposal_id: propA.proposal_id })) as { ok: boolean; error: string };
@@ -209,12 +210,12 @@ describe("edit pipeline state machine", () => {
     const client1 = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.title = "Persisted";
-    const proposed = (await call(client1, "propose_edit", { manifest: JSON.stringify(next) })) as { proposal_id: string };
+    const proposed = (await call(client1, "replace_manifest", { manifest: JSON.stringify(next) })) as { proposal_id: string };
 
     const client2 = await connect(root);
     const applied = (await call(client2, "apply_edit", { proposal_id: proposed.proposal_id })) as { ok: boolean };
     expect(applied.ok).toBe(true);
-    const checkpoints = (await call(client2, "list_checkpoints")) as string[];
+    const { checkpoints } = (await call(client2, "list_checkpoints")) as { checkpoints: string[] };
     expect(checkpoints.length).toBe(1);
   });
 });
@@ -236,7 +237,7 @@ describe("grouped manifests", () => {
     const root = freshProject();
     const client = await connect(root);
     const grouped = regroup(root);
-    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(grouped) })) as { ok: boolean; proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: JSON.stringify(grouped) })) as { ok: boolean; proposal_id: string };
     expect(proposed.ok).toBe(true);
     expect(proposed.proposal_id).toBeTruthy();
     const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id })) as { ok: boolean };
@@ -252,7 +253,7 @@ describe("grouped manifests", () => {
     const grouped = regroup(root) as { pages: { groups: { islands: Record<string, unknown>[] }[] }[] };
     // break the second group's first island (flat index 1: headline holds index 0)
     grouped.pages[0].groups[1]!.islands[0]!.y = "does_not_exist";
-    const out = (await call(client, "propose_edit", { manifest: JSON.stringify(grouped) })) as {
+    const out = (await call(client, "replace_manifest", { manifest: JSON.stringify(grouped) })) as {
       ok: boolean;
       proposal_id?: string;
       errors: { page: string; index: number }[];
@@ -266,7 +267,7 @@ describe("grouped manifests", () => {
 describe("prompt-injection posture", () => {
   it("a malicious data cell flows through reads without widening the edit surface", async () => {
     const client = await connect(freshProject());
-    const rows = (await call(client, "query_data", { dataset: "notes" })) as { note: string }[];
+    const { rows } = (await call(client, "run_sql", { dataset: "notes" })) as { rows: { note: string }[] };
     expect(rows.some((r) => r.note.includes("ignore previous instructions"))).toBe(true);
     const schema = (await call(client, "get_data_schema", { dataset: "notes" })) as { columns: unknown[] };
     expect(schema.columns.length).toBe(2);
@@ -279,7 +280,7 @@ describe("prompt-injection posture", () => {
       const m = JSON.parse(validManifest(root));
       m.datasets.evil = { source: evil };
       m.pages[0].islands = [{ type: "note.card", title: "x", markdown: "x" }];
-      const out = (await call(client, "propose_edit", { manifest: JSON.stringify(m) })) as { ok: boolean };
+      const out = (await call(client, "replace_manifest", { manifest: JSON.stringify(m) })) as { ok: boolean };
       expect(out.ok, evil).toBe(false);
     }
   });
@@ -290,7 +291,7 @@ const allocationCsv = (root: string) => readFileSync(join(root, "data", "allocat
 describe("data actions", () => {
   it("list_actions returns the declared action with a row schema naming the CSV columns", async () => {
     const client = await connect(freshProject());
-    const actions = (await call(client, "list_actions")) as { name: string; dataset: string; mode: string; rowSchema: { properties: Record<string, unknown> } }[];
+    const { actions } = (await call(client, "list_actions")) as { actions: { name: string; dataset: string; mode: string; rowSchema: { properties: Record<string, unknown> } }[] };
     expect(actions).toHaveLength(1);
     const action = actions[0]!;
     expect(action.name).toBe("log_allocation");
@@ -305,11 +306,11 @@ describe("data actions", () => {
     delete m.actions;
     writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
     const client = await connect(root);
-    const actions = (await call(client, "list_actions")) as unknown[];
+    const { actions } = (await call(client, "list_actions")) as { actions: unknown[] };
     expect(actions).toEqual([]);
   });
 
-  it("run_action inserts a valid row that query_data then sees", async () => {
+  it("run_action inserts a valid row that run_sql then sees", async () => {
     const root = freshProject();
     const client = await connect(root);
     const before = allocationCsv(root);
@@ -320,7 +321,7 @@ describe("data actions", () => {
     expect(out.checkpoint_id).toMatch(/^ckpt-\d+!/);
     expect(allocationCsv(root).length).toBeGreaterThan(before.length);
 
-    const rows = (await call(client, "query_data", { dataset: "allocation" })) as { class: string; value_eur: number }[];
+    const { rows } = (await call(client, "run_sql", { dataset: "allocation" })) as { rows: { class: string; value_eur: number }[] };
     expect(rows.some((r) => r.class === "Stocks" && r.value_eur === 250000)).toBe(true);
   });
 
@@ -379,12 +380,12 @@ describe("data actions", () => {
 
     const next = JSON.parse(validManifest(root));
     next.title = "Edited";
-    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { proposal_id: string };
     await call(client, "apply_edit", { proposal_id: proposed.proposal_id });
 
     await call(client, "run_action", { name: "log_allocation", rows: [{ class: "Cash", value_eur: 5 }] });
 
-    const checkpoints = (await call(client, "list_checkpoints")) as string[];
+    const { checkpoints } = (await call(client, "list_checkpoints")) as { checkpoints: string[] };
     expect(checkpoints.some((c) => /^ckpt-\d+$/.test(c))).toBe(true);
     expect(checkpoints.some((c) => /^ckpt-\d+!/.test(c))).toBe(true);
   });
@@ -408,7 +409,7 @@ describe("data actions", () => {
     expect(written.ok).toBe(true);
 
     expect(readFileSync(join(root, "data", "net_worth_monthly.csv"), "utf8")).toBe(otherBefore);
-    const rows = (await call(client2, "query_data", { dataset: "notes" })) as { id: number; note: string }[];
+    const { rows } = (await call(client2, "run_sql", { dataset: "notes" })) as { rows: { id: number; note: string }[] };
     const cell = rows.find((r) => Number(r.id) === 9);
     expect(cell?.note).toBe(payload);
   });
@@ -444,12 +445,14 @@ describe("read queries", () => {
       },
     });
     const client = await connect(root);
-    const queries = (await call(client, "list_queries")) as {
-      name: string;
-      description?: string;
-      params: { properties?: Record<string, unknown>; required?: string[] };
-      columns: { name: string }[];
-    }[];
+    const { queries } = (await call(client, "list_queries")) as {
+      queries: {
+        name: string;
+        description?: string;
+        params: { properties?: Record<string, unknown>; required?: string[] };
+        columns: { name: string }[];
+      }[];
+    };
     expect(queries).toHaveLength(1);
     const q = queries[0]!;
     expect(q.name).toBe("alloc_by_class");
@@ -459,7 +462,7 @@ describe("read queries", () => {
 
   it("list_queries returns an empty list when none are declared", async () => {
     const client = await connect(freshProject());
-    expect(await call(client, "list_queries")).toEqual([]);
+    expect(((await call(client, "list_queries")) as { queries: unknown[] }).queries).toEqual([]);
   });
 
   it("run_query returns rows for valid params", async () => {
@@ -502,7 +505,7 @@ describe("read queries", () => {
     expect(wrongType.errors.some((e) => e.param === "min")).toBe(true);
   });
 
-  it("an agent can author a query end-to-end via propose_edit → apply_edit", async () => {
+  it("an agent can author a query end-to-end via replace_manifest → apply_edit", async () => {
     const root = freshProject();
     const client = await connect(root);
 
@@ -517,14 +520,14 @@ describe("read queries", () => {
         where: [{ field: "class", op: "eq", param: "class" }],
       },
     };
-    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
+    const proposed = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
     expect(proposed.ok, JSON.stringify(proposed.errors)).toBe(true);
     expect(proposed.proposal_id).toBeTruthy();
 
     const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id! })) as { ok: boolean };
     expect(applied.ok).toBe(true);
 
-    const listed = (await call(client, "list_queries")) as { name: string }[];
+    const { queries: listed } = (await call(client, "list_queries")) as { queries: { name: string }[] };
     expect(listed.some((q) => q.name === "alloc_by_class")).toBe(true);
 
     const ran = (await call(client, "run_query", { name: "alloc_by_class", params: { class: "ETH" } })) as { ok: boolean; rows: { class: string; value_eur: number }[] };
@@ -532,12 +535,12 @@ describe("read queries", () => {
     expect(ran.rows[0]!.class).toBe("ETH");
   });
 
-  it("propose_edit rejects a query whose field is not a column (checkQueries runs in dryCheck)", async () => {
+  it("replace_manifest rejects a query whose field is not a column (checkQueries runs in dryCheck)", async () => {
     const root = freshProject();
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.queries = { broken: { dataset: "allocation", where: [{ field: "ghost_col", op: "eq", value: 1 }] } };
-    const out = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string; errors: string[] };
+    const out = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string; errors: string[] };
     expect(out.ok).toBe(false);
     expect(out.proposal_id).toBeUndefined();
     expect(out.errors.some((e) => typeof e === "string" && e.includes("ghost_col"))).toBe(true);
@@ -589,7 +592,7 @@ describe("connectors", () => {
 
   it("list_connectors reports an unconnected connector with its missing secret", async () => {
     const client = await connect(connectorProject());
-    const statuses = (await call(client, "list_connectors")) as { name: string; auth: string; connected: boolean; missingSecrets: string[]; schedule?: string }[];
+    const { connectors: statuses } = (await call(client, "list_connectors")) as { connectors: { name: string; auth: string; connected: boolean; missingSecrets: string[]; schedule?: string }[] };
     const demo = statuses.find((s) => s.name === "demo")!;
     expect(demo.auth).toBe("none");
     expect(demo.connected).toBe(false);
@@ -597,7 +600,7 @@ describe("connectors", () => {
     expect(demo.schedule).toBe("6h");
   });
 
-  it("run_sync pulls rows into the dataset that query_data then sees", async () => {
+  it("run_sync pulls rows into the dataset that run_sql then sees", async () => {
     process.env.DEMO_TOKEN = "t";
     const client = await connect(connectorProject());
     const result = (await call(client, "run_sync", { name: "demo" })) as { connector: string; datasets: Record<string, { mode: string; rows: number; checkpoint_id?: string }> };
@@ -605,7 +608,7 @@ describe("connectors", () => {
     expect(result.datasets.logs!.mode).toBe("insert");
     expect(result.datasets.logs!.rows).toBe(2);
 
-    const rows = (await call(client, "query_data", { dataset: "logs" })) as unknown[];
+    const { rows } = (await call(client, "run_sql", { dataset: "logs" })) as { rows: unknown[] };
     expect(rows.length).toBe(2);
   });
 
@@ -639,12 +642,12 @@ function gaugeManifest(root: string, rings: unknown): string {
 
 afterEach(() => resetCustomSchemaCache());
 
-describe("custom island schema enforcement (propose_edit)", () => {
+describe("custom island schema enforcement (replace_manifest)", () => {
   it("rejects a bad gauge.ring config naming the page/index/type/field", async () => {
     const root = freshProject();
     withGaugeSchema(root);
     const client = await connect(root);
-    const out = (await call(client, "propose_edit", {
+    const out = (await call(client, "replace_manifest", {
       manifest: gaugeManifest(root, [{ max: "value_eur" }]),
     })) as { ok: boolean; proposal_id?: string; errors: { page: string; index: number; type: string; field?: string }[] };
     expect(out.ok).toBe(false);
@@ -659,7 +662,7 @@ describe("custom island schema enforcement (propose_edit)", () => {
     const root = freshProject();
     withGaugeSchema(root);
     const client = await connect(root);
-    const out = (await call(client, "propose_edit", {
+    const out = (await call(client, "replace_manifest", {
       manifest: gaugeManifest(root, [{ value: "value_eur", max: "value_eur" }]),
     })) as { ok: boolean; proposal_id?: string };
     expect(out.ok).toBe(true);
@@ -667,13 +670,13 @@ describe("custom island schema enforcement (propose_edit)", () => {
   });
 });
 
-describe("page filter bind enforcement (propose_edit)", () => {
+describe("page filter bind enforcement (replace_manifest)", () => {
   it("rejects a filter bound to a missing column with a structured error", async () => {
     const root = freshProject();
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.pages[0].filters = [{ id: "period", type: "daterange", bind: { net_worth_monthly: "ghost" } }];
-    const out = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as {
+    const out = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as {
       ok: boolean;
       proposal_id?: string;
       errors: { page: string; type: string; message: string }[];
@@ -691,7 +694,7 @@ describe("page filter bind enforcement (propose_edit)", () => {
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.pages[0].filters = [{ id: "period", type: "daterange", label: "Period", bind: { net_worth_monthly: "month" } }];
-    const out = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string };
+    const out = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id?: string };
     expect(out.ok).toBe(true);
     expect(out.proposal_id).toBeDefined();
   });
@@ -700,7 +703,7 @@ describe("page filter bind enforcement (propose_edit)", () => {
 describe("M7 catalog additions are discoverable + bindable", () => {
   it("list_islands includes the new island types with their required fields", async () => {
     const client = await connect(freshProject());
-    const islands = (await call(client, "list_islands")) as { type: string; required: string[] }[];
+    const { islands } = (await call(client, "list_islands")) as { islands: { type: string; required: string[] }[] };
     const required = (type: string) => islands.find((i) => i.type === type)?.required;
     expect(required("category.combo")).toEqual(["dataset", "x", "bars", "lines"]);
     expect(required("rank.list")).toEqual(["dataset", "label", "value"]);
@@ -737,7 +740,7 @@ describe("M7 catalog additions are discoverable + bindable", () => {
       lines: "target_eur",
       span: 12,
     });
-    const proposed = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as { ok: boolean; proposal_id: string };
     expect(proposed.ok).toBe(true);
     expect(proposed.proposal_id).toBeTruthy();
     const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id })) as { ok: boolean };
@@ -752,7 +755,7 @@ describe("M7 catalog additions are discoverable + bindable", () => {
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.pages[0].islands.push({ type: "rank.list", title: "Top assets", dataset: "allocation", label: "class", value: "does_not_exist" });
-    const out = (await call(client, "propose_edit", { manifest: JSON.stringify(next) })) as {
+    const out = (await call(client, "replace_manifest", { manifest: JSON.stringify(next) })) as {
       ok: boolean;
       proposal_id?: string;
       errors: { page: string; index: number; type: string; field?: string; message: string }[];
@@ -768,13 +771,13 @@ describe("M7 catalog additions are discoverable + bindable", () => {
   });
 });
 
-describe("propose_edit accepts a manifest object", () => {
+describe("replace_manifest accepts a manifest object", () => {
   it("takes a JSON object directly (no double-encoding) and applies it", async () => {
     const root = freshProject();
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.title = "Object edit";
-    const proposed = (await call(client, "propose_edit", { manifest: next })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
+    const proposed = (await call(client, "replace_manifest", { manifest: next })) as { ok: boolean; proposal_id?: string; errors?: unknown[] };
     expect(proposed.ok, JSON.stringify(proposed.errors)).toBe(true);
     const applied = (await call(client, "apply_edit", { proposal_id: proposed.proposal_id! })) as { ok: boolean };
     expect(applied.ok).toBe(true);
@@ -977,7 +980,7 @@ describe("layout guidance", () => {
 
   it("list_islands carries the span range for each island", async () => {
     const client = await connect(freshProject());
-    const islands = (await call(client, "list_islands")) as { type: string; minSpan?: number; recommendedSpan?: number; maxSpan?: number }[];
+    const { islands } = (await call(client, "list_islands")) as { islands: { type: string; minSpan?: number; recommendedSpan?: number; maxSpan?: number }[] };
     const kpi = islands.find((i) => i.type === "metric.kpi");
     expect(kpi).toMatchObject({ minSpan: 2, recommendedSpan: 4, maxSpan: 6 });
     const row = islands.find((i) => i.type === "layout.row");
@@ -991,12 +994,12 @@ describe("layout guidance", () => {
     expect(out.warnings.some((w) => w.page === "overview" && w.type === "metric.kpi")).toBe(true);
   });
 
-  it("propose_edit surfaces a lone-kpi warning but still stages (ok:true)", async () => {
+  it("replace_manifest surfaces a lone-kpi warning but still stages (ok:true)", async () => {
     const root = freshProject();
     const client = await connect(root);
     const next = JSON.parse(validManifest(root));
     next.title = "Edited";
-    const out = (await call(client, "propose_edit", { manifest: next })) as { ok: boolean; proposal_id?: string; warnings: { type: string }[] };
+    const out = (await call(client, "replace_manifest", { manifest: next })) as { ok: boolean; proposal_id?: string; warnings: { type: string }[] };
     expect(out.ok).toBe(true);
     expect(out.proposal_id).toBeTruthy();
     expect(out.warnings.some((w) => w.type === "metric.kpi")).toBe(true);
@@ -1026,26 +1029,26 @@ describe("history hygiene", () => {
   async function applyTitleEdit(client: Client, root: string, title: string): Promise<void> {
     const next = JSON.parse(validManifest(root));
     next.title = title;
-    const proposed = (await call(client, "propose_edit", { manifest: next })) as { proposal_id: string };
+    const proposed = (await call(client, "replace_manifest", { manifest: next })) as { proposal_id: string };
     await call(client, "apply_edit", { proposal_id: proposed.proposal_id });
   }
 
-  it("cleanup_history keeps the newest N checkpoints and removes the rest", async () => {
+  it("prune_checkpoints keeps the newest N checkpoints and removes the rest", async () => {
     const root = freshProject();
     const client = await connect(root);
     for (const title of ["e1", "e2", "e3"]) await applyTitleEdit(client, root, title);
-    expect(((await call(client, "list_checkpoints")) as string[]).length).toBe(3);
+    expect(((await call(client, "list_checkpoints")) as { checkpoints: string[] }).checkpoints.length).toBe(3);
 
-    const out = (await call(client, "cleanup_history", { keep: 1 })) as { ok: boolean; kept: number; removed: number };
+    const out = (await call(client, "prune_checkpoints", { keep: 1 })) as { ok: boolean; kept: number; removed: number };
     expect(out).toEqual({ ok: true, kept: 1, removed: 2 });
-    expect(((await call(client, "list_checkpoints")) as string[]).length).toBe(1);
+    expect(((await call(client, "list_checkpoints")) as { checkpoints: string[] }).checkpoints.length).toBe(1);
   });
 
-  it("cleanup_history defaulting keep is a no-op below the cap", async () => {
+  it("prune_checkpoints defaulting keep is a no-op below the cap", async () => {
     const root = freshProject();
     const client = await connect(root);
     await applyTitleEdit(client, root, "only");
-    const out = (await call(client, "cleanup_history")) as { ok: boolean; kept: number; removed: number };
+    const out = (await call(client, "prune_checkpoints")) as { ok: boolean; kept: number; removed: number };
     expect(out).toEqual({ ok: true, kept: 1, removed: 0 });
   });
 
@@ -1054,16 +1057,64 @@ describe("history hygiene", () => {
     const client = await connect(root);
     const a = JSON.parse(validManifest(root));
     a.title = "A";
-    const propA = (await call(client, "propose_edit", { manifest: a })) as { proposal_id: string };
+    const propA = (await call(client, "replace_manifest", { manifest: a })) as { proposal_id: string };
 
     await applyTitleEdit(client, root, "applied"); // moves the base manifest, making propA stale
 
     const c = JSON.parse(validManifest(root));
     c.title = "C";
-    await call(client, "propose_edit", { manifest: c }); // staging C should sweep the stale propA
+    await call(client, "replace_manifest", { manifest: c }); // staging C should sweep the stale propA
 
     const stale = (await call(client, "apply_edit", { proposal_id: propA.proposal_id })) as { ok: boolean; error: string };
     expect(stale.ok).toBe(false);
     expect(stale.error).toMatch(/unknown/i); // gone, not merely rejected as stale
+  });
+});
+
+describe("result contract", () => {
+  it("a list tool returns an enveloped object plus matching structuredContent", async () => {
+    const client = await connect(freshProject());
+    const res = (await client.callTool({ name: "list_islands", arguments: {} })) as { content: { text: string }[]; structuredContent?: { ok: boolean; islands: unknown[] } };
+    expect(res.structuredContent?.ok).toBe(true);
+    expect(Array.isArray(res.structuredContent?.islands)).toBe(true);
+    // the text mirror parses to exactly the structuredContent
+    expect(JSON.parse(res.content[0]!.text)).toEqual(res.structuredContent);
+  });
+
+  it("get_overview is concise by default and detailed on request", async () => {
+    const client = await connect(freshProject());
+    const concise = (await call(client, "get_overview")) as { ok: boolean; actions: { rowSchema?: unknown }[]; queries: unknown[] };
+    expect(concise.ok).toBe(true);
+    expect(concise.actions[0]!.rowSchema).toBeUndefined();
+    const detailed = (await call(client, "get_overview", { verbosity: "detailed" })) as { actions: { rowSchema?: unknown }[] };
+    expect(detailed.actions[0]!.rowSchema).toBeDefined();
+  });
+
+  it("run_sql reports an in-band ok:false error (not bare text) for conflicting args", async () => {
+    const client = await connect(freshProject());
+    const both = (await call(client, "run_sql", { dataset: "allocation", sql: "SELECT 1" })) as { ok: boolean; error: string };
+    expect(both.ok).toBe(false);
+    expect(both.error).toMatch(/either/i);
+    const neither = (await call(client, "run_sql", {})) as { ok: boolean; error: string };
+    expect(neither.ok).toBe(false);
+  });
+
+  it("run_sql caps a large result with a steering note, and verbosity:'detailed' widens the budget", async () => {
+    const root = freshProject();
+    const csvRows = Array.from({ length: 600 }, (_, i) => `${i},"${"x".repeat(120)}"`).join("\n");
+    writeFileSync(join(root, "data", "wide.csv"), `id,blob\n${csvRows}\n`);
+    const m = JSON.parse(validManifest(root));
+    m.datasets.wide = { source: "data/wide.csv" };
+    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    const client = await connect(root);
+
+    const concise = (await call(client, "run_sql", { dataset: "wide", limit: 500 })) as { ok: boolean; rowCount: number; truncated?: boolean; note?: string };
+    expect(concise.ok).toBe(true);
+    expect(concise.truncated).toBe(true);
+    expect(concise.rowCount).toBeLessThan(500);
+    expect(concise.note).toMatch(/cap|narrow/i);
+
+    const detailed = (await call(client, "run_sql", { dataset: "wide", limit: 500, verbosity: "detailed" })) as { rowCount: number; truncated?: boolean };
+    expect(detailed.rowCount).toBeGreaterThan(concise.rowCount);
   });
 });

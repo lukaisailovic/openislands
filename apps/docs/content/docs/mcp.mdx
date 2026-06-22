@@ -19,7 +19,7 @@ sequenceDiagram
   participant A as Agent
   participant S as MCP server
   A->>S: read manifest + data
-  A->>S: patch_manifest(one section) | propose_edit(full manifest)
+  A->>S: patch_manifest(one section) | replace_manifest(full manifest)
   S-->>A: diff (or named errors)
   A->>S: apply_edit(proposal_id)
   S-->>A: checkpoint_id
@@ -62,19 +62,28 @@ An agent grounds itself before it ever proposes a change. These tools are all re
 
 | Tool | What it returns |
 | --- | --- |
-| `get_overview` | **Start here.** The manifest, every dataset's live columns, and the declared actions / queries / connectors (with status), plus the rollback checkpoint count — one call instead of a `get_manifest` + a `get_data_schema` per dataset + `list_actions` / `list_queries` / `list_connectors` fan-out. |
+| `get_overview` | **Start here.** The manifest, every dataset's live columns, and the declared actions / queries / connectors (with status), plus the rollback checkpoint count — one call instead of a `get_manifest` + a `get_data_schema` per dataset + `list_actions` / `list_queries` / `list_connectors` fan-out. Concise by default; pass `verbosity: 'detailed'` to also include per-action row schemas and per-query params + result columns. |
 | `list_islands` | The built-in island types, the fields each requires, and each one's `minSpan` / `recommendedSpan` / `maxSpan`. |
 | `get_island_schema(type)` | The exact config schema for one island type, plus its `layout` (`{ minSpan, recommendedSpan, maxSpan }`) and `notes` — so the sizing rules reach you at discovery time. |
 | `get_manifest` | The current manifest. |
 | `get_data_schema(dataset)` | A dataset's live, DuckDB-inferred columns and types. |
-| `query_data({ dataset } \| { sql }, limit)` | Rows from a dataset, or a read-only `SELECT` over the registered dataset views. |
+| `run_sql({ dataset } \| { sql }, limit)` | Rows from a dataset, or a read-only `SELECT` over the registered dataset views. |
 | `validate_sql({ sql })` | Dry-runs a read-only `SELECT` against the dataset views; returns its result columns or the exact DuckDB error. |
 | `validate_manifest({ manifest? })` | Validates a manifest (the one on disk, or one you pass) and checks every binding against the data; also returns advisory layout `warnings`. |
 | `list_checkpoints` | The rollback points, newest last. |
 
-`query_data` takes a `dataset` name for a whole dataset *or* a read-only `sql` SELECT over the
-dataset views, never both. This is how an agent confirms a column exists and what its values
-look like *before* binding an island to it.
+**Every tool returns a JSON object** carrying an `ok` flag. On `ok:false`, read `error` (or
+`errors` — each names the page, island, and field) and fix it; `isError` is reserved for an
+unexpected failure, never a validation miss. The structured read and proposal tools (the lists,
+`run_sql` / `run_query`, the `validate_*` checks, and the staging tools) also return
+`structuredContent` validated against a declared `outputSchema`, so a client can consume them
+without re-parsing text.
+
+`run_sql` takes a `dataset` name for a whole dataset *or* a read-only `sql` SELECT over the
+dataset views, never both — it pairs with `validate_sql` (the dry-run) and is the ad-hoc
+counterpart to `run_query` (a *saved, named, parameterized* read). Both are row-capped and take a
+`verbosity` (`concise` default / `detailed`) that widens the output token budget. This is how an
+agent confirms a column exists and what its values look like *before* binding an island to it.
 
 `validate_sql` is the same read-only surface, aimed at **authoring a transform**: paste the SQL you
 intend to save as a `sql` dataset and get back its result columns, or the exact DuckDB error, before
@@ -89,13 +98,13 @@ gauges) cap well below 12; data-dense ones run the full width. See
 ## The manifest write path
 
 Exactly one pipeline writes the manifest, in two steps with a human-reviewable diff between
-them. An agent stages an edit (`patch_manifest` or `propose_edit`), reviews the returned diff,
+them. An agent stages an edit (`patch_manifest` or `replace_manifest`), reviews the returned diff,
 then applies it.
 
 | Tool | What it does |
 | --- | --- |
 | `patch_manifest({ ... })` | **The preferred editor.** Merges one or more sections into the current manifest, validates the result, and stages it. |
-| `propose_edit({ manifest })` | Stages a **full** manifest rewrite. |
+| `replace_manifest({ manifest })` | Stages a **full** manifest rewrite. |
 | `apply_edit({ proposal_id })` | Writes a staged proposal and snapshots the prior manifest. |
 | `rollback({ checkpoint_id? })` | Restores a snapshot byte-for-byte (the latest if no id). |
 
@@ -130,20 +139,20 @@ The merge follows the shape of each section:
 }
 ```
 
-The validation is identical to `propose_edit`'s: if a binding fails, you get
+The validation is identical to `replace_manifest`'s: if a binding fails, you get
 `{ ok: false, errors, diff }` (each error naming the page, island, and field) and **no**
 `proposal_id`. Fix the patch and call again. On success: `{ ok: true, proposal_id, diff }`. Both
 shapes also carry an advisory **`warnings`** array — the layout linter's non-blocking suggestions
 (a lone `metric.kpi`, a compact island stretched past its recommended span). Warnings never set
 `ok` to `false` or block the apply; they're a nudge toward a tidier layout, not a gate.
 
-### `propose_edit` — the full rewrite
+### `replace_manifest` — the full rewrite
 
-**`propose_edit({ manifest })`** takes the whole manifest when you really do want to replace it
+**`replace_manifest({ manifest })`** takes the whole manifest when you really do want to replace it
 end to end. It accepts a manifest **object** (preferred) or a JSON string — no double-encoding.
 It validates the structure, checks every binding against the live data, and returns the same
 `{ ok, proposal_id?, diff, errors?, warnings? }` shape as `patch_manifest`. **Reach for
-`patch_manifest` first** — it's the preferred incremental editor; `propose_edit` is for a full
+`patch_manifest` first** — it's the preferred incremental editor; `replace_manifest` is for a full
 rewrite or a brand-new manifest, where re-sending the whole document is the point.
 
 A proposed manifest is validated **against itself**: new datasets, `sql` transforms, and markdown
@@ -163,7 +172,7 @@ content-hash check), re-stage the edit.
 given). It restores the manifest *and* any data checkpoints, so it undoes data writes too.
 
 History doesn't grow without bound: it auto-prunes to the newest few checkpoints after every
-`apply_edit`. **`cleanup_history({ keep? })`** prunes it on demand — keeping the newest `keep`
+`apply_edit`. **`prune_checkpoints({ keep? })`** prunes it on demand — keeping the newest `keep`
 checkpoints and deleting the rest — to reclaim space sooner or keep fewer. Trimmed checkpoints
 become unrecoverable.
 
@@ -236,7 +245,7 @@ Inserts are all-or-nothing and path-confined to the project: an action can only 
 ## The read query path: queries
 
 Queries are typed, read-only reads over a dataset, declared in the manifest. They're the read
-mirror of actions: a saved, named, parameterized version of `query_data`. A query is a declarative
+mirror of actions: a saved, named, parameterized version of `run_sql`. A query is a declarative
 spec — a dataset, filters, a projection — that the compiler translates to a parameterized
 `SELECT`, not raw SQL. The agent discovers and runs them:
 
@@ -279,23 +288,23 @@ own.
 
 Every guarantee is structural, not advisory:
 
-- **Validate before write.** `patch_manifest`, `propose_edit`, and `run_action` all fail closed:
+- **Validate before write.** `patch_manifest`, `replace_manifest`, and `run_action` all fail closed:
   an invalid manifest or a bad row never reaches disk.
 - **Snapshot before change.** `apply_edit`, `run_action`, and `run_sync` each snapshot to
   `.openislands/history/` first, and `rollback` restores any of them byte-for-byte. History is
   count- and byte-capped, oldest pruned first.
 - **Path confinement.** Writes are scoped to the project's declared `source` files; there is
   no general filesystem access.
-- **Reads are bounded too.** `query_data` and `run_query` only run read-only `SELECT`s; a query
+- **Reads are bounded too.** `run_sql` and `run_query` only run read-only `SELECT`s; a query
   compiles from a declarative spec with its `field`s validated and its params and literals bound,
   not interpolated, and every result is row-capped.
 - **Prompt-injection posture.** Because the *only* mutations are a validated manifest edit
-  (`patch_manifest` or `propose_edit`) and a schema-checked row insert — both diffed or reported,
+  (`patch_manifest` or `replace_manifest`) and a schema-checked row insert — both diffed or reported,
   both reversible — data that tries to talk an agent into a harmful edit still can't bypass
   validation, the diff, or the rollback snapshot.
 
 ## Related
 
 - [Getting Started](/getting-started): the human CLI loop the MCP tools mirror.
-- [The Manifest](/concepts/manifest): what `propose_edit` validates.
+- [The Manifest](/concepts/manifest): what `replace_manifest` validates.
 - [Data Contracts](/concepts/data-contracts): the binding check behind every write.

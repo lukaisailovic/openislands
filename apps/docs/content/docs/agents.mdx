@@ -17,7 +17,7 @@ Every agent drives the **same MCP edit loop**. OpenIslands ships a standard **st
 - an `AGENTS.md` pointing the agent at the conventions,
 - the OpenIslands skill under `.agents/skills/openislands/`.
 
-So the agent reads the live contract, stages a validated `patch_manifest` / `propose_edit`, applies
+So the agent reads the live contract, stages a validated `patch_manifest` / `replace_manifest`, applies
 it, and can roll it back — the tools and guarantees are identical whichever agent you use. See the
 [MCP Server](/mcp) page for the full tool list and the read-many/write-one model; this page only
 covers the per-agent **wiring**.

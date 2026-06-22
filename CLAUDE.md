@@ -22,7 +22,7 @@ packages/storage     # swappable storage ports (ContentStore / AppStateStore / V
 packages/compiler    # DuckDB query core: files → typed contracts; runs transforms/queries live
 packages/runtime     # TanStack Start SSR app: island registry + React renderers
 packages/cli         # the `openislands` command (init / validate / serve / add / infer)
-packages/mcp-server  # the MCP edit loop (@openislands/mcp): read-many + patch_manifest/propose_edit + validate_sql
+packages/mcp-server  # the MCP edit loop (@openislands/mcp): read-many + patch_manifest/replace_manifest + validate_sql
 templates/           # empty (default), finance, health, operations — each ships .mcp.json + AGENTS.md + the skill; scaffolded by `init`
 skills/openislands/  # the installable agent skill (npx skills add lukaisailovic/openislands --skill openislands); synced into every template
 apps/examples/       # dogfood workspace (multi-app serve)

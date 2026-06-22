@@ -20,9 +20,10 @@ is written until you apply a validated proposal, and every write is snapshotted 
 1. **Read** — start with **`get_overview`**: it returns the manifest, every dataset's live columns,
    and the declared actions / queries / connectors (plus the rollback checkpoint count) in **one
    call**, so you don't fan out across `get_manifest` + a `get_data_schema` per dataset. Then ground
-   a specific island edit with `list_islands` / `get_island_schema`, and use `query_data` /
-   `validate_sql` for ad-hoc data checks.
-2. **Edit** — `patch_manifest` for one section at a time (preferred), or `propose_edit` for a full
+   a specific island edit with `list_islands` / `get_island_schema`, and use `run_sql` (ad-hoc
+   read-only SELECTs) / `validate_sql` (dry-run a transform) for data checks. A *saved*,
+   parameterized read is a declared query you run with `run_query`, not `run_sql`.
+2. **Edit** — `patch_manifest` for one section at a time (preferred), or `replace_manifest` for a full
    rewrite. Both return a `proposal_id` + a diff and write **nothing** yet.
 3. **It already validated** — the edit tools dry-run the result against the live data. If `ok` is
    `false`, read `errors` (each names the page, island, and field) and fix the edit. Do **not** work
@@ -30,8 +31,12 @@ is written until you apply a validated proposal, and every write is snapshotted 
 4. **Apply** — `apply_edit({ proposal_id })`. This writes the manifest and returns a `checkpoint_id`.
 5. **Undo if needed** — `rollback({ checkpoint_id })` (or latest). Restores byte-for-byte.
 
-Prefer **`patch_manifest`** over `propose_edit`: it merges one section into the current manifest, so
+Prefer **`patch_manifest`** over `replace_manifest`: it merges one section into the current manifest, so
 you never re-send (or re-typo) the whole document. Pass JSON **objects**, not JSON strings.
+
+Every tool replies with a JSON object carrying an `ok` flag — on `ok:false`, read `error` / `errors`
+(each names the offending field) and fix it. `get_overview` is **concise by default**; pass
+`verbosity: "detailed"` when you also need the per-action row schemas and per-query params.
 
 ## The manifest model
 
@@ -92,7 +97,7 @@ Every island has a **min / recommended / max** span on the 12-column grid. Check
 - **Don't ship a lone KPI.** Group 2+ KPIs in a row, or use `metric.scorecard` for a tidy strip.
 
 `validate` and the MCP edit tools surface **advisory layout warnings** (a `warnings` array on
-`patch_manifest` / `propose_edit` / `validate_manifest`) for these smells — a standalone KPI, a
+`patch_manifest` / `replace_manifest` / `validate_manifest`) for these smells — a standalone KPI, a
 compact island stretched past its recommended span. They never block the apply; treat them as a
 nudge toward a tidier layout.
 

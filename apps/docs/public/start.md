@@ -44,11 +44,12 @@ and a `.mcp.json` that points `@openislands/mcp` at the project root.
 
 ## The safe edit loop
 
-1. **Read** — `get_manifest`, `list_islands`, `get_island_schema({ type })`,
-   `get_data_schema({ dataset })`, `query_data({ dataset | sql, limit })`. Ground every edit in the
-   live contract; don't guess island fields or column names.
+1. **Read** — start with `get_overview` (the manifest + every dataset's live columns + the declared
+   actions/queries/connectors + checkpoint count, in **one call**). Then ground a specific edit with
+   `list_islands`, `get_island_schema({ type })`, `get_data_schema({ dataset })`, and
+   `run_sql({ dataset | sql, limit })`. Don't guess island fields or column names.
 2. **Edit** — `patch_manifest({ ... })` merges one section into the current manifest (preferred), or
-   `propose_edit({ manifest })` for a full rewrite. Both return a `proposal_id` + a diff and write
+   `replace_manifest({ manifest })` for a full rewrite. Both return a `proposal_id` + a diff and write
    **nothing** yet. Pass JSON **objects**, not strings.
 3. **It already validated** — the edit tools dry-run the result against the live data. If `ok` is
    `false`, read `errors` (each names the page, island, and field) and fix the edit. Do **not** work
@@ -162,16 +163,16 @@ the user; don't try to sync. When connected, `run_sync({ name })` pulls into its
 
 ## The full tool set
 
-- **read** — `list_islands`, `get_island_schema(type)`, `get_manifest`, `get_data_schema(dataset)`,
-  `query_data({ dataset | sql, limit })`, `validate_manifest({ manifest? })`, `validate_sql({ sql })`,
-  `list_checkpoints`
-- **write** — `patch_manifest({ ... })`, `propose_edit({ manifest })`, `apply_edit({ proposal_id })`,
-  `rollback({ checkpoint_id? })`
+- **read** — `get_overview({ verbosity? })` (start here), `list_islands`, `get_island_schema(type)`,
+  `get_manifest`, `get_data_schema(dataset)`, `run_sql({ dataset | sql, limit })`,
+  `validate_manifest({ manifest? })`, `validate_sql({ sql })`, `list_checkpoints`
+- **write** — `patch_manifest({ ... })`, `replace_manifest({ manifest })`, `apply_edit({ proposal_id })`,
+  `rollback({ checkpoint_id? })`, `prune_checkpoints({ keep? })`
 - **data** — `list_actions`, `run_action({ name, rows })`
 - **queries** — `list_queries`, `run_query({ name, params?, limit? })`
 - **connectors** — `list_connectors`, `run_sync({ name })`
 
-`propose_edit` and `validate_manifest` accept a manifest **object** (preferred) or a JSON string. A
+`replace_manifest` and `validate_manifest` accept a manifest **object** (preferred) or a JSON string. A
 proposed manifest is validated against itself, so brand-new datasets, transforms, and markdown
 sources bind correctly even from an empty manifest.
 

@@ -104,7 +104,7 @@ responsively, so a tile never renders narrower than its usable width on a small 
 ## Fail loudly
 
 The manifest's job is to make a broken dashboard **impossible to ship silently.** Every
-island binds to named fields, and `validate` (and the agent's `propose_edit`) checks each one
+island binds to named fields, and `validate` (and the agent's `replace_manifest`) checks each one
 against the live, DuckDB-inferred columns of the data:
 
 - Bind to a field that exists → the island renders.
