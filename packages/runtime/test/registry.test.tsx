@@ -24,6 +24,7 @@ import { TableGrid } from "../src/islands/TableGrid.js";
 import { TimeseriesLine } from "../src/islands/TimeseriesLine.js";
 import { WaterfallBars } from "../src/islands/WaterfallBars.js";
 import { islandNeedsData, resolveRenderer } from "../src/islands/registry.js";
+import { loadLazyRenderer } from "./lazyRenderer.js";
 
 const goalGauge = (value: number) => (
   <GaugeGoal
@@ -33,82 +34,82 @@ const goalGauge = (value: number) => (
 );
 
 describe("island registry", () => {
-  it("resolves the distribution.heatmap renderer", () => {
-    expect(resolveRenderer("distribution.heatmap")).toBe(DistributionHeatmap);
+  it("resolves the distribution.heatmap renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("distribution.heatmap"))).toBe(DistributionHeatmap);
   });
 
-  it("resolves the activity.calendar renderer", () => {
-    expect(resolveRenderer("activity.calendar")).toBe(ActivityCalendar);
+  it("resolves the activity.calendar renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("activity.calendar"))).toBe(ActivityCalendar);
   });
 
-  it("resolves the funnel.steps renderer", () => {
-    expect(resolveRenderer("funnel.steps")).toBe(FunnelSteps);
+  it("resolves the funnel.steps renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("funnel.steps"))).toBe(FunnelSteps);
   });
 
-  it("resolves the rank.list renderer", () => {
-    expect(resolveRenderer("rank.list")).toBe(RankList);
+  it("resolves the rank.list renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("rank.list"))).toBe(RankList);
   });
 
-  it("resolves the compare.radar renderer", () => {
-    expect(resolveRenderer("compare.radar")).toBe(CompareRadar);
+  it("resolves the compare.radar renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("compare.radar"))).toBe(CompareRadar);
   });
 
-  it("resolves the metric.scorecard renderer", () => {
-    expect(resolveRenderer("metric.scorecard")).toBe(MetricScorecard);
+  it("resolves the metric.scorecard renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("metric.scorecard"))).toBe(MetricScorecard);
   });
 
-  it("resolves the map.choropleth renderer", () => {
-    expect(resolveRenderer("map.choropleth")).toBe(MapChoropleth);
+  it("resolves the map.choropleth renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("map.choropleth"))).toBe(MapChoropleth);
   });
-  it("resolves ported built-in renderers", () => {
-    expect(resolveRenderer("note.card")).toBe(NoteCard);
-    expect(resolveRenderer("table.grid")).toBe(TableGrid);
-  });
-
-  it("resolves the chart renderers", () => {
-    expect(resolveRenderer("metric.kpi")).toBe(MetricKpi);
-    expect(resolveRenderer("timeseries.line")).toBe(TimeseriesLine);
-    expect(resolveRenderer("breakdown.treemap")).toBe(BreakdownTreemap);
+  it("resolves ported built-in renderers", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("note.card"))).toBe(NoteCard);
+    expect(await loadLazyRenderer(resolveRenderer("table.grid"))).toBe(TableGrid);
   });
 
-  it("resolves the category.bar renderer", () => {
-    expect(resolveRenderer("category.bar")).toBe(CategoryBar);
+  it("resolves the chart renderers", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("metric.kpi"))).toBe(MetricKpi);
+    expect(await loadLazyRenderer(resolveRenderer("timeseries.line"))).toBe(TimeseriesLine);
+    expect(await loadLazyRenderer(resolveRenderer("breakdown.treemap"))).toBe(BreakdownTreemap);
   });
 
-  it("resolves the category.combo renderer", () => {
-    expect(resolveRenderer("category.combo")).toBe(CategoryCombo);
+  it("resolves the category.bar renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("category.bar"))).toBe(CategoryBar);
   });
 
-  it("resolves the waterfall.bars renderer", () => {
-    expect(resolveRenderer("waterfall.bars")).toBe(WaterfallBars);
+  it("resolves the category.combo renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("category.combo"))).toBe(CategoryCombo);
   });
 
-  it("resolves the category.pie renderer", () => {
-    expect(resolveRenderer("category.pie")).toBe(CategoryPie);
+  it("resolves the waterfall.bars renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("waterfall.bars"))).toBe(WaterfallBars);
   });
 
-  it("resolves the correlation.scatter renderer", () => {
-    expect(resolveRenderer("correlation.scatter")).toBe(CorrelationScatter);
+  it("resolves the category.pie renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("category.pie"))).toBe(CategoryPie);
   });
 
-  it("resolves the gauge.rings renderer", () => {
-    expect(resolveRenderer("gauge.rings")).toBe(GaugeRings);
+  it("resolves the correlation.scatter renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("correlation.scatter"))).toBe(CorrelationScatter);
   });
 
-  it("resolves the gauge.goal renderer", () => {
-    expect(resolveRenderer("gauge.goal")).toBe(GaugeGoal);
+  it("resolves the gauge.rings renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("gauge.rings"))).toBe(GaugeRings);
   });
 
-  it("resolves the gauge.meter renderer", () => {
-    expect(resolveRenderer("gauge.meter")).toBe(GaugeMeter);
+  it("resolves the gauge.goal renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("gauge.goal"))).toBe(GaugeGoal);
   });
 
-  it("resolves the status.grid renderer", () => {
-    expect(resolveRenderer("status.grid")).toBe(StatusGrid);
+  it("resolves the gauge.meter renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("gauge.meter"))).toBe(GaugeMeter);
   });
 
-  it("resolves the search.box renderer", () => {
-    expect(resolveRenderer("search.box")).toBe(SearchBox);
+  it("resolves the status.grid renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("status.grid"))).toBe(StatusGrid);
+  });
+
+  it("resolves the search.box renderer", async () => {
+    expect(await loadLazyRenderer(resolveRenderer("search.box"))).toBe(SearchBox);
   });
 
   it("resolves unknown custom types to the placeholder", () => {

@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo } from "react";
+import { type CSSProperties, Suspense, useMemo } from "react";
 import { SkeletonLine } from "@cloudflare/kumo";
 import type { DatasetSpec } from "@openislands/schema";
 import { BUILTIN_ISLAND_TYPES, ISLAND_DEFAULT_SPAN, type IslandType } from "@openislands/schema";
@@ -18,6 +18,22 @@ import { IslandCard, type SourceInfo } from "./primitives.js";
 
 /** Fallback span for a custom island whose type carries no recommended width. */
 const DEFAULT_SPAN = 6;
+
+/** Shown while a renderer's chunk loads or its data query is in flight. */
+function TileSkeleton() {
+  return (
+    <div>
+      <div className="mb-4 h-4">
+        <SkeletonLine minWidth={40} maxWidth={60} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <SkeletonLine />
+        <SkeletonLine />
+        <SkeletonLine minWidth={50} maxWidth={70} />
+      </div>
+    </div>
+  );
+}
 
 /**
  * Built-ins resolve from the static registry. An unknown type with a custom
@@ -108,7 +124,9 @@ export function IslandTile({
   if (config.type === "content.editor") {
     return (
       <div className="oi-tile" style={tileStyle}>
-        <Renderer config={config} data={undefined} />
+        <Suspense fallback={<TileSkeleton />}>
+          <Renderer config={config} data={undefined} />
+        </Suspense>
       </div>
     );
   }
@@ -121,18 +139,11 @@ export function IslandTile({
       source={sourceInfo(config, datasetSpec, queryResult.data)}
     >
       {needsData && queryResult.isLoading ? (
-        <div>
-          <div className="mb-4 h-4">
-            <SkeletonLine minWidth={40} maxWidth={60} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <SkeletonLine />
-            <SkeletonLine />
-            <SkeletonLine minWidth={50} maxWidth={70} />
-          </div>
-        </div>
+        <TileSkeleton />
       ) : (
-        <Renderer config={config} data={queryResult.data} />
+        <Suspense fallback={<TileSkeleton />}>
+          <Renderer config={config} data={queryResult.data} />
+        </Suspense>
       )}
     </IslandCard>
   );

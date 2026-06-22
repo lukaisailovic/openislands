@@ -1,7 +1,7 @@
 import { Button, Dialog, SkeletonLine, Text } from "@cloudflare/kumo";
 import { X } from "@phosphor-icons/react";
 import type { ValueFormat } from "@openislands/schema";
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, Suspense, useState } from "react";
 import { type MatchPair, useDrilldownQuery } from "../client/useIslandQuery.js";
 import { resolveDrilldownRenderer } from "../islands/drilldownRenderer.js";
 import type { IslandConfig, Row } from "../types.js";
@@ -92,6 +92,17 @@ function matchPairs(drilldown: DrilldownSpec, row: Row): MatchPair[] {
   }));
 }
 
+/** Shown while the drilldown's renderer chunk loads or its filtered query is in flight. */
+function DrilldownSkeleton() {
+  return (
+    <div className="flex flex-col gap-2">
+      <SkeletonLine />
+      <SkeletonLine />
+      <SkeletonLine minWidth={50} maxWidth={70} />
+    </div>
+  );
+}
+
 /** The drilldown island, fetched filtered to the clicked row and rendered like IslandTile does. */
 function DrilldownSection({ drilldown, row }: { drilldown: DrilldownSpec; row: Row }) {
   const dataset = (drilldown.island.dataset as string | undefined) ?? "";
@@ -108,13 +119,11 @@ function DrilldownSection({ drilldown, row }: { drilldown: DrilldownSpec; row: R
         </Text>
       ) : null}
       {result.isLoading ? (
-        <div className="flex flex-col gap-2">
-          <SkeletonLine />
-          <SkeletonLine />
-          <SkeletonLine minWidth={50} maxWidth={70} />
-        </div>
+        <DrilldownSkeleton />
       ) : Renderer ? (
-        <Renderer config={config} data={result.data} />
+        <Suspense fallback={<DrilldownSkeleton />}>
+          <Renderer config={config} data={result.data} />
+        </Suspense>
       ) : null}
     </div>
   );

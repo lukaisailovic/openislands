@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { type CSSProperties, Suspense } from "react";
 import { IslandCard, resolveRenderer, type Column, type SourceInfo } from "@openislands/runtime/islands";
 
 type ColumnType = Column["type"];
@@ -77,7 +77,11 @@ export function LiveIsland({
 }: LiveIslandProps) {
   const Renderer = resolveRenderer(type);
   const style = { minHeight: `${height}px` } as CSSProperties;
-  const island = <Renderer config={{ ...config, type }} data={data as never} />;
+  const island = (
+    <Suspense fallback={<div style={style} />}>
+      <Renderer config={{ ...config, type }} data={data as never} />
+    </Suspense>
+  );
 
   if (!framed) {
     return (
