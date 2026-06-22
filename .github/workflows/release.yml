@@ -34,6 +34,11 @@ jobs:
   release:
     name: Bump, publish & tag
     runs-on: ubuntu-latest
+    # Records each run as a deployment under the `npm` environment; the URL is
+    # evaluated after the steps run, so it links to the exact version just published.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/openislands/v/${{ steps.version.outputs.version }}
     if: github.repository == 'lukaisailovic/openislands'
     permissions:
       contents: write # bump commit, tag, push, GitHub release
