@@ -1,12 +1,12 @@
-import { CopyPrompt } from "./copy-prompt";
+import { gitConfig } from "../lib/shared";
+import { HeroTerminal, TerminalCommand } from "./hero-terminal";
 import { LiveIsland } from "./live-island";
 import { netWorthByMonth, sampleData } from "./sample-data";
 
-const GITHUB_URL = "https://github.com/lukaisailovic/openislands";
+const GITHUB_URL = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
 
-/** Paste this into a coding agent; it reads the start doc and builds the first dashboard. */
-const AGENT_PROMPT =
-  "Read https://openislands.sh/start.md then help me build my first agent-maintained dashboard.";
+/** The CLI's first command, offered inline in the closing CTA band as a copy-and-go. */
+const INIT_COMMAND = "npx openislands init my-dashboard";
 
 const kpiManifest = `{
   "type": "metric.kpi",
@@ -85,15 +85,7 @@ export function Home() {
           OpenIslands is a local-first runtime for agent-maintained data apps. You bind typed
           islands to your own files in a manifest, and never touch rendering code.
         </p>
-        <div className="oi-hero-buttons">
-          <a href="/getting-started" className="oi-btn oi-btn-accent">
-            Get started
-          </a>
-          <a href="/introduction" className="oi-btn">
-            Introduction
-          </a>
-          <CopyPrompt prompt={AGENT_PROMPT} label="Copy agent prompt" />
-        </div>
+        <HeroTerminal />
       </header>
 
       <section className="oi-section">
@@ -183,6 +175,9 @@ export function Home() {
 
       <section className="oi-cta">
         <h2 className="oi-cta-title">Point your agent at a folder. Get a dashboard it can keep.</h2>
+        <div className="oi-cta-command">
+          <TerminalCommand command={INIT_COMMAND} />
+        </div>
         <div className="oi-hero-buttons oi-cta-buttons">
           <a href="/getting-started" className="oi-btn oi-btn-accent">
             Get started
@@ -191,10 +186,78 @@ export function Home() {
             GitHub
           </a>
         </div>
-        <p className="oi-meta" translate="no">
-          MIT · local-first · npx openislands · MCP
-        </p>
       </section>
+
+      <footer className="oi-footer">
+        <div className="oi-footer-top">
+          <div className="oi-footer-brand">
+            <div className="oi-footer-lockup">
+              <img src="/logo-light.svg" alt="" width="32" height="32" />
+              <span className="oi-footer-word">OpenIslands</span>
+            </div>
+            <p className="oi-footer-tagline">
+              Local-first runtime for agent-maintained data apps.
+            </p>
+          </div>
+          <nav className="oi-footer-columns" aria-label="Footer">
+            <div className="oi-footer-col">
+              <p className="oi-footer-heading">Documentation</p>
+              <a href="/introduction" className="oi-footer-link">
+                Introduction
+              </a>
+              <a href="/getting-started" className="oi-footer-link">
+                Getting Started
+              </a>
+              <a href="/cli" className="oi-footer-link">
+                CLI
+              </a>
+              <a href="/mcp" className="oi-footer-link">
+                MCP Server
+              </a>
+            </div>
+            <div className="oi-footer-col">
+              <p className="oi-footer-heading">Concepts</p>
+              <a href="/concepts/manifest" className="oi-footer-link">
+                The Manifest
+              </a>
+              <a href="/concepts/data-contracts" className="oi-footer-link">
+                Data Contracts
+              </a>
+              <a href="/islands/overview" className="oi-footer-link">
+                Islands
+              </a>
+            </div>
+            <div className="oi-footer-col">
+              <p className="oi-footer-heading">Project</p>
+              <a href={GITHUB_URL} className="oi-footer-link" target="_blank" rel="noreferrer">
+                GitHub
+              </a>
+              <a href="/agents" className="oi-footer-link">
+                Agent Setup
+              </a>
+              <a href="/llms.txt" className="oi-footer-link" translate="no">
+                llms.txt
+              </a>
+            </div>
+          </nav>
+        </div>
+        <div className="oi-footer-bar">
+          <p className="oi-footer-legal" translate="no">
+            MIT licensed · local-first
+          </p>
+          <a
+            href={GITHUB_URL}
+            className="oi-footer-github"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="OpenIslands on GitHub"
+          >
+            <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+              <path d="M12 .5C5.37.5 0 5.78 0 12.29c0 5.21 3.44 9.63 8.2 11.19.6.11.82-.25.82-.56v-2.18c-3.34.71-4.04-1.58-4.04-1.58-.55-1.36-1.34-1.73-1.34-1.73-1.09-.73.08-.71.08-.71 1.2.08 1.84 1.21 1.84 1.21 1.07 1.8 2.81 1.28 3.49.98.11-.76.42-1.28.76-1.57-2.67-.3-5.47-1.31-5.47-5.81 0-1.28.47-2.33 1.24-3.15-.13-.3-.54-1.51.12-3.15 0 0 1.01-.32 3.3 1.2.96-.26 1.98-.39 3-.39 1.02 0 2.04.13 3 .39 2.29-1.52 3.3-1.2 3.3-1.2.66 1.64.25 2.85.12 3.15.77.82 1.24 1.87 1.24 3.15 0 4.51-2.81 5.5-5.49 5.79.43.36.81 1.08.81 2.18v3.23c0 .31.21.68.83.56C20.56 21.91 24 17.5 24 12.29 24 5.78 18.63.5 12 .5Z" />
+            </svg>
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

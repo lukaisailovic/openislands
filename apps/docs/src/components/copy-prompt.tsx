@@ -42,7 +42,7 @@ export function CopyPrompt({ prompt, label }: CopyPromptProps) {
   );
 }
 
-function CopyIcon() {
+export function CopyIcon() {
   return (
     <svg
       width="16"
@@ -60,7 +60,7 @@ function CopyIcon() {
   );
 }
 
-function CheckIcon() {
+export function CheckIcon() {
   return (
     <svg
       width="16"
