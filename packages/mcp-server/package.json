@@ -2,6 +2,7 @@
   "name": "@openislands/mcp",
   "version": "0.3.0",
   "description": "OpenIslands MCP server — read-many / write-one, so an agent edits your dashboard safely.",
+  "keywords": ["openislands", "mcp", "model-context-protocol", "ai-agent", "llm-tools", "dashboard", "duckdb", "data-app", "local-first", "claude"],
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",
