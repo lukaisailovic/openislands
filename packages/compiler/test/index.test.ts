@@ -838,3 +838,36 @@ describe("page filter contract check", () => {
     expect(err).toContain("ghost");
   });
 });
+
+describe("security: ad-hoc SQL is confined to registered views", () => {
+  const withNw = () =>
+    project(baseManifest, { "data/nw.csv": "month,value\n2024-01,10\n2024-02,20\n", "data/stray.csv": "x\n9\n" });
+
+  it("runs a plain SELECT and a CTE over the registered views", async () => {
+    const dir = withNw();
+    expect((await queryRaw(dir, "SELECT * FROM nw")).rows).toHaveLength(2);
+    expect((await queryRaw(dir, "WITH t AS (SELECT * FROM nw WHERE value > 10) SELECT * FROM t")).rows).toHaveLength(1);
+  });
+
+  it("rejects a file-reading table function (arbitrary read / SSRF gadget)", async () => {
+    const dir = withNw();
+    await expect(queryRaw(dir, "SELECT * FROM read_text('/etc/hosts')")).rejects.toThrow(/table function/i);
+  });
+
+  it("rejects a base table that isn't a registered view (replacement-scan file read)", async () => {
+    const dir = withNw();
+    await expect(queryRaw(dir, "SELECT * FROM 'data/stray.csv'")).rejects.toThrow(/not a known dataset/i);
+  });
+});
+
+describe("security: manifest dataset sources are confined", () => {
+  it("refuses a source that escapes the project root", async () => {
+    const dir = project({ ...baseManifest, datasets: { nw: { source: "/etc/passwd" } } }, {});
+    await expect(query(dir, "nw")).rejects.toThrow(/outside the project root/i);
+  });
+
+  it("refuses a dotfile/secret source", async () => {
+    const dir = project({ ...baseManifest, datasets: { nw: { source: ".env" } } }, { ".env": "SECRET=1\n" });
+    await expect(query(dir, "nw")).rejects.toThrow(/protected file/i);
+  });
+});

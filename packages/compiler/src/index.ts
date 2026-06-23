@@ -12,7 +12,7 @@
  */
 import { join, extname, basename, isAbsolute } from "node:path";
 import duckdb, { type DuckDBValue } from "@duckdb/node-api";
-import { type ContentStore, getContentStore } from "@openislands/storage";
+import { type ContentStore, getContentStore, isHiddenPath, resolveWithinRoot } from "@openislands/storage";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, lintManifest, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
 import { queryResultToArrowIPC } from "./arrow.js";
 import { checkCustomIsland } from "./customSchema.js";
@@ -158,6 +158,7 @@ export async function readManifest(projectDir: string): Promise<Manifest> {
 /** Register every dataset of a manifest onto a connection, isolating per-dataset failures
  * so one bad source or transform can't blind the rest (it lands in `failures`, not a throw). */
 async function registerDatasets(
+  projectDir: string,
   conn: DuckDBConnection,
   store: ContentStore,
   manifest: Manifest,
@@ -170,7 +171,7 @@ async function registerDatasets(
   const failures = new Map<string, string>();
   for (const [name, spec] of Object.entries(manifest.datasets)) {
     try {
-      await registerDataset(conn, store, name, spec);
+      await registerDataset(projectDir, conn, store, name, spec);
       registered.add(name);
     } catch (e) {
       failures.set(name, (e as Error).message);
@@ -185,7 +186,7 @@ async function buildEngine(projectDir: string): Promise<Engine> {
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
   await store.configureEngine(conn);
-  const { registered, failures } = await registerDatasets(conn, store, manifest);
+  const { registered, failures } = await registerDatasets(projectDir, conn, store, manifest);
   return { conn, manifest, registered, failures };
 }
 
@@ -219,6 +220,21 @@ export function resolveSourcePath(projectDir: string, source: string): string {
   return isAbsolute(source) ? source : join(projectDir, source);
 }
 
+/**
+ * Confine a manifest-declared `source`/`sql` path before the query engine reads it. The manifest
+ * validates these only as free strings, so without this a malicious/downloaded manifest could point
+ * a dataset at `/etc/passwd`, `../secret`, a dotfile like `.env`, or a symlink out of the root, and
+ * have DuckDB read it via read_csv_auto/read_text. The floor is "stays in the project and isn't a
+ * secret" — not a dir allowlist (in-root files are the user's own project; the MCP applies the
+ * stricter source-dir policy at write time). Throws on escape; the per-dataset catch in
+ * registerDatasets turns it into a named registration failure.
+ */
+function confineSource(projectDir: string, source: string): void {
+  const confined = resolveWithinRoot(projectDir, source);
+  if (!confined) throw new Error(`source '${source}' resolves outside the project root`);
+  if (isHiddenPath(confined.rel)) throw new Error(`source '${source}' targets a protected file`);
+}
+
 function sourceExtension(source: string): string {
   return extname(source.split("*")[0] ?? source).toLowerCase();
 }
@@ -242,15 +258,17 @@ function fileReaderExpr(source: string, uri: string): string {
   }
 }
 
-async function registerDataset(conn: DuckDBConnection, store: ContentStore, name: string, spec: DatasetSpec): Promise<void> {
+async function registerDataset(projectDir: string, conn: DuckDBConnection, store: ContentStore, name: string, spec: DatasetSpec): Promise<void> {
   const view = quoteIdent(name);
   if (spec.sql) {
+    confineSource(projectDir, spec.sql);
     const body = await store.readText(spec.sql);
     if (body === null) throw new Error(`dataset '${name}': sql transform not found: ${spec.sql}`);
     await conn.run(`CREATE VIEW ${view} AS ${body.trim().replace(/;\s*$/, "")}`);
     return;
   }
   if (!spec.source) throw new Error(`dataset '${name}': no source`);
+  confineSource(projectDir, spec.source);
   const ext = sourceExtension(spec.source);
   if (ext === ".md" || ext === ".markdown") {
     await registerMarkdownDataset(conn, store, name, spec.source);
@@ -389,6 +407,43 @@ async function assertReadOnly(conn: DuckDBConnection, sql: string): Promise<void
   if (type !== StatementType.SELECT) throw new Error(`only read-only SELECT queries are allowed (got ${StatementType[type]})`);
 }
 
+/**
+ * Confine an ad-hoc SELECT to the registered dataset views — the contract `run_sql` advertises.
+ * `assertReadOnly` gates the statement TYPE; this gates what it may READ. DuckDB exposes the
+ * filesystem two ways inside a SELECT: table functions (`read_text`/`read_csv_auto`/`read_blob`,
+ * which also reach the network via httpfs) and replacement scans (`FROM '/etc/passwd'`, which
+ * parse as a base table whose name is the path). We reject every table function and every base
+ * table that isn't a registered view or a CTE defined in the same statement, so a free-form
+ * query can't be turned into an arbitrary-file-read / SSRF gadget. Operates on DuckDB's own
+ * parse tree (via `json_serialize_sql`), so comments/casing/whitespace can't smuggle past it.
+ */
+async function assertReferencesOnlyViews(conn: DuckDBConnection, sql: string, registered: Set<string>): Promise<void> {
+  const reader = await conn.runAndReadAll(`SELECT json_serialize_sql(${quoteLiteral(sql)}) AS j`);
+  const ast = JSON.parse(String(reader.getRows()[0]![0])) as unknown;
+  const baseTables: string[] = [];
+  const cteKeys = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== "object") return;
+    const obj = node as Record<string, unknown>;
+    if (obj.type === "TABLE_FUNCTION") {
+      throw new Error("table functions are not allowed here — query the registered dataset views by name");
+    }
+    if (obj.type === "BASE_TABLE" && typeof obj.table_name === "string") baseTables.push(obj.table_name);
+    const cteMap = obj.cte_map as { map?: { key?: unknown }[] } | undefined;
+    if (cteMap?.map) for (const e of cteMap.map) if (typeof e.key === "string") cteKeys.add(e.key.toLowerCase());
+    for (const value of Object.values(obj)) walk(value);
+  };
+  walk(ast);
+  const allowed = new Set([...registered].map((v) => v.toLowerCase()));
+  for (const table of baseTables) {
+    const name = table.toLowerCase();
+    if (!allowed.has(name) && !cteKeys.has(name)) {
+      throw new Error(`'${table}' is not a known dataset — ad-hoc SQL can only read the registered dataset views`);
+    }
+  }
+}
+
 // --- Public query API -----------------------------------------------------------
 
 /** A date-range narrowing applied at query time, from a page-level filter. */
@@ -522,6 +577,7 @@ export async function queryArrow(projectDir: string, dataset: string, opts?: Que
 export async function queryRaw(projectDir: string, sql: string, opts?: { limit?: number }): Promise<QueryResult> {
   const engine = await getEngine(projectDir);
   await assertReadOnly(engine.conn, sql);
+  await assertReferencesOnlyViews(engine.conn, sql, engine.registered);
   return runSelect(engine.conn, sql, opts?.limit ?? DEFAULT_ROW_CAP);
 }
 
@@ -595,6 +651,7 @@ export async function inferSchema(projectDir: string, datasetOrFile: string): Pr
     return { dataset: datasetOrFile, columns: columnsFromReader(reader) };
   }
   if (engine.failures.has(datasetOrFile)) throw unavailableDataset(engine, datasetOrFile);
+  confineSource(projectDir, datasetOrFile);
   const uri = getContentStore(projectDir).sourceUri(datasetOrFile);
   const reader = await engine.conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(datasetOrFile, uri)} LIMIT 0`);
   return { dataset: datasetOrFile, columns: columnsFromReader(reader) };
@@ -616,7 +673,7 @@ export async function inspectManifestDatasets(
   const conn = await instance.connect();
   try {
     await store.configureEngine(conn);
-    const { registered, failures } = await registerDatasets(conn, store, manifest);
+    const { registered, failures } = await registerDatasets(projectDir, conn, store, manifest);
     const columns = new Map<string, Column[]>();
     for (const name of registered) {
       const reader = await conn.runAndReadAll(`SELECT * FROM ${quoteIdent(name)} LIMIT 0`);

@@ -13,6 +13,7 @@
  */
 export type { ContentStore } from "./content.js";
 export { LocalContentStore } from "./content.js";
+export { type ConfinedPath, isHiddenPath, resolveWithinRoot } from "./confine.js";
 export type { AppStateStore } from "./state.js";
 export { LocalAppStateStore } from "./state.js";
 export type { VersionStore } from "./versions.js";

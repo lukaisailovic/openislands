@@ -1,6 +1,4 @@
-import { realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
-import { getContentStore } from "@openislands/storage";
+import { getContentStore, isHiddenPath, resolveWithinRoot } from "@openislands/storage";
 
 /**
  * Confined, read-only project-file access for the `source.doc` island. Untrusted
@@ -34,40 +32,21 @@ export class FileAccessError extends Error {
   }
 }
 
-function realRoot(projectRoot: string): string {
-  let dir = resolve(projectRoot);
-  for (;;) {
-    try {
-      return realpathSync(dir);
-    } catch {
-      const parent = resolve(dir, "..");
-      if (parent === dir) return dir;
-      dir = parent;
-    }
-  }
-}
-
-function isDenied(rootRelative: string): boolean {
-  return rootRelative
-    .split(/[\\/]/)
-    .some((seg) => seg.startsWith(".") && seg !== "." && seg !== "..");
-}
-
-/** Resolve `candidate` under the project root or throw a FileAccessError with an HTTP status. */
+/**
+ * Resolve `candidate` under the project root or throw a FileAccessError with an HTTP status.
+ * Containment is checked against the candidate's realpath, so a symlink under a content dir
+ * can't point the resolved path (and thus the fs write/read that follows it) outside the root.
+ */
 export function confineProjectFile(projectRoot: string, candidate: string): string {
   if (!candidate) throw new FileAccessError("missing 'path'", 400);
-  const root = realRoot(projectRoot);
-  const abs = isAbsolute(candidate) ? resolve(candidate) : resolve(root, candidate);
-  const rel = relative(root, abs);
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
-    throw new FileAccessError("path escapes the project root", 403);
-  }
-  if (isDenied(rel)) throw new FileAccessError("path targets a protected file", 403);
-  const top = rel.split(/[\\/]/)[0];
+  const confined = resolveWithinRoot(projectRoot, candidate);
+  if (!confined) throw new FileAccessError("path escapes the project root", 403);
+  if (isHiddenPath(confined.rel)) throw new FileAccessError("path targets a protected file", 403);
+  const top = confined.rel.split(/[\\/]/)[0];
   if (!top || !ALLOWED_DIRS.includes(top)) {
     throw new FileAccessError(`path must live under ${ALLOWED_DIRS.join("/, ")}/`, 403);
   }
-  return abs;
+  return confined.abs;
 }
 
 function contentType(path: string): string {

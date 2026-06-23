@@ -124,6 +124,12 @@ export class LocalContentStore implements ContentStore {
 
   async configureEngine(conn: QueryConnection): Promise<void> {
     await conn.run(`SET file_search_path=${quoteLiteral(this.root)}`);
+    // Never auto-install or auto-load extensions. Without this, a SQL transform body or an
+    // ad-hoc query referencing an http(s) path silently pulls in httpfs and turns the engine
+    // into an SSRF gadget. The engine still INSTALLs what it genuinely needs (e.g. sqlite)
+    // explicitly; core readers (csv/json/parquet) are built in and unaffected.
+    await conn.run("SET autoinstall_known_extensions=false");
+    await conn.run("SET autoload_known_extensions=false");
   }
 
   async localPath(source: string): Promise<string> {
