@@ -60,6 +60,12 @@ rather than expanding the core.
 per package through Turborepo — the build (Oxc) strips types without checking them,
 so this is the only gate that does.
 
+Changing the MCP tool surface (descriptions, schemas, result shapes, renames)? The
+deterministic guardrails in `packages/mcp-server/test/tool-surface.test.ts` lock down
+its token cost, the canonical agent walkthroughs, and the result contract — keep them
+green. A tool that inlines a big typed `inputSchema` (e.g. the island catalog) trips
+the budget guard; keep manifest-edit inputs loose and let `dryCheck` validate.
+
 ## Releasing
 
 Releases are automated with Changesets. Land PRs with a changeset on `main`; the
