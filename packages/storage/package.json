@@ -1,6 +1,6 @@
 {
   "name": "@openislands/storage",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "OpenIslands storage ports — swappable ContentStore / AppStateStore / VersionStore so the runtime can be backed by local disk or another backend.",
   "keywords": [
     "openislands",
