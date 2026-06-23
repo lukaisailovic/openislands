@@ -125,7 +125,7 @@ agent edits safely.
  manifest (typed islands)  ──►  serve runtime  ──►  your dashboard
                                 (TanStack Start SSR)      ▲
                                        │ SSE on file change → islands refetch
-        AI agent  ──(MCP: propose → validate → diff → apply → rollback)──┘
+        AI agent  ──(Code Mode: execute → validate → apply → rollback)──┘
 ```
 
 The pieces, smallest contract first:
@@ -136,7 +136,7 @@ The pieces, smallest contract first:
 | `@openislands/compiler` | The DuckDB query core. Turns files into typed data contracts, runs transforms and queries live, and checks every island binding against the data. |
 | `@openislands/runtime` | The island registry and renderers behind `serve` (TanStack Start SSR + React islands + live updates). |
 | `openislands` | The CLI: `init`, `validate`, `serve`, `add`, `infer`. |
-| `@openislands/mcp` | The MCP server. Read many, write one, so an agent edits the manifest without breaking it. |
+| `@openislands/mcp` | The MCP server, in Code Mode: one `execute` tool the agent drives with JavaScript against the `oi` API. Read many, write one, so it edits the manifest without breaking it. |
 
 ## Islands
 
@@ -190,7 +190,7 @@ publish/sync tier may come later.
 ## Documentation
 
 - [Data app model](./docs/data-app-model.md): the manifest, the island catalog, data contracts, and workspaces.
-- [Agent edit loop](./docs/agent-edit-loop.md): the read-many/write-one MCP loop, actions, queries, and connectors.
+- [Agent edit loop](./docs/agent-edit-loop.md): the read-many/write-one MCP loop in Code Mode (`execute` + `oi`), actions, queries, and connectors.
 - [Contributing](./CONTRIBUTING.md): adding an island, the PR gate, releases.
 
 The full docs site lives in [`apps/docs`](./apps/docs) (built with Fumadocs on TanStack Start, deployed static to Cloudflare Workers).

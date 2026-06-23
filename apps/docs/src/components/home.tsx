@@ -56,8 +56,8 @@ const features = [
 ];
 
 const loopSteps = [
-  { name: "read", body: "Pull the manifest, the island schemas, and a slice of the live data." },
-  { name: "propose", body: "Submit a full-manifest edit; it's validated against the data before a byte is written." },
+  { name: "read", body: "Pull the manifest, the island schemas, and a slice of the live data — all from one script." },
+  { name: "stage", body: "Patch a manifest section; it's validated against the data before a byte is written." },
   { name: "diff", body: "See exactly what changes. Nothing is written yet." },
   { name: "apply", body: "Write it, and snapshot the prior version as a checkpoint." },
   { name: "rollback", body: "Restore any checkpoint, byte for byte, if something looks off." },
@@ -158,8 +158,9 @@ export function Home() {
         <p className="oi-eyebrow">the safe edit loop</p>
         <h2 className="oi-section-title">An agent edits the manifest, not your rendering code.</h2>
         <p className="oi-lede">
-          The MCP server is read-many, write-one. Every change runs the same path, and every
-          write is reversible, so an agent can maintain the app without ever leaving it broken.
+          The MCP server runs in Code Mode — one tool the agent drives with JavaScript — and it's
+          read-many, write-one. Every change runs the same path, and every write is reversible, so
+          an agent can maintain the app without ever leaving it broken.
         </p>
         <ol className="oi-loop">
           {loopSteps.map((step) => (

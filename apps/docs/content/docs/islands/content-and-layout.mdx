@@ -192,7 +192,7 @@ is a full workspace bound to a `data/` tree with an editable CSV and the three v
 
 **What it is.** A data-entry form card bound to a manifest [action](/data/actions). **When to use
 it:** when a human, not just an agent, should add rows — log an incident, record a meal, file an
-expense — right next to the data it feeds. It's the human-facing mirror of the agent's `run_action`:
+expense — right next to the data it feeds. It's the human-facing mirror of the agent's `runAction`:
 you don't re-declare fields, you point it at an action and it derives one typed input per field from
 that action's resolved row schema. So it binds **no dataset** of its own — the action already names
 the target.
@@ -200,8 +200,8 @@ the target.
 The card renders a text, number, or date input per field, a dropdown for an `enum` field, and a
 checkbox for a boolean, with a submit button in the bottom-right. A field is required unless the
 action gives it a `default`. On submit it inserts a row through the **same path** as the MCP
-`run_action` — the row is validated, snapshotted to history for `rollback`, then inserted — and the
-bound dataset's islands refresh live.
+`oi.app().runAction` — the row is validated, snapshotted to history for `rollback`, then inserted —
+and the bound dataset's islands refresh live.
 
 ```jsonc title="app/manifest.json"
 {

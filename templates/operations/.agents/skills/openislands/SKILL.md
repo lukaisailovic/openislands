@@ -1,6 +1,6 @@
 ---
 name: openislands
-description: Build and maintain OpenIslands data dashboards — typed manifests of visual islands bound to local files (CSV / JSON / Parquet / SQLite / markdown), edited safely over the OpenIslands MCP server. Use whenever a project has apps/<id>/app/manifest.json or an .mcp.json naming the openislands MCP server, and you are adding or changing datasets, islands, pages, actions, queries, or connectors, fixing a validation or binding error, or authoring a SQL transform.
+description: Build and maintain OpenIslands data dashboards — typed manifests of visual islands bound to local files (CSV / JSON / Parquet / SQLite / markdown), edited safely over the OpenIslands MCP server in Code Mode (one `execute` tool you drive with JavaScript). Use whenever a project has apps/<id>/app/manifest.json or an .mcp.json naming the openislands MCP server, and you are adding or changing datasets, islands, pages, actions, queries, or connectors, fixing a validation or binding error, or authoring a SQL transform.
 ---
 
 # Working with OpenIslands
@@ -12,35 +12,75 @@ the manifest — never rendering code. The data stays in the app's files; `serve
 The whole point is that the dashboard **fails loudly** when a binding and the data disagree, instead
 of silently rendering a wrong number, so an agent can keep it healthy for months.
 
+## Code Mode: one tool, driven with JavaScript
+
 You make every change through the **OpenIslands MCP server** (`@openislands/mcp`, already wired in
-`.mcp.json`). One MCP endpoint serves the whole project. App-scoped tools take an optional `app`
-param — **omit it when there's only one app**; pass it (the `<id>` under `apps/`) to target a
-specific one. Call **`list_apps`** to see what's there, **`create_app`** to scaffold a new one. The
-server is a safety boundary: **read freely, write through one validated pipeline.** Nothing is
-written until you apply a validated proposal, and every write is snapshotted for rollback.
+`.mcp.json`). It runs in **Code Mode**: instead of a tool per operation, you call **one tool —
+`execute`** — and pass it a small **async JavaScript program** that drives the `oi` API. Compose as
+many steps as you like in a single call (loops, conditionals, chaining); `return` a value and/or
+`console.log` what you want to see. The script runs in a sandbox — no `require` / `process` /
+network, only `oi`. (`execute`'s own tool description carries the full `oi` TypeScript API — read it
+once; the essentials are below.)
 
-## The loop
+```js
+const app = oi.app();                 // the sole app; oi.app("id") to pick one in a multi-app workspace
+const ov = await app.getOverview();   // orient: manifest + live columns + actions/queries/connectors
+console.log(ov.datasets);
+return ov.title;
+```
 
-1. **Read** — start with **`get_overview`**: it returns the manifest, every dataset's live columns,
-   and the declared actions / queries / connectors (plus the rollback checkpoint count) in **one
-   call**, so you don't fan out across `get_manifest` + a `get_data_schema` per dataset. Then ground
-   a specific island edit with `list_islands` / `get_island_schema`, and use `run_sql` (ad-hoc
-   read-only SELECTs) / `validate_sql` (dry-run a transform) for data checks. A *saved*,
-   parameterized read is a declared query you run with `run_query`, not `run_sql`.
-2. **Edit** — `patch_manifest` for one section at a time (preferred), or `replace_manifest` for a full
-   rewrite. Both return a `proposal_id` + a diff and write **nothing** yet.
-3. **It already validated** — the edit tools dry-run the result against the live data. If `ok` is
-   `false`, read `errors` (each names the page, island, and field) and fix the edit. Do **not** work
-   around a binding error — it is the safety net.
-4. **Apply** — `apply_edit({ proposal_id })`. This writes the manifest and returns a `checkpoint_id`.
-5. **Undo if needed** — `rollback({ checkpoint_id })` (or latest). Restores byte-for-byte.
+`execute` returns `{ ok, result, logs, checkpoints_created? }` (or `{ ok:false, error, logs }` if the
+script throws). The server is a safety boundary: **read freely, write through one validated pipeline.**
+Nothing is written until you apply a validated proposal, and every write is snapshotted for rollback.
 
-Prefer **`patch_manifest`** over `replace_manifest`: it merges one section into the current manifest, so
-you never re-send (or re-typo) the whole document. Pass JSON **objects**, not JSON strings.
+Everything runs through `execute` — there are no separate per-operation tools. Reading `oi`'s methods
+in the `execute` tool description is the fastest way to see the whole surface.
 
-Every tool replies with a JSON object carrying an `ok` flag — on `ok:false`, read `error` / `errors`
-(each names the offending field) and fix it. `get_overview` is **concise by default**; pass
-`verbosity: "detailed"` when you also need the per-action row schemas and per-query params.
+### The `oi` API (essentials)
+
+`oi.listApps()`, `oi.createApp({id,title?})`, `oi.deleteApp({id})` are workspace-level. `oi.app(id?)`
+returns the app-scoped API — **omit `id` when there's only one app**, else pass the `<id>` under
+`apps/`. On the app:
+
+- **Orient / read:** `getOverview({verbosity?})`, `getManifest()`, `getDataSchema(dataset)`,
+  `runSql({sql?|dataset?,limit?,verbosity?})` (ad-hoc read-only SELECTs), `validateSql(sql)` (dry-run a
+  transform), `validateManifest(manifest?)`.
+- **Island catalog:** `listIslands()`, `getIslandSchema(type)`.
+- **Edit (read-many / write-one):** `patchManifest(patch)` (preferred — one section at a time) or
+  `replaceManifest(manifest)` (full rewrite) → returns a `proposal_id` + a diff, writes **nothing** →
+  `applyEdit(proposal_id)` writes it and returns a `checkpoint_id` → `rollback(checkpoint_id?)` undoes
+  it. `listCheckpoints()` / `pruneCheckpoints(keep?)`.
+- **Typed data:** `listActions()` / `runAction(name, rows)` (typed appends); `listQueries()` /
+  `runQuery(name, params?, opts?)` (typed reads).
+- **Connectors:** `listConnectors()` / `runSync(name)` (provider pulls).
+
+Every method returns a JSON object carrying an `ok` flag — on `ok:false`, read `error` / `errors`
+(each names the offending field) and fix it. The exception is `getManifest()`, which returns the raw
+manifest object. Pass JSON **objects**, not JSON strings.
+
+## The edit loop
+
+Orient, ground the edit in the live contract, stage, apply — usually one script:
+
+```js
+const app = oi.app();
+const ov = await app.getOverview();                 // 1. read
+await app.getIslandSchema("metric.kpi");            // 2. ground (required fields, span range)
+const page = ov.pages[0];
+page.islands.push({ type: "metric.kpi", title: "Net worth", dataset: "net_worth_monthly",
+                    value: "net_worth_eur", format: "eur", span: 4 });
+const staged = await app.patchManifest({ pages: [page] });   // 3. stage (already validated vs the data)
+if (!staged.ok) return staged.errors;               //    each error names the page/island/field
+return await app.applyEdit(staged.proposal_id);     // 4. apply → checkpoint_id (rollback if wrong)
+```
+
+The stage step **dry-runs the result against the live data**. If `ok` is `false`, read `errors` (each
+names the page, island, and field) and fix the edit. Do **not** work around a binding error — it is the
+safety net. Prefer **`patchManifest`** over `replaceManifest`: it merges one section into the current
+manifest, so you never re-send (or re-typo) the whole document.
+
+You can do the whole loop in one script, or split it across several `execute` calls — a `proposal_id`
+persists between calls, so you can stage in one and apply in the next.
 
 ## The manifest model
 
@@ -62,8 +102,8 @@ Every tool replies with a JSON object carrying an `ok` flag — on `ok:false`, r
 - **pages → islands** — each island has a `type`, an optional `span` (1–12 grid columns), and type-specific
   fields. Data islands name a `dataset` and the columns they bind (e.g. `value`, `x`, `y`, `label`).
   A page uses either a flat `islands` array or tabbed `groups`, not both.
-- **actions** — declare a typed `insert` into a writable dataset; run rows through `run_action`.
-- **queries** — declare a typed, parameterized read; run it through `run_query`. No raw SQL in queries —
+- **actions** — declare a typed `insert` into a writable dataset; run rows through `runAction`.
+- **queries** — declare a typed, parameterized read; run it through `runQuery`. No raw SQL in queries —
   heavy shaping lives in a `sql` transform the query reads from.
 
 Don't put transforms inside island configs. **The manifest stays declarative; data shaping lives in the
@@ -73,9 +113,9 @@ SQL/data layer.**
 
 Island configs are the keystone schema and can change. Always ground an edit in the live contract:
 
-- `list_islands` → every built-in type with its required fields, a one-line description, and its
-  span range (`minSpan` / `recommendedSpan` / `maxSpan`).
-- `get_island_schema({ type })` → the full JSON Schema for one type, plus its `layout`
+- `oi.app().listIslands()` → every built-in type with its required fields, a one-line description, and
+  its span range (`minSpan` / `recommendedSpan` / `maxSpan`).
+- `oi.app().getIslandSchema(type)` → the full JSON Schema for one type, plus its `layout`
   (`{ minSpan, recommendedSpan, maxSpan }`) and `notes`. **Check this before setting `span`** — see
   [Layout & sizing](#layout--sizing).
 
@@ -90,7 +130,7 @@ renderer exists under `components/custom/`.
 ## Layout & sizing
 
 Every island has a **min / recommended / max** span on the 12-column grid. Check
-`get_island_schema({ type })` (its `layout` + `notes`) before you set `span`:
+`oi.app().getIslandSchema(type)` (its `layout` + `notes`) before you set `span`:
 
 - **Keep compact islands narrow.** KPIs, funnels, gauges, pies, and radars cap well below full
   width (e.g. `metric.kpi` and `funnel.steps` max out at 6, recommended 4) — past their natural
@@ -100,35 +140,38 @@ Every island has a **min / recommended / max** span on the 12-column grid. Check
 - **Omit `span` to get the recommended width** — the island renders at its natural size.
 - **Don't ship a lone KPI.** Group 2+ KPIs in a row, or use `metric.scorecard` for a tidy strip.
 
-`validate` and the MCP edit tools surface **advisory layout warnings** (a `warnings` array on
-`patch_manifest` / `replace_manifest` / `validate_manifest`) for these smells — a standalone KPI, a
+`validate` and the edit methods surface **advisory layout warnings** (a `warnings` array on
+`patchManifest` / `replaceManifest` / `validateManifest`) for these smells — a standalone KPI, a
 compact island stretched past its recommended span. They never block the apply; treat them as a
 nudge toward a tidier layout.
 
 ## Recipes
 
+Each recipe is the body of a `execute` script (assume `const app = oi.app();` at the top).
+
 **Add a chart to a page.** Read the current page, append the island, send just that page:
 
-```jsonc
-// patch_manifest
-{ "pages": [ { "id": "overview", "title": "Overview", "islands": [
-    /* ...existing islands... */,
-    { "type": "rank.list", "title": "Top assets", "dataset": "allocation",
-      "label": "class", "value": "value_eur", "span": 6 }
-] } ] }
+```js
+const ov = await app.getOverview();
+const page = ov.pages.find((p) => p.id === "overview");
+page.islands.push({ type: "rank.list", title: "Top assets", dataset: "allocation",
+                    label: "class", value: "value_eur", span: 6 });
+const s = await app.patchManifest({ pages: [page] });
+return s.ok ? await app.applyEdit(s.proposal_id) : s.errors;
 ```
 
 A page in `pages` is **upserted by `id`** (same id replaces, new id appends). `remove_pages: ["id"]`
 deletes one.
 
-**Add a dataset from a file.** Put the file under `data/` (use your file tools), then:
+**Add a dataset from a file.** Put the file under `data/` (use your file tools), then bind it and check
+its inferred columns in one script:
 
-```jsonc
-// patch_manifest
-{ "datasets": { "crypto": { "source": "data/crypto.csv", "description": "holdings" } } }
+```js
+const s = await app.patchManifest({ datasets: { crypto: { source: "data/crypto.csv", description: "holdings" } } });
+if (!s.ok) return s.errors;
+await app.applyEdit(s.proposal_id);
+return await app.getDataSchema("crypto");           // confirm columns before binding islands to it
 ```
-
-Check the inferred columns with `get_data_schema({ dataset: "crypto" })` before binding islands to it.
 
 **Add a derived dataset (SQL transform).** Transforms shape data with DuckDB SQL. Author the SQL first
 and dry-run it, *then* wire it in:
@@ -137,51 +180,52 @@ and dry-run it, *then* wire it in:
    ```sql
    SELECT class, SUM(value_eur) AS value_eur FROM holdings GROUP BY class
    ```
-2. Dry-run it: `validate_sql({ sql: "SELECT class, SUM(value_eur) AS value_eur FROM holdings GROUP BY class" })`.
+2. Dry-run it inside a script:
+   `return await app.validateSql("SELECT class, SUM(value_eur) AS value_eur FROM holdings GROUP BY class")`.
    You get back the result columns, or the **exact** DuckDB error (e.g. `Catalog Error: Table "holding" does
    not exist`). Fix it until it's valid. A transform can read any other dataset by its name.
-3. Wire it: `patch_manifest({ datasets: { allocation: { sql: "models/transforms/allocation.sql" } } })`.
+3. Wire it: `app.patchManifest({ datasets: { allocation: { sql: "models/transforms/allocation.sql" } } })`.
 
 **Add a typed write (action).** Targets a writable file dataset (CSV / SQLite), not a `sql` transform:
 
-```jsonc
-// patch_manifest
-{ "actions": { "log_txn": { "dataset": "transactions", "mode": "insert",
-    "description": "Record a transaction",
-    "fields": { "amount": { "type": "number", "min": 0 }, "kind": { "type": "string", "enum": ["in","out"] } } } } }
+```js
+await app.patchManifest({ actions: { log_txn: { dataset: "transactions", mode: "insert",
+  description: "Record a transaction",
+  fields: { amount: { type: "number", min: 0 }, kind: { type: "string", enum: ["in","out"] } } } } });
+// ...applyEdit, then append rows:
+return await app.runAction("log_txn", [{ amount: 50, kind: "in" }]);
 ```
 
-Then append rows with `run_action({ name: "log_txn", rows: [{ amount: 50, kind: "in" }] })` — every row
-is validated all-or-nothing and the file is snapshotted for rollback.
+Every row is validated all-or-nothing and the file is snapshotted for rollback.
 
 **Add a typed read (query).** Declarative, parameterized, no raw SQL:
 
-```jsonc
-// patch_manifest
-{ "queries": { "by_class": { "dataset": "allocation",
-    "select": ["class", "value_eur"], "params": { "class": { "type": "string" } },
-    "where": [ { "field": "class", "op": "eq", "param": "class" } ] } } }
+```js
+await app.patchManifest({ queries: { by_class: { dataset: "allocation",
+  select: ["class", "value_eur"], params: { class: { type: "string" } },
+  where: [{ field: "class", op: "eq", param: "class" }] } } });
+// ...applyEdit, then run it:
+return await app.runQuery("by_class", { class: "BTC" });
 ```
 
-Run it with `run_query({ name: "by_class", params: { class: "BTC" } })`.
-
 **Remove something.** In a record section, set the entry to `null`:
-`patch_manifest({ queries: { by_class: null }, actions: { log_txn: null } })`. For pages, use `remove_pages`.
+`app.patchManifest({ queries: { by_class: null }, actions: { log_txn: null } })`. For pages, use `remove_pages`.
 
-**Connectors.** `list_connectors` shows each connector's status. If `connected` is false it needs a secret
-or OAuth — **authorizing is human-only** (the Connect button in the running dashboard). Surface that to the
-user; don't try to sync. When connected, `run_sync({ name })` pulls into its datasets (checkpointed).
+**Connectors.** `app.listConnectors()` shows each connector's status. If `connected` is false it needs a
+secret or OAuth — **authorizing is human-only** (the Connect button in the running dashboard). Surface
+that to the user; don't try to sync. When connected, `app.runSync(name)` pulls into its datasets
+(checkpointed).
 
 ## Rules that keep the app healthy
 
 - **Validate is the contract.** A binding error names the page, island, and field — fix the manifest or
   the data, never silence it.
-- **Bind only to columns that exist.** Use `get_data_schema` / `validate_sql` to confirm columns before
+- **Bind only to columns that exist.** Use `getDataSchema` / `validateSql` to confirm columns before
   binding.
 - **Sources stay under `data/` / `models/` / `docs/` / `app/`.** Secrets (`.env*`) and `.openislands/` are
   off-limits.
-- **Prefer `patch_manifest`; pass objects.** Re-sending a full manifest string is the easiest way to
-  introduce a typo.
+- **Prefer `patchManifest`; pass objects.** Re-sending a full manifest is the easiest way to introduce a
+  typo.
 - **Files are the source of truth.** There is no static export — `serve` reads the files live and pushes
   updates over SSE as they change.
 
@@ -192,5 +236,5 @@ npx openislands serve        # boots the live dashboard at 127.0.0.1:4321
 npx openislands validate     # compiles + checks every binding against the data (names what's wrong)
 ```
 
-`serve` refuses to boot an invalid manifest, so `validate` (or a failed `patch_manifest`) tells you exactly
+`serve` refuses to boot an invalid manifest, so `validate` (or a failed `patchManifest`) tells you exactly
 what to fix.

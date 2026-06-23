@@ -22,7 +22,7 @@ packages/storage     # swappable storage ports (ContentStore / AppStateStore / V
 packages/compiler    # DuckDB query core: files → typed contracts; runs transforms/queries live
 packages/runtime     # TanStack Start SSR app: island registry + React renderers
 packages/cli         # the `openislands` command (init / validate / serve / add / infer)
-packages/mcp-server  # the MCP edit loop (@openislands/mcp): read-many + patch_manifest/replace_manifest + validate_sql
+packages/mcp-server  # the MCP edit loop (@openislands/mcp) in Code Mode: ONE `execute` tool drives the whole `oi` API (read-many + oi.app().patchManifest/replaceManifest → applyEdit; oi.createApp/deleteApp) in a node:vm sandbox — no per-operation tools
 templates/           # empty (default), finance, health, operations — each ships .mcp.json + AGENTS.md + the skill; scaffolded by `init`
 skills/openislands/  # the installable agent skill (npx skills add lukaisailovic/openislands --skill openislands); synced into every template
 apps/examples/       # dogfood workspace (multi-app serve)
@@ -82,7 +82,7 @@ Node ≥ 20.
 
 - `docs/data-app-model.md` — manifest shape, island catalog + required fields, spans, filters,
   custom islands, workspaces.
-- `docs/agent-edit-loop.md` — the MCP read-many/write-one loop, actions (data writes), queries (parameterized reads), connectors.
+- `docs/agent-edit-loop.md` — the MCP read-many/write-one loop in Code Mode (`execute` + `oi`), actions (data writes), queries (parameterized reads), connectors.
 - `CONTRIBUTING.md` — adding an island, the PR gate, releases.
 - `apps/docs/content/docs/` — the public docs MDX (manifest, data contracts, islands, MCP).
 - `packages/schema/src/index.ts` — the exact, authoritative island config schemas.

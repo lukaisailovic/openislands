@@ -69,6 +69,7 @@ Every derived contract — the status signals, the daily deploy rollup — is co
 
 Three insert actions let an agent record operational events: `log_incident` (open or record an
 incident), `log_incident_update` (append a status update sharing the same `incident_id`), and
-`log_deploy` (record a deploy). Discover them with `list_actions`, write rows with `run_action`;
-every row is validated against the resolved schema before anything is written, and the views
-update live. Edit `app/manifest.json` to change the layout; never hand-edit build output.
+`log_deploy` (record a deploy). Discover them with `oi.app().listActions()`, write rows with
+`oi.app().runAction(...)` (inside the `execute` tool); every row is validated against the resolved
+schema before anything is written, and the views update live. Edit `app/manifest.json` to change the
+layout; never hand-edit build output.

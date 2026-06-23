@@ -98,14 +98,14 @@ still renders; the warning just nudges you toward a tidier layout.
 
 The schema is the source of truth for all three numbers: see `ISLAND_MIN_SPAN`,
 `ISLAND_DEFAULT_SPAN`, and `ISLAND_MAX_SPAN` in `packages/schema/src/index.ts`, or read an
-island's range straight from `get_island_schema` over the MCP. The runtime also floors spans
-responsively, so a tile never renders narrower than its usable width on a small screen.
+island's range straight from `oi.app().getIslandSchema(type)` over the MCP. The runtime also floors
+spans responsively, so a tile never renders narrower than its usable width on a small screen.
 
 ## Fail loudly
 
 The manifest's job is to make a broken dashboard **impossible to ship silently.** Every
-island binds to named fields, and `validate` (and the agent's `replace_manifest`) checks each one
-against the live, DuckDB-inferred columns of the data:
+island binds to named fields, and `validate` (and the agent's `oi.app().replaceManifest`) checks
+each one against the live, DuckDB-inferred columns of the data:
 
 - Bind to a field that exists → the island renders.
 - Bind to a field that **doesn't** → the build fails and **names the page, the island, and

@@ -82,7 +82,7 @@ A page's optional `filters` declare shared controls rendered in the page header.
 `bind` maps a dataset to the column the filter applies to; islands on the page bound to one of
 those datasets re-query together when the filter changes, and every other island ignores it.
 Every bound column is validated against the live data exactly like an island binding — a
-missing column fails `validate`/`replace_manifest` naming the page, filter id, dataset, and column.
+missing column fails `validate`/`patchManifest` naming the page, filter id, dataset, and column.
 Two kinds:
 
 **`daterange`** — a shared date range. State lives in `?from=&to=` as `YYYY-MM-DD`. The range
@@ -104,8 +104,8 @@ include an "All" choice that clears the selection.
 
 ## Built-in islands and their required fields
 
-Get any island's exact config schema with `get_island_schema(type)` (MCP) or read
-`packages/schema/src/index.ts`.
+Get any island's exact config schema with `oi.app().getIslandSchema(type)` (MCP, inside `execute`)
+or read `packages/schema/src/index.ts`.
 
 | type | required | notes |
 |---|---|---|

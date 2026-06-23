@@ -5,8 +5,9 @@ description: The path from nothing to an agent-maintained dashboard — scaffold
 
 OpenIslands is built for an **agent** to own a dashboard over months — but you bootstrap it. You
 scaffold a project, connect your agent to it over MCP, then drive it with prompts. From there the
-agent reads your data, proposes a change, validates it, and applies it — and can undo any of it.
-Here's the path from nothing to an agent-maintained dashboard.
+agent reads your data, stages a change, validates it, and applies it — and can undo any of it. It
+drives all of this in **Code Mode**: one `execute` tool it programs against the OpenIslands `oi`
+API. Here's the path from nothing to an agent-maintained dashboard.
 
 <Callout type="info" title="The one-paste start">
 
@@ -51,8 +52,8 @@ CSVs you own. `health` and `operations` are there too.
 
 `init` already did this. The scaffold ships a local `.mcp.json` wiring the `@openislands/mcp`
 server, an `AGENTS.md`, and the OpenIslands skill under `.agents/skills/openislands/` — so any
-agent that reads the project picks up the tools and the conventions. Open the folder in your agent
-and you're connected.
+agent that reads the project picks up the `execute` tool and the conventions. Open the folder in
+your agent and you're connected.
 
 If you're wiring it into a project by hand, this is the config it expects, pointed at the project
 root that holds your apps under `apps/<id>/`:
@@ -94,7 +95,7 @@ every request. Leave it running — each edit the agent applies live-updates the
 ### Prompt the agent
 
 Now just ask. The agent grounds itself first (it reads the manifest, the dataset schema, and real
-rows), proposes the change so you see a diff before anything is written, applies it with a snapshot
+rows), stages the change so you see a diff before anything is written, applies it with a snapshot
 of the prior version, and rolls back if the result is wrong. A binding to a column that doesn't
 exist comes back as a named error, so a broken dashboard never ships.
 
@@ -114,8 +115,8 @@ the same snapshots.
 
 <Callout type="info" title="Tip">
 
-Read [MCP Server](/mcp) for the full tool surface and the safety posture behind it. Prefer to
-drive it by hand? The [CLI](/cli) mirrors every step.
+Read [MCP Server](/mcp) for Code Mode, the full `oi` API, and the safety posture behind it. Prefer
+to drive it by hand? The [CLI](/cli) mirrors every step.
 
 </Callout>
 

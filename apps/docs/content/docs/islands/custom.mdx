@@ -20,7 +20,7 @@ components/custom/heatmap.calendar/
 ```
 
 Reference the type from the manifest exactly like a built-in; `validate` and the runtime resolve
-it to your component:
+it to your component (an agent stages it through `oi.app().patchManifest` like any other island):
 
 ```jsonc title="app/manifest.json"
 {
@@ -104,10 +104,10 @@ export default z.object({
 - **Bundled on demand.** `serve` compiles `index.tsx` to ESM the first time the island is
   requested, with no build step and no `node_modules` in your project. React resolves to the
   runtime's own copy.
-- **Validated like a built-in.** `validate` (and `replace_manifest`) check the manifest config against
-  `schema.ts` with the *same* machinery that guards the built-ins. A config that violates the
-  schema is a named compile error: it names the page, island index, and type, just like a missing
-  built-in binding.
+- **Validated like a built-in.** `validate` (and `oi.app().replaceManifest`) check the manifest
+  config against `schema.ts` with the *same* machinery that guards the built-ins. A config that
+  violates the schema is a named compile error: it names the page, island index, and type, just
+  like a missing built-in binding.
 - **Hot reload.** Editing anything under `components/` remounts the island on the next live-reload
   event; you don't restart `serve`.
 

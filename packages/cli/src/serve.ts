@@ -118,7 +118,7 @@ export function envFlag(value: string | undefined): boolean {
 }
 
 /**
- * MCP over a non-loopback host is a remote write surface (apply_edit/run_action). A token is
+ * MCP over a non-loopback host is a remote write surface (the `execute` tool). A token is
  * mandatory there; loopback is local trust (parity with stdio). Fail loud and exit rather than
  * silently exposing the surface.
  */
@@ -128,7 +128,7 @@ export function assertMcpHostSafe(host: string, mcpEnabled: boolean, token: stri
   if (token) return;
   console.error(
     red(
-      `\n✗ MCP on a non-loopback host (${host}) exposes a write surface (apply_edit / run_action). ` +
+      `\n✗ MCP on a non-loopback host (${host}) exposes a write surface (the \`execute\` tool can write). ` +
         `Set --mcp-token or OPENISLANDS_MCP_TOKEN, or bind to loopback (127.0.0.1).`,
     ),
   );
