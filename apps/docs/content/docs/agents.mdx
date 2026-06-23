@@ -11,16 +11,17 @@ OpenIslands is built for an AI agent to own a dashboard. Any agent that speaks t
 ## What's common to all of them
 
 Every agent drives the **same MCP edit loop**. OpenIslands ships a standard **stdio** MCP server,
-`@openislands/mcp`, and `init` scaffolds everything an agent needs to find it:
+`@openislands/mcp`, in **Code Mode** — one `execute` tool the agent drives by writing JavaScript
+against the `oi` API — and `init` scaffolds everything an agent needs to find it:
 
 - a `.mcp.json` wiring the server (pointed at the project root that holds your apps under `apps/<id>/`),
 - an `AGENTS.md` pointing the agent at the conventions,
 - the OpenIslands skill under `.agents/skills/openislands/`.
 
-So the agent reads the live contract, stages a validated `patch_manifest` / `replace_manifest`, applies
-it, and can roll it back — the tools and guarantees are identical whichever agent you use. See the
-[MCP Server](/mcp) page for the full tool list and the read-many/write-one model; this page only
-covers the per-agent **wiring**.
+So the agent reads the live contract, stages a validated `oi.app().patchManifest` /
+`replaceManifest`, applies it, and can roll it back — the tool and guarantees are identical whichever
+agent you use. See the [MCP Server](/mcp) page for the full `oi` API and the read-many/write-one
+model; this page only covers the per-agent **wiring**.
 
 The server invocation is always the same — `npx -y @openislands/mcp <project-root>` over stdio — so
 if an agent isn't listed below, point its MCP config at that command and drop an `AGENTS.md` (or its
@@ -149,8 +150,8 @@ conventionally symlinked to `CLAUDE.md`.)
 
 - Just open the scaffolded folder — project-scoped `.mcp.json` and the skill are picked up with no
   manual MCP setup.
-- The skill's edit loop is the contract: prefer `patch_manifest`, pass JSON objects, and never work
-  around a binding error.
+- The skill's edit loop is the contract: drive it through `execute`, prefer
+  `oi.app().patchManifest`, pass JSON objects, and never work around a binding error.
 
 ## Codex CLI
 

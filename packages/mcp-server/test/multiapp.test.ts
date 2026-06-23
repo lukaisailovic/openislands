@@ -1,11 +1,14 @@
 /**
  * Multi-app workspace behavior for @openislands/mcp — the "multi-app by default" surface.
  *
- * createServer roots a WORKSPACE (a dir of `apps/<id>/app/manifest.json`), and every app-scoped
- * tool takes an optional `app`. These tests cover what server.test.ts's single-app fixture can't:
- *  - resolveApp via tool calls (sole default, ambiguous error, explicit select, unknown error),
- *  - the project-level tools list_apps / create_app / delete_app,
- *  - the openislands://apps catalog + the per-app manifest resource template.
+ * createServer roots a WORKSPACE (a dir of `apps/<id>/app/manifest.json`). Since the pivot to pure
+ * Code Mode there are NO native app/workspace tools — every operation is a method on `oi` inside
+ * the single execute tool. These tests cover what server.test.ts's single-app fixture can't:
+ *  - resolveApp via oi.app(id) inside execute (sole default, ambiguous error, explicit select,
+ *    unknown error, invalid id, empty workspace) — a resolution failure surfaces as execute's
+ *    thrown error,
+ *  - the workspace surface: oi.createApp / oi.deleteApp / oi.listApps in execute,
+ *  - the openislands://apps catalog + the per-app manifest resource template (still resources).
  *
  * Each test builds a self-contained workspace under a fresh mkdtemp and cleans its engines up.
  */
@@ -75,72 +78,101 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
   }
 }
 
-describe("resolveApp — the optional app selector", () => {
-  it("omitting app resolves to the sole app in a single-app workspace", async () => {
+/** The execute envelope: { ok, result?, error? }. */
+async function runCode<T = unknown>(client: Client, code: string): Promise<{ ok: boolean; result?: T; error?: string }> {
+  return (await call(client, "execute", { code })) as { ok: boolean; result?: T; error?: string };
+}
+
+/** Run an `oi` program and return its `result`, asserting it succeeded — the only way to reach the
+ * workspace/app methods (oi.listApps(), oi.app(id).runSql(...)) now that nothing is a native tool. */
+async function runResult<T>(client: Client, code: string): Promise<T> {
+  const out = await runCode<T>(client, code);
+  expect(out.ok, out.error).toBe(true);
+  return out.result as T;
+}
+
+/** Run an `oi` program expected to THROW (e.g. an app-resolution failure, which oi.app() raises),
+ * returning execute's surfaced error string. */
+async function runError(client: Client, code: string): Promise<string> {
+  const out = await runCode(client, code);
+  expect(out.ok, "expected the program to throw").toBe(false);
+  return out.error ?? "";
+}
+
+describe("resolveApp — oi.app(id) inside execute", () => {
+  it("omitting the id resolves to the sole app in a single-app workspace", async () => {
     const client = await connect(workspace(["finance"]));
-    const ov = (await call(client, "get_overview")) as { ok: boolean; title: string };
+    const ov = await runResult<{ ok: boolean; title: string }>(client, `return await oi.app().getOverview();`);
     expect(ov.ok).toBe(true);
     expect(ov.title).toBe("Finance Overview");
   });
 
-  it("omitting app in a multi-app workspace errors and names the available apps", async () => {
+  it("omitting the id in a multi-app workspace throws and names the available apps", async () => {
     const client = await connect(workspace(["finance", "health"]));
-    const ov = (await call(client, "get_overview")) as { ok: boolean; error: string };
-    expect(ov.ok).toBe(false);
-    expect(ov.error).toMatch(/multiple apps/i);
-    expect(ov.error).toContain("finance");
-    expect(ov.error).toContain("health");
+    const error = await runError(client, `return await oi.app().getOverview();`);
+    expect(error).toMatch(/multiple apps/i);
+    expect(error).toContain("finance");
+    expect(error).toContain("health");
   });
 
-  it("an explicit app selects the right app's manifest", async () => {
+  it("an explicit id selects the right app's manifest", async () => {
     const client = await connect(workspace(["finance", "health"]));
-    const finance = (await call(client, "get_overview", { app: "finance" })) as { ok: boolean; title: string };
-    expect(finance.ok).toBe(true);
-    expect(finance.title).toBe("Finance Overview");
-    const health = (await call(client, "get_overview", { app: "health" })) as { ok: boolean; title: string };
-    expect(health.ok).toBe(true);
-    expect(health.title).toBe("health title");
+    const out = await runResult<{ finance: { ok: boolean; title: string }; health: { ok: boolean; title: string } }>(
+      client,
+      `
+        const finance = await oi.app("finance").getOverview();
+        const health = await oi.app("health").getOverview();
+        return { finance, health };
+      `,
+    );
+    expect(out.finance.ok).toBe(true);
+    expect(out.finance.title).toBe("Finance Overview");
+    expect(out.health.ok).toBe(true);
+    expect(out.health.title).toBe("health title");
   });
 
-  it("an unknown app errors and lists the available ids", async () => {
+  it("an unknown id throws and lists the available ids", async () => {
     const client = await connect(workspace(["finance", "health"]));
-    const ov = (await call(client, "get_overview", { app: "ghost" })) as { ok: boolean; error: string };
-    expect(ov.ok).toBe(false);
-    expect(ov.error).toMatch(/unknown app 'ghost'/i);
-    expect(ov.error).toMatch(/finance/);
-    expect(ov.error).toMatch(/health/);
+    const error = await runError(client, `return await oi.app("ghost").getOverview();`);
+    expect(error).toMatch(/unknown app 'ghost'/i);
+    expect(error).toMatch(/finance/);
+    expect(error).toMatch(/health/);
   });
 
-  it("an empty workspace errors with 'no apps found'", async () => {
+  it("an empty workspace throws 'no apps found'", async () => {
     const client = await connect(mkdtempSync(join(tmpdir(), "oi-mcp-empty-")));
-    const ov = (await call(client, "get_overview")) as { ok: boolean; error: string };
-    expect(ov.ok).toBe(false);
-    expect(ov.error).toMatch(/no apps found/i);
+    const error = await runError(client, `return await oi.app().getOverview();`);
+    expect(error).toMatch(/no apps found/i);
   });
 
   it("an invalid app id is rejected before lookup", async () => {
     const client = await connect(workspace(["finance"]));
-    const ov = (await call(client, "get_overview", { app: "../escape" })) as { ok: boolean; error: string };
-    expect(ov.ok).toBe(false);
-    expect(ov.error).toMatch(/invalid app id/i);
+    const error = await runError(client, `return await oi.app("../escape").getOverview();`);
+    expect(error).toMatch(/invalid app id/i);
   });
 
-  it("the explicit app routes app-scoped reads to the right files (run_sql)", async () => {
+  it("routes app-scoped reads to the right files", async () => {
     const client = await connect(workspace(["finance", "health"]));
-    const ran = (await call(client, "run_sql", { app: "finance", dataset: "allocation", limit: 5 })) as { ok: boolean; rows: { class: string }[] };
-    expect(ran.ok).toBe(true);
-    expect(ran.rows.some((r) => r.class === "BTC")).toBe(true);
+    const out = await runResult<{ finance: { ok: boolean; rows: { class: string }[] }; health: { ok: boolean } }>(
+      client,
+      `
+        const finance = await oi.app("finance").runSql({ dataset: "allocation", limit: 5 });
+        const health = await oi.app("health").runSql({ dataset: "allocation", limit: 5 });
+        return { finance, health };
+      `,
+    );
+    expect(out.finance.ok).toBe(true);
+    expect(out.finance.rows.some((r) => r.class === "BTC")).toBe(true);
     // the health app has no such dataset — proves routing, not a shared engine
-    const missing = (await call(client, "run_sql", { app: "health", dataset: "allocation", limit: 5 })) as { ok: boolean; error: string };
-    expect(missing.ok).toBe(false);
+    expect(out.health.ok).toBe(false);
   });
 });
 
-describe("list_apps", () => {
+describe("oi.listApps() — workspace listing via execute", () => {
   it("returns every app with its id, manifest title, and dir", async () => {
     const root = workspace(["finance", "health"]);
     const client = await connect(root);
-    const { ok, apps } = (await call(client, "list_apps")) as { ok: boolean; apps: { id: string; title: string; dir: string }[] };
+    const { ok, apps } = await runResult<{ ok: boolean; apps: { id: string; title: string; dir: string }[] }>(client, `return await oi.listApps();`);
     expect(ok).toBe(true);
     const byId = Object.fromEntries(apps.map((a) => [a.id, a]));
     expect(Object.keys(byId).toSorted()).toEqual(["finance", "health"]);
@@ -151,63 +183,63 @@ describe("list_apps", () => {
 
   it("returns an empty list for an empty workspace", async () => {
     const client = await connect(mkdtempSync(join(tmpdir(), "oi-mcp-empty-")));
-    const { ok, apps } = (await call(client, "list_apps")) as { ok: boolean; apps: unknown[] };
+    const { ok, apps } = await runResult<{ ok: boolean; apps: unknown[] }>(client, `return await oi.listApps();`);
     expect(ok).toBe(true);
     expect(apps).toEqual([]);
   });
 });
 
-describe("create_app", () => {
-  it("scaffolds an app that list_apps then shows and tools can target by app", async () => {
+describe("oi.createApp", () => {
+  it("scaffolds an app that oi.listApps() then shows and oi.app(id) can target", async () => {
     const root = workspace(["finance"]);
     const client = await connect(root);
 
-    const created = (await call(client, "create_app", { id: "ops", title: "Operations" })) as { ok: boolean; id: string; dir: string };
+    const created = await runResult<{ ok: boolean; id: string; dir: string }>(client, `return await oi.createApp({ id: "ops", title: "Operations" });`);
     expect(created.ok).toBe(true);
     expect(created.id).toBe("ops");
     appDirs.push(created.dir);
     for (const sub of ["app", "data", "models", "docs"]) expect(existsSync(join(created.dir, sub))).toBe(true);
     expect(existsSync(join(created.dir, "app", "manifest.json"))).toBe(true);
 
-    const { apps } = (await call(client, "list_apps")) as { apps: { id: string }[] };
+    const { apps } = await runResult<{ apps: { id: string }[] }>(client, `return await oi.listApps();`);
     expect(apps.map((a) => a.id).toSorted()).toEqual(["finance", "ops"]);
 
-    // the new app is now selectable; with 2 apps the call must carry `app`
-    const ov = (await call(client, "get_overview", { app: "ops" })) as { ok: boolean; title: string };
+    // the new app is now selectable; with 2 apps the program must name the id
+    const ov = await runResult<{ ok: boolean; title: string }>(client, `return await oi.app("ops").getOverview();`);
     expect(ov.ok).toBe(true);
     expect(ov.title).toBe("Operations");
   });
 
   it("defaults the title to the id when none is given", async () => {
     const client = await connect(workspace(["finance"]));
-    const created = (await call(client, "create_app", { id: "bare" })) as { ok: boolean; dir: string };
+    const created = await runResult<{ ok: boolean; dir: string }>(client, `return await oi.createApp({ id: "bare" });`);
     expect(created.ok).toBe(true);
     appDirs.push(created.dir);
-    const ov = (await call(client, "get_overview", { app: "bare" })) as { ok: boolean; title: string };
+    const ov = await runResult<{ title: string }>(client, `return await oi.app("bare").getOverview();`);
     expect(ov.title).toBe("bare");
   });
 
-  it("rejects a duplicate create_app", async () => {
+  it("rejects a duplicate create", async () => {
     const client = await connect(workspace(["finance"]));
-    const dup = (await call(client, "create_app", { id: "finance" })) as { ok: boolean; error: string };
+    const dup = await runResult<{ ok: boolean; error: string }>(client, `return await oi.createApp({ id: "finance" });`);
     expect(dup.ok).toBe(false);
     expect(dup.error).toMatch(/already exists/i);
   });
 
   it("rejects an unsafe app id", async () => {
     const client = await connect(workspace(["finance"]));
-    const bad = (await call(client, "create_app", { id: "../evil" })) as { ok: boolean; error: string };
+    const bad = await runResult<{ ok: boolean; error: string }>(client, `return await oi.createApp({ id: "../evil" });`);
     expect(bad.ok).toBe(false);
     expect(bad.error).toMatch(/invalid app id/i);
   });
 });
 
-describe("delete_app — reversible soft-archive", () => {
-  it("moves the app into .openislands/trash and drops it from list_apps", async () => {
+describe("oi.deleteApp — reversible soft-archive", () => {
+  it("moves the app into .openislands/trash and drops it from oi.listApps()", async () => {
     const root = workspace(["finance", "health"]);
     const client = await connect(root);
 
-    const archived = (await call(client, "delete_app", { id: "health" })) as { ok: boolean; archivedTo: string };
+    const archived = await runResult<{ ok: boolean; archivedTo: string }>(client, `return await oi.deleteApp({ id: "health" });`);
     expect(archived.ok).toBe(true);
     expect(archived.archivedTo).toContain(join(".openislands", "trash"));
 
@@ -217,25 +249,25 @@ describe("delete_app — reversible soft-archive", () => {
     const trashed = readdirSync(join(root, ".openislands", "trash"));
     expect(trashed.some((d) => d.startsWith("health-"))).toBe(true);
 
-    const { apps } = (await call(client, "list_apps")) as { apps: { id: string }[] };
+    const { apps } = await runResult<{ apps: { id: string }[] }>(client, `return await oi.listApps();`);
     expect(apps.map((a) => a.id)).toEqual(["finance"]);
 
-    // with the sole remaining app, an unqualified tool call resolves again
-    const ov = (await call(client, "get_overview")) as { ok: boolean; title: string };
+    // with the sole remaining app, an unqualified oi.app() resolves again
+    const ov = await runResult<{ ok: boolean; title: string }>(client, `return await oi.app().getOverview();`);
     expect(ov.ok).toBe(true);
     expect(ov.title).toBe("Finance Overview");
   });
 
   it("rejects deleting an unknown app", async () => {
     const client = await connect(workspace(["finance"]));
-    const out = (await call(client, "delete_app", { id: "ghost" })) as { ok: boolean; error: string };
+    const out = await runResult<{ ok: boolean; error: string }>(client, `return await oi.deleteApp({ id: "ghost" });`);
     expect(out.ok).toBe(false);
     expect(out.error).toMatch(/unknown app 'ghost'/i);
   });
 
   it("rejects an unsafe app id", async () => {
     const client = await connect(workspace(["finance"]));
-    const out = (await call(client, "delete_app", { id: "../evil" })) as { ok: boolean; error: string };
+    const out = await runResult<{ ok: boolean; error: string }>(client, `return await oi.deleteApp({ id: "../evil" });`);
     expect(out.ok).toBe(false);
     expect(out.error).toMatch(/invalid app id/i);
   });

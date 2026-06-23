@@ -63,7 +63,7 @@ Now a `breakdown.treemap` can bind cleanly to `allocation` with `label: "class"`
 
 ## The contract check
 
-This is the safety net. When you run `validate` (or an agent calls `replace_manifest`), the
+This is the safety net. When you run `validate` (or an agent calls `oi.app().replaceManifest`), the
 compiler materializes each dataset, asks DuckDB for its columns and types, and checks every
 island binding against that live schema:
 
@@ -101,6 +101,6 @@ checkpointed pipeline, so writes are reversible:
   datasets on a schedule.
 
 Both run through the same snapshot-before-write machinery the agent edit loop uses. See
-[MCP Server](/mcp) for how an agent drives actions (`run_action`) and connectors
-(`run_sync`) safely, and the [Manifest Reference](/reference/manifest) for their full
+[MCP Server](/mcp) for how an agent drives actions (`oi.app().runAction`) and connectors
+(`oi.app().runSync`) safely, and the [Manifest Reference](/reference/manifest) for their full
 declaration shape.

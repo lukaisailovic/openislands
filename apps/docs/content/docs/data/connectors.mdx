@@ -66,7 +66,7 @@ Once connected, rows arrive three ways:
   it's overdue and on the interval after that.
 - **From the CLI.** `openislands sync` pulls every configured connector once and exits;
   `openislands sync . whoop` runs a single one. Cron this for a headless refresh.
-- **From an agent.** `run_sync({ name })` over [MCP](/mcp) pulls and writes, returning
+- **From an agent.** `oi.app().runSync(name)` over [MCP](/mcp) pulls and writes, returning
   rows-per-dataset and a `checkpoint_id`.
 
 Every path writes through the snapshot-before-write machinery, so `rollback` undoes a sync the
@@ -199,8 +199,8 @@ own copies.
 
 ## Status and troubleshooting
 
-`list_connectors` over MCP, `openislands sync`, and the dashboard all read the same status per
-connector:
+`oi.app().listConnectors()` over MCP, `openislands sync`, and the dashboard all read the same status
+per connector:
 
 - `connected`: OAuth is complete, the bearer token env var is set, or for a keyless connector,
   every secret is present.
@@ -217,4 +217,4 @@ outputs, a cursor for the append-only ones, and a full pull-and-shape `sync`.
 
 - [Actions](/data/actions): the manual write path connectors build on.
 - [Data Contracts](/concepts/data-contracts): what makes a dataset a writable `source`.
-- [MCP Server](/mcp): `list_connectors` and `run_sync` inside the agent loop.
+- [MCP Server](/mcp): `oi.app().listConnectors()` and `runSync` inside the agent loop.

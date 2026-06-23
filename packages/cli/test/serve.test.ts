@@ -63,7 +63,7 @@ describe("assertMcpHostSafe", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     assertMcpHostSafe("0.0.0.0", true, null);
     expect(exit).toHaveBeenCalledWith(1);
-    expect(err.mock.calls.flat().join(" ")).toMatch(/write surface|apply_edit|run_action/);
+    expect(err.mock.calls.flat().join(" ")).toMatch(/write surface|execute/);
   });
 });
 

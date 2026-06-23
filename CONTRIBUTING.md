@@ -24,7 +24,7 @@ package's `test/` (not `src/`, so the bundler doesn't ship them).
 | `packages/compiler` | the DuckDB query core: files → typed contracts, run live |
 | `packages/runtime` | the TanStack Start SSR app + island renderers |
 | `packages/cli` | the `openislands` command (init / validate / serve / add) |
-| `packages/mcp-server` | the MCP edit loop (`@openislands/mcp`) |
+| `packages/mcp-server` | the MCP edit loop (`@openislands/mcp`) in Code Mode — one `execute` tool driving the whole `oi` API |
 
 ## Adding an island
 
@@ -60,11 +60,15 @@ rather than expanding the core.
 per package through Turborepo — the build (Oxc) strips types without checking them,
 so this is the only gate that does.
 
-Changing the MCP tool surface (descriptions, schemas, result shapes, renames)? The
-deterministic guardrails in `packages/mcp-server/test/tool-surface.test.ts` lock down
-its token cost, the canonical agent walkthroughs, and the result contract — keep them
-green. A tool that inlines a big typed `inputSchema` (e.g. the island catalog) trips
-the budget guard; keep manifest-edit inputs loose and let `dryCheck` validate.
+Changing the MCP surface? The server runs in **Code Mode** — one `execute` tool drives the whole
+`oi` API in a `node:vm` sandbox; that single tool (plus two read-only resources) is the entire
+surface. **A new operation is a method, not a new tool:** add it to the `AppApi` interface and
+`createAppApi` in `packages/mcp-server/src/api.ts`, and add its declaration to the `OI_API_DECL` doc
+string in `packages/mcp-server/src/server.ts` (the embedded TypeScript the model programs against).
+Don't register another tool for it. The deterministic guardrails in
+`packages/mcp-server/test/tool-surface.test.ts` lock down the single-tool surface and its token cost,
+the `OI_API_DECL` ↔ `AppApi` method-name parity, the canonical agent walkthroughs, and the result
+contract — keep them green.
 
 ## Releasing
 

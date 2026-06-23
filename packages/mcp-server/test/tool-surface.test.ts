@@ -1,22 +1,23 @@
 /**
  * Tool-surface guardrails for @openislands/mcp — deterministic, no AI, no network, no secrets.
  *
- * Ported from the retired `evals/run.ts` + `skills/mcp-evals` harness: same in-process MCP
- * client over InMemoryTransport, the same capability-aliased resolver and shape-agnostic
- * unwrap (so the checks survive a future tool rename), but as plain Vitest assertions that
- * run under `pnpm test` + CI instead of a report-writing CLI. Nothing here is shipped — `test/`
- * is stripped from the published `dist`.
+ * Same in-process MCP client over InMemoryTransport, the finance fixture, and the connector
+ * helper as before, but the surface is now PURE Code Mode: exactly ONE tool — `execute` — with
+ * every operation reachable only as a method on `oi` inside it. The canonical agent tasks that
+ * used to be one-tool-per-step are now single `execute` programs. Nothing here is shipped —
+ * `test/` is stripped from the published `dist`.
  *
  * What it locks down:
- *  - BUDGET (the marquee guard): the whole tool-definition surface stays well under a token
- *    ceiling, and no single tool runs away. This catches the regression where patch_manifest
- *    inlined the island catalog through a typed inputSchema and ballooned the surface from
- *    ~4.9k to ~106k est. tokens — a cost every session pays just to learn the tools.
- *  - WALKTHROUGHS: each canonical agent task completes through the real pipeline within a
- *    bounded number of calls and response size.
- *  - CONTRACT: every result is an enveloped object carrying `ok` (except get_manifest's raw
- *    doc); every outputSchema tool returns matching structuredContent; list tools return
- *    { ok, <name>: [...] } rather than a bare array.
+ *  - SURFACE: listTools() is exactly [execute] — no atomic tools remain (the two read-only
+ *    resources live alongside it but aren't tools).
+ *  - BUDGET (the marquee guard): execute is the only/fattest tool (its description embeds the `oi`
+ *    TS API, ~2.3k est. tokens) and stays under both the per-tool and the total ceiling.
+ *  - WALKTHROUGHS: each canonical agent task completes inside ONE execute call (orient; add a
+ *    KPI; add a CSV + chart; author + run a query; log a row; fix a binding error; connect + sync).
+ *  - CONTRACT: execute returns an enveloped { ok, …, logs } object; a response that returns a huge
+ *    dump is truncated (the response cap, not just the defs).
+ *  - PARITY: the method names on `oi.app()` match the AppApi interface documented in server.ts —
+ *    neither has a name the other lacks (a doc the agent programs against can't silently drift).
  *
  * Token cost is estimated at ~4 chars/token — approximate in absolute terms but identical
  * run-to-run, which is all a guardrail needs.
@@ -35,11 +36,14 @@ const FIXTURE = join(import.meta.dirname, "fixtures", "finance");
 /** The workspace root that owns an app dir laid out as `<workspace>/apps/<id>`. */
 const workspaceOf = (appDir: string): string => dirname(dirname(appDir));
 
-/** Total tool-definition cost must stay well under this. Measured ~4.9k; the inlined-catalog
- * regression hit ~106k, so this ceiling sits far above today's surface yet far below the bloat. */
+/** The exact Code Mode tool surface — execute, nothing else. */
+const EXPECTED_TOOLS = ["execute"];
+
+/** Total tool-definition cost must stay well under this. The pre-Code-Mode surface was ~4.9k and
+ * a regression once hit ~106k; this ceiling sits far above today's surface yet far below that bloat. */
 const TOOL_SURFACE_TOKEN_BUDGET = 15_000;
-/** No single tool may run away. Measured fattest ~662 (patch_manifest); an inlined keystone
- * schema would blow past this on its own, before the total even matters. */
+/** No single tool may run away. execute is the fattest (it embeds the `oi` TS API in its
+ * description); it must still clear this ceiling. */
 const MAX_SINGLE_TOOL_TOKENS = 2_500;
 
 const estTokens = (chars: number): number => Math.ceil(chars / 4);
@@ -112,6 +116,7 @@ async function connect(appDir: string): Promise<Client> {
   return client;
 }
 
+/** Call a tool and parse its JSON text body (the server's `json(...)` envelope). */
 async function call(client: Client, name: string, args: Record<string, unknown> = {}): Promise<unknown> {
   const res = (await client.callTool({ name, arguments: args })) as { content: { text: string }[] };
   const body = res.content[0]!.text;
@@ -122,376 +127,321 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
   }
 }
 
-/** Capability → the tool names that could serve it, newest first. The walkthroughs ask for a
- * capability and the session picks the first name the live server exposes, so a future rename
- * is a one-line ALIASES edit rather than a rewrite of every scripted task. */
-const ALIASES: Record<string, string[]> = {
-  orient: ["get_overview"],
-  islandSchema: ["get_island_schema"],
-  dataSchema: ["get_data_schema"],
-  adhocRead: ["run_sql", "query_data"],
-  validateManifest: ["validate_manifest"],
-  stagePatch: ["patch_manifest"],
-  stageFull: ["replace_manifest", "propose_edit"],
-  apply: ["apply_edit"],
-  listActions: ["list_actions"],
-  runAction: ["run_action"],
-  listQueries: ["list_queries"],
-  runQuery: ["run_query"],
-  listConnectors: ["list_connectors"],
-  runSync: ["run_sync"],
-};
-
-/** Shape-agnostic: an enveloped `{ ok, <key>: [...] }` OR a bare value (pre-envelope). */
-function unwrap<T = unknown>(res: unknown, key: string): T {
-  if (Array.isArray(res)) return res as T;
-  if (res && typeof res === "object" && key in (res as Record<string, unknown>)) return (res as Record<string, unknown>)[key] as T;
-  return res as T;
+/** The shape `execute` always returns: { ok, result?, logs, error?, … }. */
+interface RunCodeBody {
+  ok: boolean;
+  result?: unknown;
+  logs: string[];
+  error?: string;
+  result_truncated?: boolean;
+  logs_truncated?: boolean;
+  checkpoints_created?: string[];
 }
 
-const isOk = (res: unknown): boolean => !!res && typeof res === "object" && (res as { ok?: boolean }).ok !== false;
-
-/** An in-process MCP client that resolves calls by capability and meters calls + response chars,
- * so a walkthrough reads as the scripted tool sequence an agent would run. */
-interface Session {
-  root: string;
-  calls: number;
-  chars: number;
-  call(cap: string, args?: Record<string, unknown>): Promise<unknown>;
+/** Run an `oi` program through the execute tool and return its parsed envelope + the response
+ * char count (for the response-size budget — the def budget can't see what a script returns). */
+async function runCode(client: Client, code: string): Promise<{ body: RunCodeBody; chars: number }> {
+  const res = (await client.callTool({ name: "execute", arguments: { code } })) as { content: { text: string }[] };
+  const text = res.content[0]!.text;
+  return { body: JSON.parse(text) as RunCodeBody, chars: text.length };
 }
 
-async function session(root: string): Promise<Session> {
-  const client = await connect(root);
-  const names = new Set((await client.listTools()).tools.map((t) => t.name));
-  const resolve = (cap: string): string => {
-    const candidates = ALIASES[cap] ?? [cap];
-    const hit = candidates.find((n) => names.has(n));
-    if (!hit) throw new Error(`no tool for capability '${cap}' (tried ${candidates.join(", ")})`);
-    return hit;
-  };
-  const s: Session = {
-    root,
-    calls: 0,
-    chars: 0,
-    async call(cap, args = {}) {
-      s.calls += 1;
-      const res = (await client.callTool({ name: resolve(cap), arguments: args })) as { content?: { text?: string }[] };
-      const txt = (res.content ?? []).map((c) => c.text ?? "").join("");
-      s.chars += txt.length;
-      try {
-        return JSON.parse(txt);
-      } catch {
-        return txt;
-      }
-    },
-  };
-  return s;
-}
+describe("tool-definition surface + budget", () => {
+  it("registers exactly one tool: execute", async () => {
+    const tools = (await (await connect(freshFinance())).listTools()).tools;
+    expect(tools).toHaveLength(1);
+    expect(tools.map((t) => t.name)).toEqual(EXPECTED_TOOLS);
+  });
 
-/** Drive a scripted task, then assert it stayed within its call + response-token budget. The
- * steps assert success exactly; the budgets are documented ceilings (with headroom), not exact
- * counts, so honest churn doesn't flap the suite while a real regression still trips it. */
-async function walkthrough(root: string, max: { calls: number; tokens: number }, steps: (s: Session) => Promise<void>): Promise<void> {
-  const s = await session(root);
-  await steps(s);
-  expect(s.calls, "tool calls").toBeLessThanOrEqual(max.calls);
-  expect(estTokens(s.chars), "response tokens").toBeLessThan(max.tokens);
-}
-
-describe("tool-definition budget", () => {
-  it("the whole surface stays well under budget and no single tool runs away", async () => {
+  it("the whole surface stays well under budget and the single tool doesn't run away", async () => {
     const tools = (await (await connect(freshFinance())).listTools()).tools;
     const perTool = tools.map((t) => ({ name: t.name, tokens: estTokens(JSON.stringify(t).length) }));
     const total = perTool.reduce((sum, t) => sum + t.tokens, 0);
     const fattest = perTool.toSorted((a, b) => b.tokens - a.tokens)[0]!;
 
     expect(total, `${perTool.length} tools, ~${total} est. tokens; fattest ${fattest.name} (${fattest.tokens})`).toBeLessThan(TOOL_SURFACE_TOKEN_BUDGET);
+    // execute is the only tool, and it carries the embedded `oi` API, so it is the fattest by design.
+    expect(fattest.name, "execute is the only tool").toBe("execute");
     expect(fattest.tokens, `${fattest.name} is the fattest tool`).toBeLessThan(MAX_SINGLE_TOOL_TOKENS);
   });
 });
 
-describe("canonical task walkthroughs", () => {
-  it("orient cold — one call yields a usable map", async () => {
-    await walkthrough(freshFinance(), { calls: 1, tokens: 1000 }, async (s) => {
-      const ov = (await s.call("orient")) as { pages?: unknown[] };
-      expect(isOk(ov)).toBe(true);
-      expect(unwrap(ov, "datasets")).toBeTruthy();
-      expect(ov.pages).toBeTruthy();
-    });
+describe("canonical task walkthroughs — one execute program each", () => {
+  it("orient cold — one program yields a usable map", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const ov = await oi.app().getOverview();
+      return { ok: ov.ok, title: ov.title, datasets: Object.keys(ov.datasets), pages: ov.pages.length };
+    `);
+    expect(body.ok).toBe(true);
+    const r = body.result as { ok: boolean; title: string; datasets: string[]; pages: number };
+    expect(r.ok).toBe(true);
+    expect(r.title).toBe("Finance Overview");
+    expect(r.datasets.toSorted()).toEqual(["allocation", "net_worth_monthly", "notes"]);
+    expect(r.pages).toBe(1);
   });
 
-  it("add a KPI — orient, ground, patch, apply", async () => {
-    await walkthrough(freshFinance(), { calls: 4, tokens: 3200 }, async (s) => {
-      const ov = (await s.call("orient")) as { pages: { id: string; title?: string; islands: unknown[] }[] };
-      await s.call("islandSchema", { type: "metric.kpi" });
-      const page = ov.pages[0]!;
+  it("add a KPI — orient, ground, patch, apply, all in one program", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const ov = await app.getOverview();
+      const schema = await app.getIslandSchema("metric.kpi");
+      if (!schema.ok) return { failed: "schema" };
+      const page = ov.pages[0];
       page.islands.push({ type: "metric.kpi", title: "Target", dataset: "net_worth_monthly", value: "target_eur", format: "eur", span: 4 });
-      const staged = (await s.call("stagePatch", { pages: [page] })) as { proposal_id?: string };
-      expect(isOk(staged)).toBe(true);
-      expect(staged.proposal_id).toBeTruthy();
-      expect(isOk(await s.call("apply", { proposal_id: staged.proposal_id }))).toBe(true);
-    });
+      const staged = await app.patchManifest({ pages: [page] });
+      if (!staged.ok) return { failed: "stage", errors: staged.errors };
+      const applied = await app.applyEdit(staged.proposal_id);
+      return { stagedOk: staged.ok, appliedOk: applied.ok };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toMatchObject({ stagedOk: true, appliedOk: true });
+    expect(body.checkpoints_created?.length).toBe(1);
   });
 
-  it("add a CSV + chart — bring a new file in and bind it", async () => {
-    await walkthrough(freshFinance(), { calls: 3, tokens: 2500 }, async (s) => {
-      writeFileSync(join(s.root, "data", "crypto.csv"), "coin,amount_eur\nBTC,50000\nETH,20000\n");
-      await s.call("orient");
-      const staged = (await s.call("stagePatch", {
+  it("add a CSV + chart — bring a new file in and bind it in one program", async () => {
+    const root = freshFinance();
+    writeFileSync(join(root, "data", "crypto.csv"), "coin,amount_eur\nBTC,50000\nETH,20000\n");
+    const { body } = await runCode(await connect(root), `
+      const app = oi.app();
+      const staged = await app.patchManifest({
         datasets: { crypto: { source: "data/crypto.csv", description: "holdings" } },
         pages: [{ id: "crypto", title: "Crypto", islands: [{ type: "rank.list", title: "By coin", dataset: "crypto", label: "coin", value: "amount_eur", span: 12 }] }],
-      })) as { proposal_id?: string };
-      expect(isOk(staged)).toBe(true);
-      expect(staged.proposal_id).toBeTruthy();
-      expect(isOk(await s.call("apply", { proposal_id: staged.proposal_id }))).toBe(true);
-    });
+      });
+      if (!staged.ok) return { failed: "stage", errors: staged.errors };
+      return await app.applyEdit(staged.proposal_id);
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toMatchObject({ ok: true });
+    expect(JSON.parse(readFileSync(join(root, "app", "manifest.json"), "utf8")).datasets.crypto.source).toBe("data/crypto.csv");
   });
 
-  it("author + run a query — declare a typed read and run it", async () => {
-    await walkthrough(freshFinance(), { calls: 5, tokens: 2800 }, async (s) => {
-      await s.call("orient");
-      const staged = (await s.call("stagePatch", {
+  it("author + run a query — declare a typed read and run it in one program", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const staged = await app.patchManifest({
         queries: { by_class: { dataset: "allocation", select: ["class", "value_eur"], params: { class: { type: "string" } }, where: [{ field: "class", op: "eq", param: "class" }] } },
-      })) as { proposal_id?: string };
-      expect(isOk(staged)).toBe(true);
-      expect(staged.proposal_id).toBeTruthy();
-      expect(isOk(await s.call("apply", { proposal_id: staged.proposal_id }))).toBe(true);
-      await s.call("listQueries");
-      const ran = (await s.call("runQuery", { name: "by_class", params: { class: "BTC" } })) as { rows?: { class: string }[] };
-      expect(isOk(ran)).toBe(true);
-      expect(ran.rows?.[0]?.class).toBe("BTC");
-    });
+      });
+      if (!staged.ok) return { failed: "stage", errors: staged.errors };
+      const applied = await app.applyEdit(staged.proposal_id);
+      const ran = await app.runQuery("by_class", { class: "BTC" });
+      return { appliedOk: applied.ok, firstClass: ran.rows[0]?.class };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toMatchObject({ appliedOk: true, firstClass: "BTC" });
   });
 
-  it("log a row — discover the action and append through it", async () => {
-    await walkthrough(freshFinance(), { calls: 3, tokens: 1300 }, async (s) => {
-      await s.call("orient");
-      await s.call("listActions");
-      const out = (await s.call("runAction", { name: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] })) as { inserted?: number };
-      expect(isOk(out)).toBe(true);
-      expect(out.inserted).toBe(1);
-    });
+  it("log a row — discover the action and append through it in one program", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const { actions } = await app.listActions();
+      const out = await app.runAction("log_allocation", [{ class: "Stocks", value_eur: 250000 }]);
+      return { hasAction: actions.some((a) => a.name === "log_allocation"), ok: out.ok, inserted: out.inserted };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toMatchObject({ hasAction: true, ok: true, inserted: 1 });
+    expect(body.checkpoints_created?.length).toBe(1);
   });
 
-  it("fix a binding error — validate surfaces it, then patch the real column", async () => {
+  it("fix a binding error — validate surfaces it, then patch the real column in one program", async () => {
     const root = freshFinance();
     const m = JSON.parse(readFileSync(join(root, "app", "manifest.json"), "utf8"));
     m.pages[0].islands[0].value = "does_not_exist";
     writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m, null, 2));
 
-    await walkthrough(root, { calls: 4, tokens: 900 }, async (s) => {
-      const v = await s.call("validateManifest");
-      expect(isOk(v), "the binding error must surface, not pass").toBe(false);
-      await s.call("dataSchema", { dataset: "net_worth_monthly" });
-      const staged = (await s.call("stagePatch", {
-        pages: [
-          {
-            id: "overview",
-            title: "Overview",
-            islands: [
-              { type: "metric.kpi", title: "Net worth", dataset: "net_worth_monthly", value: "net_worth_eur", compareTo: "prev", format: "eur", span: 4 },
-              { type: "timeseries.line", title: "Net worth over time", dataset: "net_worth_monthly", x: "month", y: "net_worth_eur", options: { goalField: "target_eur" }, span: 8 },
-              { type: "breakdown.treemap", title: "Allocation", dataset: "allocation", label: "class", value: "value_eur", span: 12 },
-            ],
-          },
-        ],
-      })) as { proposal_id?: string };
-      expect(isOk(staged)).toBe(true);
-      expect(staged.proposal_id).toBeTruthy();
-      expect(isOk(await s.call("apply", { proposal_id: staged.proposal_id }))).toBe(true);
-    });
+    const { body } = await runCode(await connect(root), `
+      const app = oi.app();
+      const before = await app.validateManifest();
+      const schema = await app.getDataSchema("net_worth_monthly");
+      const staged = await app.patchManifest({
+        pages: [{
+          id: "overview",
+          title: "Overview",
+          islands: [
+            { type: "metric.kpi", title: "Net worth", dataset: "net_worth_monthly", value: "net_worth_eur", compareTo: "prev", format: "eur", span: 4 },
+            { type: "timeseries.line", title: "Net worth over time", dataset: "net_worth_monthly", x: "month", y: "net_worth_eur", options: { goalField: "target_eur" }, span: 8 },
+            { type: "breakdown.treemap", title: "Allocation", dataset: "allocation", label: "class", value: "value_eur", span: 12 },
+          ],
+        }],
+      });
+      if (!staged.ok) return { failed: "stage", errors: staged.errors };
+      const applied = await app.applyEdit(staged.proposal_id);
+      return { brokenSurfaced: before.ok === false, hasColumn: schema.columns.some((c) => c.name === "net_worth_eur"), appliedOk: applied.ok };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toMatchObject({ brokenSurfaced: true, hasColumn: true, appliedOk: true });
   });
 
-  it("connect + sync — discover a connector and pull its rows", async () => {
+  it("connect + sync — discover a connector and pull its rows in one program", async () => {
     process.env.DEMO_TOKEN = "t";
-    await walkthrough(connectorProject(), { calls: 2, tokens: 400 }, async (s) => {
-      await s.call("listConnectors");
-      expect(isOk(await s.call("runSync", { name: "demo" }))).toBe(true);
-    });
+    const { body } = await runCode(await connect(connectorProject()), `
+      const app = oi.app();
+      const { connectors } = await app.listConnectors();
+      const synced = await app.runSync("demo");
+      const read = await app.runSql({ dataset: "logs" });
+      return { discovered: connectors.some((c) => c.name === "demo"), syncedOk: synced.ok, rowCount: read.rowCount };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toMatchObject({ discovered: true, syncedOk: true, rowCount: 2 });
   });
 });
 
-/** A valid manifest that stages clean against the finance fixture (allocation.csv exists,
- * note.card binds no data) — the smoke-call payload for the staging tools. */
-const PROBE_MANIFEST = {
-  version: 1,
-  title: "Probe",
-  datasets: { allocation: { source: "data/allocation.csv" } },
-  pages: [{ id: "p", islands: [{ type: "note.card", markdown: "x", span: 12 }] }],
-};
+describe("execute composition + safety", () => {
+  it("composes orient + a per-dataset SELECT loop in one call", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const ov = await app.getOverview();
+      const counts = {};
+      for (const name of Object.keys(ov.datasets)) counts[name] = (await app.runSql({ dataset: name, limit: 1 })).rowCount;
+      return counts;
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toEqual({ net_worth_monthly: 1, allocation: 1, notes: 1 });
+  });
 
-/** Minimal valid arguments to reach each tool's handler (past SDK input validation) so its
- * envelope can be inspected. ok:false is fine — these probe the contract, not success. Adding
- * or renaming a tool must add an entry here; the contract test fails loudly until it does. */
-const MINIMAL_ARGS: Record<string, Record<string, unknown>> = {
-  get_overview: {},
-  list_islands: {},
-  get_island_schema: { type: "metric.kpi" },
-  get_manifest: {},
-  get_data_schema: { dataset: "allocation" },
-  run_sql: { dataset: "allocation" },
-  validate_sql: { sql: "SELECT class FROM allocation" },
-  validate_manifest: {},
-  list_checkpoints: {},
-  prune_checkpoints: {},
-  replace_manifest: { manifest: PROBE_MANIFEST },
-  patch_manifest: { title: "Surface probe" },
-  apply_edit: { proposal_id: "prop-unknownunknownun" },
-  rollback: {},
-  list_actions: {},
-  run_action: { name: "nonexistent", rows: [{ x: 1 }] },
-  list_queries: {},
-  run_query: { name: "nonexistent" },
-  list_connectors: {},
-  run_sync: { name: "nonexistent" },
-  list_apps: {},
-  create_app: { id: "surface-probe-app" },
-  delete_app: { id: "nonexistent" },
-};
+  it("serializes a DuckDB BigInt count to a number rather than crashing", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      return await oi.app().runSql({ sql: "SELECT count(*) AS n FROM allocation" });
+    `);
+    expect(body.ok).toBe(true);
+    expect((body.result as { rows: { n: number }[] }).rows).toEqual([{ n: 3 }]);
+  });
 
-/** List tools and the array key each must envelope (never a bare array). */
-const LIST_TOOLS: Record<string, string> = {
-  list_islands: "islands",
-  list_actions: "actions",
-  list_queries: "queries",
-  list_connectors: "connectors",
-  list_checkpoints: "checkpoints",
-  list_apps: "apps",
-};
+  it("stage → apply → rollback in one script reports checkpoints and restores the title", async () => {
+    const root = freshFinance();
+    const { body } = await runCode(await connect(root), `
+      const app = oi.app();
+      const ov = await app.getOverview();
+      const original = ov.title;
+      const staged = await app.patchManifest({ title: "Renamed in script" });
+      const applied = await app.applyEdit(staged.proposal_id);
+      const afterApply = (await app.getOverview()).title;
+      const back = await app.rollback(applied.checkpoint_id);
+      const afterRollback = (await app.getOverview()).title;
+      return { original, afterApply, restored: back.ok, afterRollback };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toEqual({ original: "Finance Overview", afterApply: "Renamed in script", restored: true, afterRollback: "Finance Overview" });
+    // The applyEdit checkpoint is reported; the rollback restores it, leaving the file as it began.
+    expect(body.checkpoints_created?.length).toBe(1);
+    expect(readFileSync(join(root, "app", "manifest.json"), "utf8")).toBe(readFileSync(join(FIXTURE, "app", "manifest.json"), "utf8"));
+  });
+
+  it("a write then a read in the same script sees the new row (the engine resets on the dirty bit)", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const before = (await app.runSql({ dataset: "allocation" })).rowCount;
+      await app.runAction("log_allocation", [{ class: "Stocks", value_eur: 250000 }]);
+      const after = (await app.runSql({ dataset: "allocation" })).rowCount;
+      return { before, after };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toEqual({ before: 3, after: 4 });
+  });
+
+  it("reading the same dataset twice without an intervening write reuses the engine (no error)", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const a = (await app.runSql({ dataset: "allocation" })).rowCount;
+      const b = (await app.runSql({ dataset: "allocation" })).rowCount;
+      return { a, b };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toEqual({ a: 3, b: 3 });
+  });
+
+  it("the sandbox hides process/require and survives the textbook break-out", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const reachable = (() => { try { return this.constructor.constructor("return process")(); } catch { return null; } })();
+      return { process: typeof process, require: typeof require, reachedHost: reachable !== null };
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toEqual({ process: "undefined", require: "undefined", reachedHost: false });
+  });
+
+  it("surfaces a thrown error as { ok:false, error } without leaking host paths", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      await oi.app().getOverview();
+      throw new Error("script blew up");
+    `);
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/script blew up/);
+    expect(body.error).not.toMatch(/api\.js|server\.js|node_modules|node:internal/);
+  });
+});
 
 describe("result contract", () => {
-  it("every tool returns an enveloped object carrying `ok` (except get_manifest's raw doc)", async () => {
-    const root = freshFinance();
-    const client = await connect(root);
-    const liveNames = (await client.listTools()).tools.map((t) => t.name);
+  it("execute always returns an enveloped { ok, logs } object", async () => {
+    const client = await connect(freshFinance());
 
-    const uncovered = liveNames.filter((n) => !(n in MINIMAL_ARGS));
-    expect(uncovered, `tools missing a MINIMAL_ARGS smoke-call entry: ${uncovered.join(", ")}`).toEqual([]);
+    const ok = (await call(client, "execute", { code: `return await oi.app().getOverview();` })) as RunCodeBody;
+    expect(typeof ok).toBe("object");
+    expect(ok.ok).toBe(true);
+    expect(Array.isArray(ok.logs)).toBe(true);
 
-    for (const name of liveNames) {
-      const body = (await call(client, name, MINIMAL_ARGS[name]!)) as Record<string, unknown>;
-      expect(typeof body, name).toBe("object");
-      if (name === "get_manifest") {
-        // The lone exception: the raw manifest document, returned verbatim with no envelope.
-        expect("ok" in body, "get_manifest is the raw doc").toBe(false);
-        expect(body).toEqual(JSON.parse(readFileSync(join(root, "app", "manifest.json"), "utf8")));
-        continue;
-      }
-      expect("ok" in body, name).toBe(true);
-      expect(typeof body.ok, name).toBe("boolean");
-    }
+    // A thrown program still envelopes: ok:false with an error string and the logs array.
+    const failed = (await call(client, "execute", { code: `throw new Error("nope");` })) as RunCodeBody;
+    expect(failed.ok).toBe(false);
+    expect(failed.error).toMatch(/nope/);
+    expect(Array.isArray(failed.logs)).toBe(true);
   });
 
-  it("every outputSchema tool returns structuredContent that mirrors its text", async () => {
-    const client = await connect(freshFinance());
-    const structuredTools = (await client.listTools()).tools.filter((t) => t.outputSchema);
-    // Non-vacuous: the high-value reads + proposal tools all declare an outputSchema.
-    expect(structuredTools.length).toBeGreaterThanOrEqual(8);
+  it("a execute program returning a huge dump is truncated in the response", async () => {
+    // The tool-def budget can't see this — only the response cap can. A 10k-row dump blows past
+    // execute's default maxResultChars (~60k) and must come back as a flagged string.
+    const { body } = await runCode(await connect(freshFinance()), `
+      return Array.from({ length: 10000 }, (_, i) => ({ i, blob: "x".repeat(40) }));
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result_truncated).toBe(true);
+    expect(typeof body.result).toBe("string");
+    expect((body.result as string)).toMatch(/truncated/i);
+  });
 
-    for (const t of structuredTools) {
-      const res = (await client.callTool({ name: t.name, arguments: MINIMAL_ARGS[t.name]! })) as {
-        content: { text: string }[];
-        structuredContent?: Record<string, unknown>;
+  it("oi.app().getOverview() is concise by default and detailed on request", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const concise = await app.getOverview();
+      const detailed = await app.getOverview({ verbosity: "detailed" });
+      return {
+        conciseOk: concise.ok,
+        conciseHasRowSchema: concise.actions[0]?.rowSchema !== undefined,
+        detailedHasRowSchema: detailed.actions[0]?.rowSchema !== undefined,
       };
-      expect(res.structuredContent, t.name).toBeDefined();
-      expect(typeof res.structuredContent!.ok, t.name).toBe("boolean");
-      expect(JSON.parse(res.content[0]!.text), t.name).toEqual(res.structuredContent);
-    }
-  });
-
-  it("list tools envelope their array as { ok, <name>: [...] } — never a bare array", async () => {
-    const client = await connect(freshFinance());
-    for (const [name, key] of Object.entries(LIST_TOOLS)) {
-      const res = await call(client, name);
-      expect(Array.isArray(res), `${name} must not return a bare array`).toBe(false);
-      const obj = res as Record<string, unknown>;
-      expect(obj.ok, name).toBe(true);
-      expect(Array.isArray(obj[key]), `${name}.${key}`).toBe(true);
-    }
+    `);
+    expect(body.ok).toBe(true);
+    expect(body.result).toEqual({ conciseOk: true, conciseHasRowSchema: false, detailedHasRowSchema: true });
   });
 });
 
-const validManifest = (root: string): string => readFileSync(join(root, "app", "manifest.json"), "utf8");
+/** Extract the method names declared in the `interface AppApi { … }` block of OI_API_DECL inside
+ * server.ts. Each method is a `name(` at the start of a trimmed line; comment + blank lines are
+ * skipped. This is the doc the agent programs against, so it must match the real object exactly. */
+function documentedApiMethods(): string[] {
+  const src = readFileSync(join(import.meta.dirname, "..", "src", "server.ts"), "utf8");
+  const block = src.match(/interface AppApi \{([\s\S]*?)\n\}/);
+  if (!block) throw new Error("could not find the AppApi interface in server.ts");
+  const names = new Set<string>();
+  for (const line of block[1]!.split("\n")) {
+    const m = line.trim().match(/^([a-zA-Z]\w*)\s*\(/);
+    if (m) names.add(m[1]!);
+  }
+  return [...names].toSorted();
+}
 
-describe("extended walkthroughs", () => {
-  it("apply → rollback restores the manifest byte-for-byte", async () => {
-    const root = freshFinance();
-    const client = await connect(root);
-    const original = validManifest(root);
+/** Build the real `oi.app()` object (single-app workspace) and list its method names. */
+async function appApiMethods(): Promise<string[]> {
+  const { body } = await runCode(await connect(freshFinance()), `return Object.keys(oi.app()).sort();`);
+  return body.result as string[];
+}
 
-    const staged = (await call(client, "patch_manifest", { title: "Renamed" })) as { ok: boolean; proposal_id: string };
-    expect(staged.ok).toBe(true);
-    expect(isOk(await call(client, "apply_edit", { proposal_id: staged.proposal_id }))).toBe(true);
-    expect(validManifest(root)).not.toBe(original);
-
-    const back = (await call(client, "rollback")) as { ok: boolean };
-    expect(back.ok).toBe(true);
-    expect(validManifest(root)).toBe(original);
-  });
-
-  it("patch_manifest deletes a section entry with null", async () => {
-    const root = freshFinance();
-    const client = await connect(root);
-    expect(JSON.parse(validManifest(root)).actions.log_allocation).toBeDefined();
-
-    const staged = (await call(client, "patch_manifest", { actions: { log_allocation: null } })) as { ok: boolean; proposal_id: string };
-    expect(staged.ok).toBe(true);
-    expect(isOk(await call(client, "apply_edit", { proposal_id: staged.proposal_id }))).toBe(true);
-    expect(JSON.parse(validManifest(root)).actions).toBeUndefined();
-  });
-
-  it("apply_edit rejects a proposal made stale by an intervening apply", async () => {
-    const root = freshFinance();
-    const client = await connect(root);
-
-    const a = JSON.parse(validManifest(root));
-    a.title = "A";
-    const propA = (await call(client, "replace_manifest", { manifest: a })) as { proposal_id: string };
-
-    const b = JSON.parse(validManifest(root));
-    b.title = "B";
-    const propB = (await call(client, "replace_manifest", { manifest: b })) as { proposal_id: string };
-    expect(isOk(await call(client, "apply_edit", { proposal_id: propB.proposal_id }))).toBe(true);
-
-    const stale = (await call(client, "apply_edit", { proposal_id: propA.proposal_id })) as { ok: boolean; error: string };
-    expect(stale.ok).toBe(false);
-    expect(stale.error).toMatch(/stale/i);
-  });
-
-  it("validate_sql dry-runs an authored SELECT and rejects a non-SELECT", async () => {
-    const client = await connect(freshFinance());
-    const authored = (await call(client, "validate_sql", { sql: "SELECT class, SUM(value_eur) AS total FROM allocation GROUP BY class" })) as { ok: boolean; columns?: { name: string }[] };
-    expect(authored.ok).toBe(true);
-    expect(authored.columns!.map((c) => c.name).toSorted()).toEqual(["class", "total"]);
-
-    const rejected = (await call(client, "validate_sql", { sql: "DROP TABLE allocation" })) as { ok: boolean; error?: string };
-    expect(rejected.ok).toBe(false);
-    expect(rejected.error).toMatch(/read-only|SELECT/i);
-  });
-
-  it("binds a custom island once its schema exists, and rejects a config that breaks it", async () => {
-    const root = freshFinance();
-    const dir = join(root, "components", "custom", "gauge.ring");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(
-      join(dir, "schema.ts"),
-      `import { z } from "zod";\nexport default z.object({\n  type: z.literal("gauge.ring"),\n  dataset: z.string(),\n  rings: z.array(z.object({ value: z.string(), max: z.union([z.string(), z.number()]) })).min(1),\n});\n`,
-    );
-    const client = await connect(root);
-    const withRings = (rings: unknown): string => {
-      const m = JSON.parse(validManifest(root));
-      m.pages[0].islands = [{ type: "gauge.ring", title: "Rings", dataset: "allocation", rings }];
-      return JSON.stringify(m);
-    };
-
-    const bad = (await call(client, "replace_manifest", { manifest: withRings([{ max: "value_eur" }]) })) as { ok: boolean; proposal_id?: string; errors: { type: string; page: string; index: number }[] };
-    expect(bad.ok).toBe(false);
-    expect(bad.proposal_id).toBeUndefined();
-    expect(bad.errors.find((e) => e.type === "gauge.ring")).toMatchObject({ page: "overview", index: 0 });
-
-    const good = (await call(client, "replace_manifest", { manifest: withRings([{ value: "value_eur", max: "value_eur" }]) })) as { ok: boolean; proposal_id?: string };
-    expect(good.ok).toBe(true);
-    expect(good.proposal_id).toBeTruthy();
-    expect(isOk(await call(client, "apply_edit", { proposal_id: good.proposal_id }))).toBe(true);
+describe("api / doc parity", () => {
+  it("oi.app() method names match the AppApi interface documented in server.ts", async () => {
+    const documented = documentedApiMethods();
+    const actual = await appApiMethods();
+    expect(documented.length, "the parity check must see a non-trivial interface").toBeGreaterThan(10);
+    // Symmetric: neither the live object nor the embedded doc may carry a method the other lacks.
+    expect(actual, "methods documented but missing from oi.app()").toEqual(expect.arrayContaining(documented));
+    expect(documented, "methods on oi.app() but undocumented in OI_API_DECL").toEqual(expect.arrayContaining(actual));
+    expect(actual).toEqual(documented);
   });
 });

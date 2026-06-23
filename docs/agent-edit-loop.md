@@ -1,34 +1,46 @@
 # The agent edit loop
 
 How an agent changes a *live* OpenIslands dashboard safely — the MCP read-many/write-one
-path, the data write path (actions), and provider sync (connectors). Read this when working
-on `packages/mcp-server`, or when an agent maintains a user's dashboard over MCP. The
-user-facing version lives in `apps/docs/src/pages/mcp.mdx`.
+path in Code Mode, the data write path (actions), and provider sync (connectors). Read this when
+working on `packages/mcp-server`, or when an agent maintains a user's dashboard over MCP. The
+user-facing version lives in `apps/docs/content/docs/mcp.mdx`; the canonical agent-facing version is
+`skills/openislands/SKILL.md`.
 
-## The safe loop (MCP server `@openislands/mcp`)
+## The safe loop (MCP server `@openislands/mcp`, Code Mode)
 
 Read-many / write-one. An agent reads everything, but every change funnels through a single
 validated, snapshotted proposal-and-apply pipeline.
 
-**Read first:** `get_overview` (the manifest + every dataset's live columns + the declared
-actions/queries/connectors + the checkpoint count, in one call — the orientation entry point that
-saves a per-dataset `get_data_schema` + `list_*` fan-out), `list_islands` (built-in types +
-required fields), `get_island_schema(type)`,
-`get_manifest`, `get_data_schema(dataset)`, `run_sql({ dataset } | { sql }, limit)` — pass a
-`dataset` name for a whole dataset *or* a read-only `sql` SELECT over the registered dataset
-views, not both — `list_queries`/`run_query` (declared parameterized reads, see Queries below),
-`validate_manifest`, and `list_checkpoints` (rollback points, newest last).
+The server runs in **Code Mode**: instead of a tool per operation, the agent calls **one tool —
+`execute`** — and passes a small async JavaScript program that drives the `oi` API (loops,
+conditionals, chaining; `return` a value and/or `console.log`). It runs in a `node:vm` sandbox (no
+`require` / `process` / network, only `oi`) and returns `{ ok, result, logs, checkpoints_created? }`
+(or `{ ok:false, error, logs }` on a throw). `oi.listApps()` / `oi.createApp` / `oi.deleteApp` are
+workspace-level; `oi.app(id?)` returns the per-app API (omit `id` for the sole app). `execute` is the
+*entire* tool surface (plus two read-only resources for the app catalog + per-app manifests) — every
+operation, including creating/deleting an app, is an `oi` method reached from inside it. There are no
+separate per-operation tools.
 
-**The manifest write path:** `replace_manifest(manifest)` takes the **full** manifest, validates it
-+ checks every binding against the live data, and returns a `diff` — but does **not** write. If the
-data check fails it returns `{ ok: false, errors }` (each error names the page, island index, type,
-and missing field) with **no** `proposal_id`; fix the binding and propose again. On success it
-returns a `proposal_id`. Review the diff, then `apply_edit(proposal_id)` writes the manifest and
-snapshots the prior version as a checkpoint — its result includes `checkpoint_id`. A proposal is
-rejected if unknown or **stale** (the manifest on disk changed since it was proposed); re-run
-`replace_manifest`. `rollback(checkpoint_id?)` restores a checkpoint byte-for-byte (latest if omitted) —
-it restores manifest *and* data checkpoints; the id encodes the target file. There is no raw
-file-write tool and no git dependency by design — rollback safety is `.openislands/history/`
+**Read first** (all on `oi.app(id?)`): `getOverview()` (the manifest + every dataset's live columns +
+the declared actions/queries/connectors + the checkpoint count, in one call — the orientation entry
+point that saves a per-dataset `getDataSchema` + `list*` fan-out), `listIslands()` (built-in types +
+required fields), `getIslandSchema(type)`, `getManifest()`, `getDataSchema(dataset)`,
+`runSql({ dataset } | { sql }, limit)` — pass a `dataset` name for a whole dataset *or* a read-only
+`sql` SELECT over the registered dataset views, not both — `listQueries()`/`runQuery()` (declared
+parameterized reads, see Queries below), `validateManifest()`, and `listCheckpoints()` (rollback
+points, newest last).
+
+**The manifest write path:** `patchManifest(patch)` (preferred — merges one section into the current
+manifest) or `replaceManifest(manifest)` (the **full** manifest) validates the result + checks every
+binding against the live data, and returns a `diff` — but does **not** write. If the data check fails
+it returns `{ ok: false, errors }` (each error names the page, island index, type, and missing field)
+with **no** `proposal_id`; fix the binding and stage again. On success it returns a `proposal_id`.
+Review the diff, then `applyEdit(proposal_id)` writes the manifest and snapshots the prior version as
+a checkpoint — its result includes `checkpoint_id`. (A `proposal_id` persists across `execute` calls,
+so you can stage in one call and apply in the next.) A proposal is rejected if unknown or **stale**
+(the manifest on disk changed since it was staged); re-stage it. `rollback(checkpoint_id?)` restores a checkpoint byte-for-byte (latest if
+omitted) — it restores manifest *and* data checkpoints; the id encodes the target file. There is no
+raw file-write tool and no git dependency by design — rollback safety is `.openislands/history/`
 snapshots (count + byte capped, oldest pruned first).
 
 Without MCP, the same loop is: edit `app/manifest.json` → `openislands validate` → `openislands serve`.
@@ -36,12 +48,12 @@ Without MCP, the same loop is: edit `app/manifest.json` → `openislands validat
 ## Actions (the data write path)
 
 A manifest-declared, typed `insert` into a `source` dataset (CSV / JSON(L) and SQLite tables;
-only a derived `sql` dataset is never writable). Discover with `list_actions` (declared actions
-+ their resolved row JSON Schema, derived from the live data merged with the action's `fields`
-overrides), then `run_action(name, rows)` — every row is validated first; a bad row rejects the
-whole call with an error naming the row index + field and nothing is written (the result reports
-the rows `inserted`). The target file is snapshotted to `.openislands/history/` before the insert,
-so `rollback` covers data writes too. A SQLite-backed `source` insert is an `INSERT` into the
+only a derived `sql` dataset is never writable). Discover with `oi.app().listActions()` (declared
+actions + their resolved row JSON Schema, derived from the live data merged with the action's
+`fields` overrides), then `oi.app().runAction(name, rows)` — every row is validated first; a bad row
+rejects the whole call with an error naming the row index + field and nothing is written (the result
+reports the rows `inserted`). The target file is snapshotted to `.openislands/history/` before the
+insert, so `rollback` covers data writes too. A SQLite-backed `source` insert is an `INSERT` into the
 table; the file and table must already exist. Declare an action in the manifest:
 
 ```jsonc
@@ -72,16 +84,16 @@ identifiers are quoted).
   all columns. `groupBy`: array of column names. `orderBy`: array of `{ field, dir? }` (asc|desc).
   `limit`: integer.
 
-Discover with `list_queries` (each query's `name`, `description`, `params` as JSON Schema, result
-`columns`), then `run_query({ name, params?, limit? })` — params validated, `limit` 1–500, result
-row-capped. Success is `{ ok: true, rowCount, columns, rows }`; a bad param is
+Discover with `oi.app().listQueries()` (each query's `name`, `description`, `params` as JSON Schema,
+result `columns`), then `oi.app().runQuery(name, params?, { limit? })` — params validated, `limit`
+1–500, result row-capped. Success is `{ ok: true, rowCount, columns, rows }`; a bad param is
 `{ ok: false, errors }` (all-or-nothing), an unknown name or query error is `{ ok: false, error }`.
 
-Because the spec is plain JSON, an agent **authors** a query through the normal `replace_manifest` →
-`apply_edit` loop (the write path only ever writes the manifest) — it creates a read tool, not
-just runs one. `replace_manifest`/`validate` check the same thing as an island binding: the `dataset`
-exists and every `field` (in `where`/`select`/`groupBy`/`orderBy`) is a real column (else a named
-error).
+Because the spec is plain JSON, an agent **authors** a query through the normal
+`oi.app().patchManifest` → `applyEdit` loop (the write path only ever writes the manifest) — it
+creates a read tool, not just runs one. `patchManifest`/`replaceManifest`/`validate` check the same
+thing as an island binding: the `dataset` exists and every `field` (in
+`where`/`select`/`groupBy`/`orderBy`) is a real column (else a named error).
 
 ```jsonc
 "queries": {
@@ -123,9 +135,9 @@ checks the outputs — a bad config, unknown output, or invalid schedule is a na
 
 **The agent loop** (auth itself stays human-only — OAuth runs in the dashboard browser):
 
-- `list_connectors` → each connector's status: `connected`, `missingSecrets`, `lastSync`,
+- `oi.app().listConnectors()` → each connector's status: `connected`, `missingSecrets`, `lastSync`,
   `lastError`, effective `schedule`, `loadError`. This is how you discover auth is missing.
-- `run_sync({ name })` → pulls from the provider and writes rows; returns rows-per-dataset,
+- `oi.app().runSync(name)` → pulls from the provider and writes rows; returns rows-per-dataset,
   mode (`insert` / `replace`), and a `checkpoint_id` (so a sync is reversible with `rollback`).
   If a connector isn't connected (OAuth not completed, or secrets missing), tell the user to
   open the dashboard and click **Connect** — do **not** attempt to authorize from the agent.

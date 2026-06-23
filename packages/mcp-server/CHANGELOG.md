@@ -1,5 +1,25 @@
 # @openislands/mcp
 
+## Unreleased
+
+### Major Changes
+
+- **Code Mode — replaced the per-operation tools with a single `execute` tool.** Instead of ~23
+  fine-grained tools, the agent now writes a small async JavaScript program against the `oi` API and
+  runs it through one tool (`execute`), composing many steps — loops, conditionals, chaining — in a
+  single call. `execute` is the entire tool surface (plus two read-only resources for the app catalog
+  and per-app manifests); there are no separate per-operation tools. The program runs in a `node:vm`
+  sandbox (no `require` / `process` / network, only `oi`) and returns
+  `{ ok, result, logs, checkpoints_created? }`. Every former tool is now a method:
+  `oi.listApps` / `oi.createApp` / `oi.deleteApp` at the workspace level, and `oi.app(id?)` returns
+  the app-scoped API (`getOverview`, `getManifest`, `listIslands`, `getIslandSchema`, `getDataSchema`,
+  `runSql`, `validateSql`, `validateManifest`, `patchManifest`, `replaceManifest`, `applyEdit`,
+  `rollback`, `listCheckpoints`, `pruneCheckpoints`, `listActions`, `runAction`, `listQueries`,
+  `runQuery`, `listConnectors`, `runSync`). The read-many / write-one model is unchanged — every
+  manifest change still funnels through `patchManifest` / `replaceManifest` → validate + data-check →
+  `proposal_id` → `applyEdit` (snapshotted for rollback), with no raw file write. A `proposal_id`
+  persists across `execute` calls, so a client can stage in one call and apply in the next.
+
 ## 0.3.0
 
 ### Minor Changes

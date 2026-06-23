@@ -1,11 +1,13 @@
 {
   "name": "@openislands/mcp",
   "version": "0.3.1",
-  "description": "OpenIslands MCP server — read-many / write-one, so an agent edits your dashboard safely.",
+  "description": "OpenIslands MCP server — Code Mode: an agent maintains your dashboard by writing JavaScript against one tool, read-many / write-one, every edit validated + checkpointed.",
   "keywords": [
     "openislands",
     "mcp",
     "model-context-protocol",
+    "codemode",
+    "code-mode",
     "ai-agent",
     "llm-tools",
     "dashboard",

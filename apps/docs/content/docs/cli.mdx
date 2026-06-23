@@ -58,7 +58,7 @@ npx openislands validate
 ```
 
 Green means the dashboard renders. A binding to a field that doesn't exist fails here and
-**names the island** — the same check the agent's `replace_manifest` runs.
+**names the island** — the same check the agent's `oi.app().replaceManifest` runs.
 </Step>
 
 </Steps>
@@ -130,7 +130,7 @@ openislands add-app <id> [project] --template <empty|finance|health|operations>
 ```
 
 Adds another app to an existing workspace, scaffolding a full template into `apps/<id>/` — the CLI
-parity for the MCP `create_app` tool. The `id` must be a single safe path segment and not already
+parity for the MCP `oi.createApp` method. The `id` must be a single safe path segment and not already
 exist.
 
 ### `validate`

@@ -15,15 +15,16 @@ is that an agent can maintain a dashboard for months without it rotting.
   are no snapshots to drift out of date.
 
 The headline use is an agent maintaining the dashboard for you over the
-[MCP server](/mcp): it reads the manifest and your data, proposes a full-manifest edit, sees the
-diff, applies it, and rolls back if it was wrong. Every change is validated and snapshotted, so
-the agent can't hand-edit your files, ship a broken binding, or make a change you can't undo.
+[MCP server](/mcp), in Code Mode — one `execute` tool it programs against the `oi` API: it reads
+the manifest and your data, stages a manifest edit, sees the diff, applies it, and rolls back if it
+was wrong. Every change is validated and snapshotted, so the agent can't hand-edit your files, ship
+a broken binding, or make a change you can't undo.
 
 ## Start here
 
 - [Getting Started](/getting-started): point an agent at a project and let it build the
   dashboard. The CLI path is here too.
-- [MCP Server](/mcp): the safe edit loop the agent runs.
+- [MCP Server](/mcp): Code Mode and the safe edit loop the agent runs.
 - [The Manifest](/concepts/manifest): how an app is described.
 - [Data Contracts](/concepts/data-contracts): how islands bind to data.
 - [Islands](/islands/overview): the visual building blocks, with live previews.

@@ -67,6 +67,6 @@ contract is computed in `models/transforms/`, never in the manifest.
 
 Six insert actions let an agent log new rows: `log_meal` (+ `log_meal_components`),
 `log_weight`, `log_workout`, and `log_panel` (+ `log_biomarkers`). Discover them with
-`list_actions`, write rows with `run_action`; every row is validated against the resolved
-schema before anything is written, and the views update live. Edit `app/manifest.json` to
-change the layout; never hand-edit build output.
+`oi.app().listActions()`, write rows with `oi.app().runAction(...)` (inside the `execute` tool);
+every row is validated against the resolved schema before anything is written, and the views update
+live. Edit `app/manifest.json` to change the layout; never hand-edit build output.

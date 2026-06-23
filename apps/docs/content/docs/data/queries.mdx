@@ -7,11 +7,11 @@ A query is the read mirror of an [action](/data/actions). Where an action is a t
 `source` dataset, a query is a typed, read-only read over one dataset, declared in the manifest
 and called on demand. You don't write SQL: a query is a declarative spec (a dataset, optional
 filters, a projection, an order) that the compiler translates to a parameterized `SELECT`. You
-declare a query; an agent runs it over [MCP](/mcp).
+declare a query; an agent runs it over [MCP](/mcp) with `oi.app().runQuery`.
 
 ```mermaid
 flowchart LR
-  A[Agent: run_query] --> V{Validate params}
+  A["Agent: oi.app().runQuery"] --> V{Validate params}
   V -- bad param --> X[Reject, nothing runs]
   V -- ok --> S[Run read-only SELECT]
   S --> R[Rows]
@@ -30,7 +30,7 @@ That buys five things:
 - **Injection-safe.** Every param and every literal `value` is bound, never interpolated. Only
   verified column identifiers are quoted into the SQL.
 - **Agent-authorable.** The spec is plain JSON, so an agent writes a query through the normal
-  `replace_manifest` → `apply_edit` loop, the same loop it uses for islands (see
+  `oi.app().patchManifest` → `applyEdit` loop, the same loop it uses for islands (see
   [Authoring queries](#authoring-queries)).
 - **No joins by design.** A query reads one dataset. When a read needs joins or other heavy
   shaping, that lives in a [`sql` transform](/concepts/sql-transforms) the query's `dataset`
@@ -40,7 +40,7 @@ That buys five things:
 
 One dataset: a raw `source` dataset or a `sql` transform, named by `dataset`. Because a transform
 is itself a dataset, a query over a transform reads already-shaped, already-joined columns. Think
-of a query as a saved, named, typed version of the ad-hoc `run_sql` MCP tool, scoped to a
+of a query as a saved, named, typed version of the ad-hoc `oi.app().runSql` read, scoped to a
 single dataset.
 
 A query is the dual of a transform, not a replacement for one. A transform is a file-backed view
@@ -125,10 +125,10 @@ with `groupBy`, a list of columns to group by:
 
 Queries belong to the agent edit loop, not to a CLI command. An agent:
 
-1. Calls **`list_queries`** to get each declared query: its `name`, `description`, its `params` as
-   a JSON Schema, and the result `columns`. That's its grounding for what to pass and what comes
-   back.
-2. Calls **`run_query({ name, params?, limit? })`**, which validates the params and runs the
+1. Calls **`oi.app().listQueries()`** to get each declared query: its `name`, `description`, its
+   `params` as a JSON Schema, and the result `columns`. That's its grounding for what to pass and
+   what comes back.
+2. Calls **`oi.app().runQuery(name, params?, { limit? })`**, which validates the params and runs the
    compiled `SELECT`. On success it returns `{ ok: true, rowCount, columns, rows }`. A bad param
    rejects the whole call with `{ ok: false, errors }` (all-or-nothing); an unknown name or a
    query error returns `{ ok: false, error }`. `limit` is 1–500 and the result is row-capped
@@ -137,15 +137,15 @@ Queries belong to the agent edit loop, not to a CLI command. An agent:
 ## Authoring queries
 
 Because a query is declarative JSON, an agent writes one end-to-end through the same
-`replace_manifest` → `apply_edit` loop it uses for islands and actions. No new tool, no file write.
-It reads the data, drafts the `queries` block, proposes the full manifest, reviews the diff, and
+`oi.app().patchManifest` → `applyEdit` loop it uses for islands and actions. No new tool, no file
+write. It reads the data, drafts the `queries` block, stages the change, reviews the diff, and
 applies it. The MCP write path only ever writes `app/manifest.json`, so a JSON spec is what lets
 an agent create a read tool, not just run one.
 
-`replace_manifest` and `validate` enforce the same checks: the `dataset` must exist, and every `field`
-in `where`, `select`, `groupBy`, and `orderBy` must be a real column on it. A field that doesn't
-exist is a named error, caught before the manifest lands: the same fail-loud binding check an
-island gets.
+`patchManifest` / `replaceManifest` and `validate` enforce the same checks: the `dataset` must
+exist, and every `field` in `where`, `select`, `groupBy`, and `orderBy` must be a real column on it.
+A field that doesn't exist is a named error, caught before the manifest lands: the same fail-loud
+binding check an island gets.
 
 <Callout type="info" title="Note">
 
@@ -160,4 +160,4 @@ validation or the row cap.
 
 - [SQL Transforms](/concepts/sql-transforms): the file-backed views a query selects from.
 - [Actions](/data/actions): the typed write a query mirrors.
-- [MCP Server](/mcp): `list_queries` and `run_query` inside the agent loop.
+- [MCP Server](/mcp): `oi.app().listQueries()` and `runQuery` inside the agent loop.

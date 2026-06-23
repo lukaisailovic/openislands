@@ -36,8 +36,8 @@ The macro rings are the built-in `gauge.rings` island — concentric rings readi
 row, each filling toward its goal column.
 
 The single **action** — `log_meal`, a typed insert write — lets an agent log a meal.
-An agent discovers it with `list_actions` and writes rows with `run_action`; the views
-update live.
+An agent discovers it with `oi.app().listActions()` and writes rows with
+`oi.app().runAction(...)` (inside the `execute` tool); the views update live.
 
 Swap `data/` for your own export and rebuild. Nothing leaves your machine.
 

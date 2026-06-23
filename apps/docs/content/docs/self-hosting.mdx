@@ -9,7 +9,7 @@ process serves **both** surfaces on one port:
 
 - the **dashboard** at `/`, and
 - the **MCP server** over [Streamable HTTP](/mcp#running-over-http) at a single `/mcp` — one
-  endpoint for the whole workspace, with the app picked by the `app` tool param.
+  endpoint for the whole workspace, with the app picked by `oi.app(id)` inside an `execute` script.
 
 Because both share the process, an MCP edit and the live dashboard stay in lockstep: when an agent
 applies a change, the file watcher fires and the open page live-updates over SSE — no second
@@ -130,8 +130,9 @@ simply not mounted.
 ## Connecting an HTTP MCP client
 
 Point an HTTP-aware MCP client at the single `/mcp` endpoint — `http://<host>:4321/mcp` — and pass
-the token as a bearer header. One endpoint hosts the whole workspace; the client picks the app with
-the `app` tool param (omitted when there's only one), and `list_apps` enumerates them.
+the token as a bearer header. One endpoint hosts the whole workspace; inside an `execute` script the
+client picks the app with `oi.app(id)` (omit the id when there's only one), and `oi.listApps()`
+enumerates them.
 
 A client that takes a server URL — for example Nous Research's Hermes Agent, via its `url:` server
 config — connects like this:
@@ -147,9 +148,10 @@ config — connects like this:
 }
 ```
 
-A missing or wrong token returns `401`. The same read-many/write-one tool surface and safety
-posture from the [MCP page](/mcp) apply — the transport is the only thing that changes. App ids
-never appear in the URL, so the single `/mcp` endpoint serves every app in the workspace.
+A missing or wrong token returns `401`. The same Code Mode surface (the `execute` tool + the `oi`
+API) and read-many/write-one safety posture from the [MCP page](/mcp) apply — the transport is the
+only thing that changes. App ids never appear in the URL, so the single `/mcp` endpoint serves every
+app in the workspace.
 
 ## Image tags
 

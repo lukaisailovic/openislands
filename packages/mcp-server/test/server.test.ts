@@ -1,3 +1,14 @@
+/**
+ * Behavioral coverage for @openislands/mcp's edit pipeline, reads, actions, queries, connectors,
+ * and validation — the deep single-app suite.
+ *
+ * Code Mode moved EVERY operation off the tool surface and onto the `oi` API inside the single
+ * execute tool. Rather than rewrite ~120 scripted steps, `call` is now a thin dispatcher: each
+ * former tool name is compiled to the equivalent `oi.app().<method>(...)` program and run through
+ * execute, returning that method's envelope verbatim (each `oi` method returns the same `{ ok, … }`
+ * object the old tool did). So the test bodies below read exactly as the agent's intent — only the
+ * transport underneath them changed.
+ */
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -38,7 +49,8 @@ async function connect(appDir: string): Promise<Client> {
   return client;
 }
 
-async function call(client: Client, name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+/** Invoke a tool (only execute exists now) and parse its JSON envelope. */
+async function callTool(client: Client, name: string, args: Record<string, unknown>): Promise<unknown> {
   const res = (await client.callTool({ name, arguments: args })) as { content: { type: string; text: string }[] };
   const body = res.content[0]!.text;
   try {
@@ -46,6 +58,56 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
   } catch {
     return body;
   }
+}
+
+/** Compile a former tool name + its flat args into the `oi.app().<method>(...)` call expression.
+ * Each entry returns the JS argument list (the args are JSON-encoded by the caller). Since the
+ * pivot to pure Code Mode, even get_overview / apply_edit / rollback are `oi` methods. */
+const OI_METHOD: Record<string, { method: string; args: (a: Record<string, unknown>) => unknown[] }> = {
+  get_overview: { method: "getOverview", args: (a) => ("verbosity" in a ? [{ verbosity: a.verbosity }] : []) },
+  get_data_schema: { method: "getDataSchema", args: (a) => [a.dataset] },
+  get_island_schema: { method: "getIslandSchema", args: (a) => [a.type] },
+  list_islands: { method: "listIslands", args: () => [] },
+  run_sql: { method: "runSql", args: (a) => [a] },
+  validate_sql: { method: "validateSql", args: (a) => [a.sql] },
+  validate_manifest: { method: "validateManifest", args: (a) => ("manifest" in a ? [a.manifest] : []) },
+  list_checkpoints: { method: "listCheckpoints", args: () => [] },
+  prune_checkpoints: { method: "pruneCheckpoints", args: (a) => ("keep" in a ? [a.keep] : []) },
+  replace_manifest: { method: "replaceManifest", args: (a) => [a.manifest] },
+  patch_manifest: { method: "patchManifest", args: (a) => [a] },
+  apply_edit: { method: "applyEdit", args: (a) => [a.proposal_id] },
+  rollback: { method: "rollback", args: (a) => ("checkpoint_id" in a ? [a.checkpoint_id] : []) },
+  list_actions: { method: "listActions", args: () => [] },
+  run_action: { method: "runAction", args: (a) => [a.name, a.rows] },
+  list_queries: { method: "listQueries", args: () => [] },
+  run_query: { method: "runQuery", args: (a) => [a.name, a.params ?? {}, { limit: a.limit, verbosity: a.verbosity }] },
+  list_connectors: { method: "listConnectors", args: () => [] },
+  run_sync: { method: "runSync", args: (a) => [a.name] },
+};
+
+/**
+ * Drive a former tool by compiling it to an `oi.app().<method>(...)` program, running it through
+ * the single execute tool, and returning that method's envelope verbatim — so each call site reads
+ * unchanged. (A thrown checkpoint id still rides inside the method's own result envelope.)
+ */
+async function call(client: Client, name: string, args: Record<string, unknown> = {}): Promise<unknown> {
+  const spec = OI_METHOD[name];
+  if (!spec) throw new Error(`no Code Mode mapping for former tool '${name}'`);
+  const argList = spec.args(args).map((a) => JSON.stringify(a)).join(", ");
+  const code = `return await oi.app().${spec.method}(${argList});`;
+  const out = (await callTool(client, "execute", { code })) as { ok: boolean; result?: unknown; error?: string };
+  if (!out.ok) throw new Error(`execute failed for ${name}: ${out.error}`);
+  return out.result;
+}
+
+/** Run an explicit `oi` program and return its `result`. Used by the few tests whose method result
+ * is too big to round-trip whole through execute's response cap (e.g. layout.row's schema, which
+ * embeds the island catalog) — the program returns only the fields the test asserts, exactly as an
+ * agent would project a large result down before returning it. */
+async function runResult<T>(client: Client, code: string): Promise<T> {
+  const out = (await callTool(client, "execute", { code })) as { ok: boolean; result: T; error?: string };
+  expect(out.ok, out.error).toBe(true);
+  return out.result;
 }
 
 const validManifest = (root: string) => readFileSync(join(root, "app", "manifest.json"), "utf8");
@@ -975,16 +1037,17 @@ describe("layout guidance", () => {
 
   it("get_island_schema returns a null layout for the structural layout.row", async () => {
     const client = await connect(freshProject());
-    const row = (await call(client, "get_island_schema", { type: "layout.row" })) as {
-      type: string;
-      schema: unknown;
-      layout: null;
-      notes: string[];
-    };
+    // layout.row's schema embeds the whole island catalog, so the program returns only the fields
+    // under test rather than the full (cap-busting) envelope.
+    const row = await runResult<{ ok: boolean; type: string; hasSchema: boolean; layout: null; firstNote: string }>(
+      client,
+      `const r = await oi.app().getIslandSchema("layout.row");
+       return { ok: r.ok, type: r.type, hasSchema: r.schema !== undefined, layout: r.layout, firstNote: r.notes[0] };`,
+    );
     expect(row.type).toBe("layout.row");
-    expect(row.schema).toBeDefined();
+    expect(row.hasSchema).toBe(true);
     expect(row.layout).toBeNull();
-    expect(row.notes[0]).toMatch(/full-width row/i);
+    expect(row.firstNote).toMatch(/full-width row/i);
   });
 
   it("list_islands carries the span range for each island", async () => {
@@ -1081,13 +1144,13 @@ describe("history hygiene", () => {
 });
 
 describe("result contract", () => {
-  it("a list tool returns an enveloped object plus matching structuredContent", async () => {
+  it("a list op returns an enveloped object, never a bare array", async () => {
     const client = await connect(freshProject());
-    const res = (await client.callTool({ name: "list_islands", arguments: {} })) as { content: { text: string }[]; structuredContent?: { ok: boolean; islands: unknown[] } };
-    expect(res.structuredContent?.ok).toBe(true);
-    expect(Array.isArray(res.structuredContent?.islands)).toBe(true);
-    // the text mirror parses to exactly the structuredContent
-    expect(JSON.parse(res.content[0]!.text)).toEqual(res.structuredContent);
+    // listIslands now lives on `oi` (execute), but its envelope is unchanged: { ok, islands: [...] }.
+    const islands = (await call(client, "list_islands")) as { ok: boolean; islands: unknown[] };
+    expect(Array.isArray(islands)).toBe(false);
+    expect(islands.ok).toBe(true);
+    expect(Array.isArray(islands.islands)).toBe(true);
   });
 
   it("get_overview is concise by default and detailed on request", async () => {
@@ -1117,13 +1180,26 @@ describe("result contract", () => {
     writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
     const client = await connect(root);
 
-    const concise = (await call(client, "run_sql", { dataset: "wide", limit: 500 })) as { ok: boolean; rowCount: number; truncated?: boolean; note?: string };
-    expect(concise.ok).toBe(true);
-    expect(concise.truncated).toBe(true);
-    expect(concise.rowCount).toBeLessThan(500);
-    expect(concise.note).toMatch(/cap|narrow/i);
-
-    const detailed = (await call(client, "run_sql", { dataset: "wide", limit: 500, verbosity: "detailed" })) as { rowCount: number; truncated?: boolean };
-    expect(detailed.rowCount).toBeGreaterThan(concise.rowCount);
+    // The capped row sets are too big to return whole through execute's response cap, so the
+    // program returns only each read's metadata — the row budget is enforced inside runSql, not by
+    // the outer cap, and verbosity:"detailed" lifts it.
+    const out = await runResult<{
+      concise: { ok: boolean; rowCount: number; truncated?: boolean; note?: string };
+      detailed: { rowCount: number; truncated?: boolean };
+    }>(
+      client,
+      `const app = oi.app();
+       const c = await app.runSql({ dataset: "wide", limit: 500 });
+       const d = await app.runSql({ dataset: "wide", limit: 500, verbosity: "detailed" });
+       return {
+         concise: { ok: c.ok, rowCount: c.rowCount, truncated: c.truncated, note: c.note },
+         detailed: { rowCount: d.rowCount, truncated: d.truncated },
+       };`,
+    );
+    expect(out.concise.ok).toBe(true);
+    expect(out.concise.truncated).toBe(true);
+    expect(out.concise.rowCount).toBeLessThan(500);
+    expect(out.concise.note).toMatch(/cap|narrow/i);
+    expect(out.detailed.rowCount).toBeGreaterThan(out.concise.rowCount);
   });
 });
