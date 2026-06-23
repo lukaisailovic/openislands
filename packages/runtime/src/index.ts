@@ -38,7 +38,7 @@ export {
   runQuery,
 } from "./server/query.js";
 export { createEventStream, formatEvent, SSE_HEADERS } from "./server/events.js";
-export { loadManifest, projectDir } from "./server/project.js";
+export { loadManifest } from "./server/project.js";
 export {
   appDir,
   appDirFromParams,

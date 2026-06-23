@@ -47,8 +47,6 @@ export interface ContentStore {
   localPath(source: string): Promise<string>;
   /** Push a locally-mutated file back to the store after an in-place write (local: a no-op). */
   persistLocal(source: string, localFilePath: string): Promise<void>;
-  /** A writable URI the engine can COPY a cache artifact to (e.g. a Parquet snapshot). */
-  cacheTarget(name: string): Promise<string>;
 }
 
 function quoteLiteral(value: string): string {
@@ -134,11 +132,5 @@ export class LocalContentStore implements ContentStore {
 
   async persistLocal(): Promise<void> {
     // The local path is the real file — nothing to push back.
-  }
-
-  async cacheTarget(name: string): Promise<string> {
-    const dir = join(this.root, "data", "cache");
-    mkdirSync(dir, { recursive: true });
-    return join(dir, name);
   }
 }
