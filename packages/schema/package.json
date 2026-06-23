@@ -1,8 +1,19 @@
 {
   "name": "@openislands/schema",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OpenIslands manifest, island, and data-contract schemas — the single source of truth.",
-  "keywords": ["openislands", "dashboard", "manifest", "schema", "zod", "json-schema", "validation", "typescript", "data-app", "types"],
+  "keywords": [
+    "openislands",
+    "dashboard",
+    "manifest",
+    "schema",
+    "zod",
+    "json-schema",
+    "validation",
+    "typescript",
+    "data-app",
+    "types"
+  ],
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",

@@ -1,8 +1,19 @@
 {
   "name": "openislands",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Agent-built dashboards over data you own, that don't rot. The OpenIslands CLI.",
-  "keywords": ["openislands", "dashboards", "duckdb", "local-first", "ai-agents", "mcp", "data-apps", "tanstack-start", "cli", "self-hosted"],
+  "keywords": [
+    "openislands",
+    "dashboards",
+    "duckdb",
+    "local-first",
+    "ai-agents",
+    "mcp",
+    "data-apps",
+    "tanstack-start",
+    "cli",
+    "self-hosted"
+  ],
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",

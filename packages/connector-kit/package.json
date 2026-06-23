@@ -1,8 +1,19 @@
 {
   "name": "@openislands/connector-kit",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OpenIslands connector authoring kit — the typed contract a vendored connector implements.",
-  "keywords": ["openislands", "connector", "data-sync", "oauth2", "etl", "zod", "integration", "typescript", "bearer-token", "local-first"],
+  "keywords": [
+    "openislands",
+    "connector",
+    "data-sync",
+    "oauth2",
+    "etl",
+    "zod",
+    "integration",
+    "typescript",
+    "bearer-token",
+    "local-first"
+  ],
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",
