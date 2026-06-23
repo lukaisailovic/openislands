@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -11,6 +11,7 @@ import {
   getVersionStore,
   hasVersionStore,
   resetStorage,
+  resolveWithinRoot,
 } from "../src/index.js";
 
 let root: string;
@@ -62,13 +63,16 @@ describe("LocalContentStore", () => {
     expect(store.sourceUri("/already/abs.csv")).toBe("/already/abs.csv");
   });
 
-  it("configures an engine connection with the file search path", async () => {
+  it("configures an engine connection with the file search path and disables extension autoload", async () => {
     const store = new LocalContentStore(root);
     const calls: string[] = [];
     await store.configureEngine({ run: async (sql: string) => void calls.push(sql) });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain("file_search_path");
-    expect(calls[0]).toContain(root);
+    const searchPath = calls.find((c) => c.includes("file_search_path"));
+    expect(searchPath).toBeDefined();
+    expect(searchPath).toContain(root);
+    // Extension autoload/autoinstall must be off so untrusted SQL can't pull in httpfs (SSRF).
+    expect(calls.some((c) => /autoload_known_extensions\s*=\s*false/.test(c))).toBe(true);
+    expect(calls.some((c) => /autoinstall_known_extensions\s*=\s*false/.test(c))).toBe(true);
   });
 });
 
@@ -120,5 +124,45 @@ describe("storage registry", () => {
     const custom = new LocalContentStore(join(root, "nested"));
     configureStorage({ content: () => custom });
     expect(getContentStore(root)).toBe(custom);
+  });
+});
+
+describe("resolveWithinRoot", () => {
+  it("resolves an ordinary in-root path", () => {
+    const c = resolveWithinRoot(root, "data/x.csv");
+    expect(c).not.toBeNull();
+    expect(c!.rel).toBe(join("data", "x.csv"));
+  });
+
+  it("rejects ../ and absolute escapes", () => {
+    expect(resolveWithinRoot(root, "../escape.txt")).toBeNull();
+    expect(resolveWithinRoot(root, "/etc/passwd")).toBeNull();
+    expect(resolveWithinRoot(root, "data/../../escape.txt")).toBeNull();
+  });
+
+  it("rejects a symlink whose target escapes the root (leaf realpath, not lexical)", () => {
+    const outside = mkdtempSync(join(tmpdir(), "openislands-outside-"));
+    writeFileSync(join(outside, "secret.txt"), "TOP SECRET");
+    mkdirSync(join(root, "data"));
+    symlinkSync(join(outside, "secret.txt"), join(root, "data", "link.txt"));
+    // Lexically `data/link.txt` looks in-root; its realpath is the outside file.
+    expect(resolveWithinRoot(root, "data/link.txt")).toBeNull();
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("rejects a new leaf created under a symlinked directory that escapes the root", () => {
+    const outside = mkdtempSync(join(tmpdir(), "openislands-outside-"));
+    mkdirSync(join(root, "docs"));
+    symlinkSync(outside, join(root, "docs", "escape"));
+    // `docs/escape/new.md` doesn't exist yet, but its parent symlink points out of root.
+    expect(resolveWithinRoot(root, "docs/escape/new.md")).toBeNull();
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("allows an in-root symlink", () => {
+    mkdirSync(join(root, "data"));
+    writeFileSync(join(root, "data", "real.csv"), "a\n1\n");
+    symlinkSync(join(root, "data", "real.csv"), join(root, "data", "alias.csv"));
+    expect(resolveWithinRoot(root, "data/alias.csv")).not.toBeNull();
   });
 });

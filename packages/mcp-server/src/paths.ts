@@ -5,34 +5,21 @@
  * anywhere but the single sanctioned manifest path.
  *
  * Rules:
- *   - Everything resolves under the realpath of the project root.
+ *   - Everything resolves under the realpath of the project root, and the
+ *     resolved path's own realpath must stay inside it — so a symlink under a
+ *     content dir can't smuggle a tool input out of the root.
  *   - Dotfiles/secrets are denied for both read and write: `.env*` and the
  *     `.openislands/` internals are off-limits to any tool input. (The server
  *     reads/writes `.openislands/` itself via dedicated, fixed paths — never
  *     via a path derived from a tool argument.)
  *   - Writes are confined to `app/manifest.json`. Nothing else is ever written.
  */
-import { realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { resolveWithinRoot } from "@openislands/storage";
 
 export class PathConfinementError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "PathConfinementError";
-  }
-}
-
-/** Realpath of an existing ancestor, so confinement holds even before a leaf exists. */
-function realRoot(projectRoot: string): string {
-  let dir = resolve(projectRoot);
-  for (;;) {
-    try {
-      return realpathSync(dir);
-    } catch {
-      const parent = resolve(dir, "..");
-      if (parent === dir) return dir;
-      dir = parent;
-    }
   }
 }
 
@@ -42,18 +29,14 @@ function isDenied(rootRelative: string): boolean {
 }
 
 /**
- * Resolve `candidate` (absolute or root-relative) and assert it stays inside the
+ * Resolve `candidate` (absolute or root-relative) and assert its realpath stays inside the
  * project root and clears the secret denylist. Returns the resolved absolute path.
  */
 export function confineReadable(projectRoot: string, candidate: string): string {
-  const root = realRoot(projectRoot);
-  const abs = isAbsolute(candidate) ? resolve(candidate) : resolve(root, candidate);
-  const rel = relative(root, abs);
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
-    throw new PathConfinementError(`path '${candidate}' resolves outside the project root`);
-  }
-  if (isDenied(rel)) throw new PathConfinementError(`path '${candidate}' targets a protected file`);
-  return abs;
+  const confined = resolveWithinRoot(projectRoot, candidate);
+  if (!confined) throw new PathConfinementError(`path '${candidate}' resolves outside the project root`);
+  if (isDenied(confined.rel)) throw new PathConfinementError(`path '${candidate}' targets a protected file`);
+  return confined.abs;
 }
 
 /** Top-level dirs a dataset source / sql transform may live under. `docs/` is here
@@ -63,12 +46,12 @@ const SOURCE_DIRS = ["app", "data", "docs", "models"];
 
 /** Assert a dataset source path is allowed to be read (confined + in a source dir). */
 export function confineDatasetSource(projectRoot: string, source: string): string {
-  const abs = confineReadable(projectRoot, source);
-  const root = realRoot(projectRoot);
-  const rel = relative(root, abs);
-  const top = rel.split(/[\\/]/)[0];
+  const confined = resolveWithinRoot(projectRoot, source);
+  if (!confined) throw new PathConfinementError(`path '${source}' resolves outside the project root`);
+  if (isDenied(confined.rel)) throw new PathConfinementError(`path '${source}' targets a protected file`);
+  const top = confined.rel.split(/[\\/]/)[0];
   if (!top || !SOURCE_DIRS.includes(top)) {
     throw new PathConfinementError(`dataset source '${source}' must live under ${SOURCE_DIRS.join("/, ")}/`);
   }
-  return abs;
+  return confined.abs;
 }

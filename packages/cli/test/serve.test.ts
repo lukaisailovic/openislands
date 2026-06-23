@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { assertMcpHostSafe, handleServeRequest, type McpConfig, type McpHttpHandler } from "../src/serve.js";
+import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, handleServeRequest, warnRuntimeHostExposed, type McpConfig, type McpHttpHandler } from "../src/serve.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -128,5 +128,83 @@ describe("handleServeRequest", () => {
     expect(handlers.has("/mcp")).toBe(true);
     await new Promise((r) => setTimeout(r, 20));
     expect(status()).not.toBe(401);
+  });
+});
+
+const reqOf = (method: string, headers: Record<string, string>) => ({ method, headers }) as unknown as IncomingMessage;
+
+describe("apiRequestForbiddenReason", () => {
+  const none = new Set<string>();
+
+  it("allows a GET from a loopback host", () => {
+    expect(apiRequestForbiddenReason(reqOf("GET", { host: "localhost:4321" }), "127.0.0.1", none)).toBeNull();
+    expect(apiRequestForbiddenReason(reqOf("GET", { host: "127.0.0.1:4321" }), "127.0.0.1", none)).toBeNull();
+  });
+
+  it("blocks a request whose Host is foreign on a loopback bind (DNS rebinding)", () => {
+    const r = apiRequestForbiddenReason(reqOf("GET", { host: "attacker.com:4321" }), "127.0.0.1", none);
+    expect(r).toMatch(/rebinding/i);
+  });
+
+  it("permits a foreign Host via the allowlist", () => {
+    const allowed = allowedHostsFromEnv("myapp.local");
+    expect(apiRequestForbiddenReason(reqOf("GET", { host: "myapp.local:4321" }), "127.0.0.1", allowed)).toBeNull();
+  });
+
+  it("blocks a cross-site POST (Sec-Fetch-Site)", () => {
+    const r = apiRequestForbiddenReason(
+      reqOf("POST", { host: "localhost:4321", "sec-fetch-site": "cross-site", "content-type": "text/plain" }),
+      "127.0.0.1",
+      none,
+    );
+    expect(r).toMatch(/cross-site/i);
+  });
+
+  it("allows a same-origin POST", () => {
+    expect(
+      apiRequestForbiddenReason(reqOf("POST", { host: "localhost:4321", "sec-fetch-site": "same-origin" }), "127.0.0.1", none),
+    ).toBeNull();
+    expect(
+      apiRequestForbiddenReason(reqOf("POST", { host: "localhost:4321", "sec-fetch-site": "none" }), "127.0.0.1", none),
+    ).toBeNull();
+  });
+
+  it("allows a POST from a non-browser caller (no Origin / Sec-Fetch headers)", () => {
+    expect(apiRequestForbiddenReason(reqOf("POST", { host: "127.0.0.1:4321" }), "127.0.0.1", none)).toBeNull();
+  });
+
+  it("blocks a POST whose Origin host:port mismatches, allows a match", () => {
+    expect(
+      apiRequestForbiddenReason(reqOf("POST", { host: "localhost:4321", origin: "http://evil.com" }), "127.0.0.1", none),
+    ).toMatch(/cross-origin/i);
+    expect(
+      apiRequestForbiddenReason(reqOf("POST", { host: "localhost:4321", origin: "http://localhost:4321" }), "127.0.0.1", none),
+    ).toBeNull();
+  });
+
+  it("skips the host check on a non-loopback bind but still blocks cross-site writes", () => {
+    expect(apiRequestForbiddenReason(reqOf("GET", { host: "192.168.1.9:4321" }), "0.0.0.0", none)).toBeNull();
+    expect(
+      apiRequestForbiddenReason(reqOf("POST", { host: "192.168.1.9:4321", "sec-fetch-site": "cross-site" }), "0.0.0.0", none),
+    ).toMatch(/cross-site/i);
+  });
+});
+
+describe("allowedHostsFromEnv", () => {
+  it("parses a comma list, trims, lowercases, drops blanks", () => {
+    expect([...allowedHostsFromEnv(" Foo.local, BAR:8080 ,, ")]).toEqual(["foo.local", "bar:8080"]);
+    expect(allowedHostsFromEnv(undefined).size).toBe(0);
+  });
+});
+
+describe("warnRuntimeHostExposed", () => {
+  it("warns on a non-loopback bind, stays silent on loopback", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    warnRuntimeHostExposed("127.0.0.1");
+    warnRuntimeHostExposed("localhost");
+    expect(err).not.toHaveBeenCalled();
+    warnRuntimeHostExposed("0.0.0.0");
+    expect(err).toHaveBeenCalledOnce();
+    expect(err.mock.calls[0]![0]).toMatch(/non-loopback/i);
   });
 });

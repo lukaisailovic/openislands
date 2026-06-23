@@ -18,7 +18,7 @@ import { Command } from "commander";
 import { compile, inferFile, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
 import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
-import { assertMcpHostSafe, envFlag, handleServeRequest, type McpConfig, type McpHttpHandler } from "./serve.js";
+import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, envFlag, handleServeRequest, warnRuntimeHostExposed, type McpConfig, type McpHttpHandler } from "./serve.js";
 import { datasetNameFromFile, islandSkeleton, suggestIslands } from "./scaffold.js";
 
 interface FetchServer {
@@ -98,6 +98,7 @@ program
     const mcpEnabled = opts.mcp || envFlag(process.env.OPENISLANDS_MCP);
     const mcpToken = opts.mcpToken ?? process.env.OPENISLANDS_MCP_TOKEN ?? null;
     assertMcpHostSafe(host, mcpEnabled, mcpToken);
+    warnRuntimeHostExposed(host);
 
     if (existsSync(join(root, "app", "manifest.json"))) {
       const report = await compile(root);
@@ -463,6 +464,7 @@ async function bootRuntime(
   const serverEntry = fileURLToPath(import.meta.resolve("@openislands/runtime/server"));
   const clientDir = join(dirname(serverEntry), "..", "client");
   const origin = `http://${host}:${port}`;
+  const allowedHosts = allowedHostsFromEnv(process.env.OPENISLANDS_ALLOWED_HOSTS);
   const mcpHandlers = new Map<string, McpHttpHandler>();
 
   const server = createServer((req, res) => {
@@ -470,6 +472,15 @@ async function bootRuntime(
       try {
         if (handleServeRequest(mcp, mcpHandlers, req, res)) return;
         if (serveClientAsset(clientDir, req, res)) return;
+        if ((req.url ?? "/").split("?")[0]!.startsWith("/api/")) {
+          const forbidden = apiRequestForbiddenReason(req, host, allowedHosts);
+          if (forbidden) {
+            res.statusCode = 403;
+            res.setHeader("content-type", "text/plain");
+            res.end(forbidden);
+            return;
+          }
+        }
         const response = await handler.fetch(await toWebRequest(req, origin));
         await writeWebResponse(response, res);
       } catch (err) {

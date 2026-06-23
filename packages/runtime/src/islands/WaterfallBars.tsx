@@ -5,7 +5,7 @@ import { NoData } from "../components/EmptyState.js";
 import type { IslandRenderProps } from "../types.js";
 import { echarts } from "./echarts.js";
 import { formatValue, toNumber } from "./format.js";
-import { tooltip, usePrefersDark } from "./chart.js";
+import { escapeHtml, tooltip, usePrefersDark } from "./chart.js";
 
 type WaterfallTone = "increase" | "decrease" | "total";
 
@@ -84,7 +84,7 @@ function buildOptions(spec: WaterfallSpec, bars: WaterfallBar[], dark: boolean):
         const i = (item as { dataIndex?: number } | undefined)?.dataIndex;
         const bar = i === undefined ? undefined : bars[i];
         if (!bar) return "";
-        return `<div style="line-height:1.6;"><span style="margin-right:12px;">${bar.label}</span><span style="font-weight:600;">${formatValue(bar.signed, spec.format)}</span></div>`;
+        return `<div style="line-height:1.6;"><span style="margin-right:12px;">${escapeHtml(bar.label)}</span><span style="font-weight:600;">${formatValue(bar.signed, spec.format)}</span></div>`;
       },
     },
     xAxis: {
