@@ -1,6 +1,6 @@
 /**
  * serve-layer HTTP routing for `openislands serve`: the `/healthz` probe and the optional
- * MCP-over-HTTP mounts that sit in front of the TanStack Start runtime. Kept out of index.ts
+ * single `/mcp` mount that sits in front of the TanStack Start runtime. Kept out of index.ts
  * (which runs the CLI on import) so this logic stays unit-testable in isolation.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -100,7 +100,16 @@ export function warnRuntimeHostExposed(host: string): void {
 
 export interface McpConfig {
   token: string | null;
-  mounts: Array<{ basePath: string; projectDir: string }>;
+  projectRoot: string;
+}
+
+/** A lazily-created, single MCP handler. One workspace-aware server hosts every app. */
+export interface McpHandlerHolder {
+  handler: McpHttpHandler | null;
+}
+
+export function newMcpHandlerHolder(): McpHandlerHolder {
+  return { handler: null };
 }
 
 /** An env flag is on for `1` / `true` (case-insensitive); anything else (incl. unset) is off. */
@@ -135,32 +144,24 @@ function bearerTokenMatches(header: string | undefined, token: string): boolean 
   return presented.length === expected.length && timingSafeEqual(presented, expected);
 }
 
-/** The mount whose basePath matches this pathname (exact `/mcp` or `/mcp/<appId>`), longest first. */
-function matchMount(mounts: McpConfig["mounts"], pathname: string): McpConfig["mounts"][number] | undefined {
-  return mounts
-    .toSorted((a, b) => b.basePath.length - a.basePath.length)
-    .find((m) => pathname === m.basePath || pathname.startsWith(`${m.basePath}/`));
-}
-
 /**
- * Route + auth an MCP request, lazily creating (and caching) the handler for its mount. Returns
- * true once it has owned the response, false to fall through to the runtime. A multi-app request
- * to a bare/unknown `/mcp/...` path is owned with a 404 that lists the valid app ids.
+ * Route + auth an MCP request against the single workspace-aware handler, created lazily on the
+ * first request. Returns true once it has owned the response, false to fall through to the runtime.
+ * Only the exact `/mcp` path is owned — `/mcp/...` subpaths 404 (apps are selected via the `app`
+ * tool param now, not a URL segment).
  */
 function handleMcpRequest(
   mcp: McpConfig,
-  handlers: Map<string, McpHttpHandler>,
+  holder: McpHandlerHolder,
   pathname: string,
   req: IncomingMessage,
   res: ServerResponse,
 ): boolean {
-  if (pathname !== "/mcp" && !pathname.startsWith("/mcp/")) return false;
-
-  const mount = matchMount(mcp.mounts, pathname);
-  if (!mount) {
+  if (pathname !== "/mcp") {
+    if (!pathname.startsWith("/mcp/")) return false;
     res.statusCode = 404;
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ error: "no MCP app at this path — specify one of `apps`", apps: mcp.mounts.map((m) => m.basePath.slice("/mcp/".length)) }));
+    res.end(JSON.stringify({ error: "no MCP mount at this path — POST to /mcp and pass `app` on the tool call" }));
     return true;
   }
 
@@ -171,24 +172,20 @@ function handleMcpRequest(
     return true;
   }
 
-  let handler = handlers.get(mount.basePath);
-  if (!handler) {
-    handler = createMcpHttpHandler(mount.projectDir);
-    handlers.set(mount.basePath, handler);
-  }
-  void handler.handle(req, res);
+  holder.handler ??= createMcpHttpHandler(mcp.projectRoot);
+  void holder.handler.handle(req, res);
   return true;
 }
 
 /**
  * The serve-layer routes that sit in front of the runtime: `/healthz` (always on, so a container
- * healthcheck never depends on a runtime route) and the MCP mounts (when configured). Returns true
- * once it has owned the response; false falls through to static assets + the SSR fetch handler.
- * One code path for both the live server and its tests.
+ * healthcheck never depends on a runtime route) and the single `/mcp` mount (when configured).
+ * Returns true once it has owned the response; false falls through to static assets + the SSR fetch
+ * handler. One code path for both the live server and its tests.
  */
 export function handleServeRequest(
   mcp: McpConfig | undefined,
-  handlers: Map<string, McpHttpHandler>,
+  holder: McpHandlerHolder,
   req: IncomingMessage,
   res: ServerResponse,
 ): boolean {
@@ -199,6 +196,6 @@ export function handleServeRequest(
     res.end(JSON.stringify({ status: "ok" }));
     return true;
   }
-  if (mcp) return handleMcpRequest(mcp, handlers, pathname, req, res);
+  if (mcp) return handleMcpRequest(mcp, holder, pathname, req, res);
   return false;
 }

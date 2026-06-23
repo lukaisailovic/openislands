@@ -8,8 +8,8 @@ home server or NAS, reachable by a remote agent — run the published Docker ima
 process serves **both** surfaces on one port:
 
 - the **dashboard** at `/`, and
-- the **MCP server** over [Streamable HTTP](/mcp#running-over-http) at `/mcp` (or `/mcp/<app>` in
-  a multi-app workspace).
+- the **MCP server** over [Streamable HTTP](/mcp#running-over-http) at a single `/mcp` — one
+  endpoint for the whole workspace, with the app picked by the `app` tool param.
 
 Because both share the process, an MCP edit and the live dashboard stay in lockstep: when an agent
 applies a change, the file watcher fires and the open page live-updates over SSE — no second
@@ -26,9 +26,9 @@ up.
 
 ## Quick start
 
-The image is published to `ghcr.io/lukaisailovic/openislands`. Mount a project at `/project` — a
-single app (a directory with `app/manifest.json`) **or** a workspace directory of such apps; `serve`
-auto-detects which.
+The image is published to `ghcr.io/lukaisailovic/openislands`. Mount a project workspace at
+`/project` — the directory holding your apps under `apps/<id>/`. `serve` scans them and serves them
+all in one process, whether the workspace has one app or several.
 
 <Steps>
 
@@ -101,7 +101,7 @@ Everything is environment-driven (CLI flags win if you also pass them):
 | --- | --- | --- |
 | `OPENISLANDS_BIND` | `127.0.0.1` | Host interface the port maps to. Set `0.0.0.0` to reach it across your LAN/NAS *(compose only — the host side of the port mapping)*. |
 | `OPENISLANDS_HOST_PORT` | `4321` | Host port that maps to the container's `4321` *(compose only)*. |
-| `OPENISLANDS_MCP` | `1` | `1`/`true` mounts the MCP HTTP endpoint(s). Set `0` for a dashboard-only container. |
+| `OPENISLANDS_MCP` | `1` | `1`/`true` mounts the MCP HTTP endpoint. Set `0` for a dashboard-only container. |
 | `OPENISLANDS_MCP_TOKEN` | *(unset)* | Bearer token required on MCP requests. Required to bind off loopback with MCP on. |
 | `OPENISLANDS_PORT` | `4321` | Port the server listens on **inside** the container. |
 | `OPENISLANDS_HOST` | `0.0.0.0` | Interface the server binds **inside** the container. Leave as is. |
@@ -129,11 +129,9 @@ simply not mounted.
 
 ## Connecting an HTTP MCP client
 
-Point an HTTP-aware MCP client at the endpoint and pass the token as a bearer header:
-
-- **Single app:** `http://<host>:4321/mcp`
-- **Multi-app workspace:** `http://<host>:4321/mcp/<app>` — one endpoint per app id. A bare
-  `/mcp` in a workspace returns a `404` listing the valid app ids, so a client can self-discover.
+Point an HTTP-aware MCP client at the single `/mcp` endpoint — `http://<host>:4321/mcp` — and pass
+the token as a bearer header. One endpoint hosts the whole workspace; the client picks the app with
+the `app` tool param (omitted when there's only one), and `list_apps` enumerates them.
 
 A client that takes a server URL — for example Nous Research's Hermes Agent, via its `url:` server
 config — connects like this:
@@ -150,14 +148,8 @@ config — connects like this:
 ```
 
 A missing or wrong token returns `401`. The same read-many/write-one tool surface and safety
-posture from the [MCP page](/mcp) apply — the transport is the only thing that changes.
-
-<Callout type="info" title="`mcp` is a reserved path">
-
-The MCP endpoint owns the `/mcp` path. In a workspace, an app whose id is literally `mcp` is
-shadowed by the endpoint — rename it.
-
-</Callout>
+posture from the [MCP page](/mcp) apply — the transport is the only thing that changes. App ids
+never appear in the URL, so the single `/mcp` endpoint serves every app in the workspace.
 
 ## Image tags
 

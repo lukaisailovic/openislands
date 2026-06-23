@@ -10,28 +10,22 @@
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname, basename } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(repoRoot, "packages", "cli", "src", "index.ts");
 
-/** Single-app `serve` derives the app id from the project dir basename — mirror
- * `sanitizeAppId` in packages/runtime/src/server/workspace.ts. */
-function appIdFromDir(dir) {
-  const id = basename(dir).replace(/[^A-Za-z0-9._-]/g, "-").replace(/^[._-]+/, "");
-  return id || "app";
-}
-
-/** A representative tabular dataset per template (not a markdown/doc source). */
+/** A representative tabular dataset per template (not a markdown/doc source). The
+ * app id `init` scaffolds under apps/<id>/ defaults to the template name. */
 const TEMPLATES = [
-  { template: "finance", dataset: "net_worth_monthly" },
-  { template: "health", dataset: "weight" },
-  { template: "operations", dataset: "throughput" },
+  { template: "finance", appId: "finance", dataset: "net_worth_monthly" },
+  { template: "health", appId: "health", dataset: "weight" },
+  { template: "operations", appId: "operations", dataset: "throughput" },
 ];
 
-function manifestTitle(template) {
-  const manifest = join(repoRoot, "templates", template, "app", "manifest.json");
+function manifestTitle(template, appId) {
+  const manifest = join(repoRoot, "templates", template, "apps", appId, "app", "manifest.json");
   return JSON.parse(readFileSync(manifest, "utf8")).title;
 }
 
@@ -102,8 +96,8 @@ function kill(proc) {
   }
 }
 
-async function check({ template, dataset }) {
-  const title = manifestTitle(template);
+async function check({ template, appId, dataset }) {
+  const title = manifestTitle(template, appId);
   const dir = mkdtempSync(join(tmpdir(), `openislands-e2e-${template}-`));
   const port = randomPort();
   let server;
@@ -125,7 +119,6 @@ async function check({ template, dataset }) {
       throw new Error(`dashboard HTML did not contain title "${title}"`);
     }
 
-    const appId = appIdFromDir(dir);
     const query = await withTimeout(
       fetch(`${base}/api/query?app=${appId}&dataset=${dataset}`).then(async (r) => {
         const body = await r.json();

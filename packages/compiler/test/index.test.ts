@@ -32,7 +32,7 @@ function project(manifest: unknown, files: Record<string, string>): string {
   return dir;
 }
 
-const FINANCE = join(import.meta.dirname, "..", "..", "..", "templates", "finance");
+const FINANCE = join(import.meta.dirname, "..", "..", "..", "templates", "finance", "apps", "finance");
 
 const baseManifest = {
   version: 1,

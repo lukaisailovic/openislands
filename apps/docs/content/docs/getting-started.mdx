@@ -26,9 +26,10 @@ The steps below are that same path, done by hand.
 <Step>
 ### Scaffold a project
 
-`init` drops a complete, working project in the target directory. With no flag it scaffolds the
-`empty` template — a blank starter with one welcome note and an empty `data/`, so you and your
-agent build it up from your own files.
+`init` drops a complete, working project **workspace** in the target directory — your apps live
+under `apps/<id>/`, starting with one. With no flag it scaffolds the `empty` template — a blank
+starter with one welcome note and an empty `data/`, so you and your agent build it up from your own
+files.
 
 ```bash
 npx openislands init my-dashboard
@@ -53,8 +54,8 @@ server, an `AGENTS.md`, and the OpenIslands skill under `.agents/skills/openisla
 agent that reads the project picks up the tools and the conventions. Open the folder in your agent
 and you're connected.
 
-If you're wiring it into a project by hand, this is the config it expects, pointed at the directory
-that holds `app/manifest.json`:
+If you're wiring it into a project by hand, this is the config it expects, pointed at the project
+root that holds your apps under `apps/<id>/`:
 
 ```jsonc title=".mcp.json"
 {

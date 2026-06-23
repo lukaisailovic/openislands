@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appDir,
   appDirFromParams,
-  isSafeAppId,
   listApps,
   resetWorkspaceCache,
   workspaceRoot,
@@ -13,57 +12,45 @@ import {
 import { broadcasterFor } from "../src/server/watcher.js";
 
 function writeApp(root: string, name: string, content: Record<string, unknown>): void {
-  mkdirSync(join(root, name, "app"), { recursive: true });
-  writeFileSync(join(root, name, "app", "manifest.json"), JSON.stringify(content));
+  mkdirSync(join(root, "apps", name, "app"), { recursive: true });
+  writeFileSync(join(root, "apps", name, "app", "manifest.json"), JSON.stringify(content));
 }
 
 function manifest(title: string, icon?: string): Record<string, unknown> {
   return { version: 1, title, icon, datasets: {}, pages: [] };
 }
 
-const savedEnv = {
-  project: process.env.OPENISLANDS_PROJECT_DIR,
-  workspace: process.env.OPENISLANDS_WORKSPACE_DIR,
-};
+const savedProjectDir = process.env.OPENISLANDS_PROJECT_DIR;
 
 beforeEach(() => {
   delete process.env.OPENISLANDS_PROJECT_DIR;
-  delete process.env.OPENISLANDS_WORKSPACE_DIR;
   resetWorkspaceCache();
 });
 
 afterEach(() => {
-  process.env.OPENISLANDS_PROJECT_DIR = savedEnv.project;
-  process.env.OPENISLANDS_WORKSPACE_DIR = savedEnv.workspace;
-  if (savedEnv.project === undefined) delete process.env.OPENISLANDS_PROJECT_DIR;
-  if (savedEnv.workspace === undefined) delete process.env.OPENISLANDS_WORKSPACE_DIR;
+  process.env.OPENISLANDS_PROJECT_DIR = savedProjectDir;
+  if (savedProjectDir === undefined) delete process.env.OPENISLANDS_PROJECT_DIR;
   resetWorkspaceCache();
 });
 
 describe("workspaceRoot", () => {
-  it("prefers the single-project env var", () => {
+  it("returns the project root from the env var", () => {
     process.env.OPENISLANDS_PROJECT_DIR = "/p";
-    process.env.OPENISLANDS_WORKSPACE_DIR = "/w";
-    expect(workspaceRoot()).toEqual({ mode: "single", dir: "/p" });
+    expect(workspaceRoot()).toBe("/p");
   });
 
-  it("falls back to the workspace env var", () => {
-    process.env.OPENISLANDS_WORKSPACE_DIR = "/w";
-    expect(workspaceRoot()).toEqual({ mode: "multi", dir: "/w" });
-  });
-
-  it("throws when neither is set", () => {
+  it("throws when it is not set", () => {
     expect(() => workspaceRoot()).toThrow(/openislands serve/);
   });
 });
 
-describe("listApps — multi mode", () => {
-  it("scans immediate subdirs with an app/manifest.json, alphabetically", () => {
+describe("listApps", () => {
+  it("scans apps/ subdirs with an app/manifest.json, alphabetically", () => {
     const root = mkdtempSync(join(tmpdir(), "oi-ws-"));
     writeApp(root, "finance", manifest("Finance Overview", "wallet"));
     writeApp(root, "health", manifest("Health"));
-    mkdirSync(join(root, "not-an-app"));
-    process.env.OPENISLANDS_WORKSPACE_DIR = root;
+    mkdirSync(join(root, "apps", "not-an-app"), { recursive: true });
+    process.env.OPENISLANDS_PROJECT_DIR = root;
 
     const apps = listApps();
     expect(apps.map((a) => a.id)).toEqual(["finance", "health"]);
@@ -77,7 +64,7 @@ describe("listApps — multi mode", () => {
     writeApp(root, "b", manifest("B"));
     writeApp(root, "c", manifest("C"));
     writeFileSync(join(root, "openislands.json"), JSON.stringify({ order: ["c", "a"], hidden: ["b"] }));
-    process.env.OPENISLANDS_WORKSPACE_DIR = root;
+    process.env.OPENISLANDS_PROJECT_DIR = root;
 
     expect(listApps().map((a) => a.id)).toEqual(["c", "a"]);
   });
@@ -85,7 +72,7 @@ describe("listApps — multi mode", () => {
   it("surfaces manifest errors on the app instead of dropping it", () => {
     const root = mkdtempSync(join(tmpdir(), "oi-ws-"));
     writeApp(root, "broken", { version: 2, title: "Broken" });
-    process.env.OPENISLANDS_WORKSPACE_DIR = root;
+    process.env.OPENISLANDS_PROJECT_DIR = root;
 
     const apps = listApps();
     expect(apps).toHaveLength(1);
@@ -93,39 +80,26 @@ describe("listApps — multi mode", () => {
   });
 });
 
-describe("listApps — single mode", () => {
-  it("serves the project as a one-app workspace named after its directory", () => {
-    const root = mkdtempSync(join(tmpdir(), "oi-ws-"));
-    writeApp(root, "My Finance", manifest("Finance"));
-    process.env.OPENISLANDS_PROJECT_DIR = join(root, "My Finance");
-
-    const apps = listApps();
-    expect(apps).toHaveLength(1);
-    expect(apps[0]!.id).toBe("My-Finance");
-    expect(isSafeAppId(apps[0]!.id)).toBe(true);
-  });
-});
-
 describe("appDir + appDirFromParams", () => {
   it("resolves a known app and throws on an unknown one", () => {
     const root = mkdtempSync(join(tmpdir(), "oi-ws-"));
     writeApp(root, "fin", manifest("F"));
-    process.env.OPENISLANDS_WORKSPACE_DIR = root;
+    process.env.OPENISLANDS_PROJECT_DIR = root;
 
-    expect(appDir("fin")).toBe(join(root, "fin"));
+    expect(appDir("fin")).toBe(join(root, "apps", "fin"));
     expect(() => appDir("nope")).toThrow(/unknown app/);
   });
 
   it("maps a missing param to 400 and an unknown app to 404", () => {
     const root = mkdtempSync(join(tmpdir(), "oi-ws-"));
     writeApp(root, "fin", manifest("F"));
-    process.env.OPENISLANDS_WORKSPACE_DIR = root;
+    process.env.OPENISLANDS_PROJECT_DIR = root;
 
     expect(appDirFromParams(new URLSearchParams(""))).toMatchObject({ ok: false, status: 400 });
     expect(appDirFromParams(new URLSearchParams("app=nope"))).toMatchObject({ ok: false, status: 404 });
     expect(appDirFromParams(new URLSearchParams("app=fin"))).toMatchObject({
       ok: true,
-      dir: join(root, "fin"),
+      dir: join(root, "apps", "fin"),
       appId: "fin",
     });
   });
@@ -145,10 +119,10 @@ describe("query isolation across apps", () => {
         datasets: { metrics: { source: "data/metrics.csv" } },
         pages: [],
       });
-      mkdirSync(join(root, name, "data"), { recursive: true });
-      writeFileSync(join(root, name, "data", "metrics.csv"), `value\n${value}\n`);
+      mkdirSync(join(root, "apps", name, "data"), { recursive: true });
+      writeFileSync(join(root, "apps", name, "data", "metrics.csv"), `value\n${value}\n`);
     }
-    process.env.OPENISLANDS_WORKSPACE_DIR = root;
+    process.env.OPENISLANDS_PROJECT_DIR = root;
 
     const fin = await runQuery(appDir("fin"), { dataset: "metrics" });
     const health = await runQuery(appDir("health"), { dataset: "metrics" });

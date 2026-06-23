@@ -13,7 +13,7 @@ OpenIslands is built for an AI agent to own a dashboard. Any agent that speaks t
 Every agent drives the **same MCP edit loop**. OpenIslands ships a standard **stdio** MCP server,
 `@openislands/mcp`, and `init` scaffolds everything an agent needs to find it:
 
-- a `.mcp.json` wiring the server (pointed at the project root that holds `app/manifest.json`),
+- a `.mcp.json` wiring the server (pointed at the project root that holds your apps under `apps/<id>/`),
 - an `AGENTS.md` pointing the agent at the conventions,
 - the OpenIslands skill under `.agents/skills/openislands/`.
 
@@ -142,8 +142,8 @@ on first use.)
 
 **Project guidance.** Claude Code reads `CLAUDE.md` as project memory and discovers skills under
 `.agents/skills/`. The scaffold ships the OpenIslands skill, so it loads automatically whenever you
-edit a project that has an `app/manifest.json`. (`AGENTS.md` is conventionally symlinked to
-`CLAUDE.md`.)
+edit an OpenIslands workspace (a project with apps under `apps/<id>/`). (`AGENTS.md` is
+conventionally symlinked to `CLAUDE.md`.)
 
 **Tips.**
 

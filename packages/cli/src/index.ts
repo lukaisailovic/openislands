@@ -9,7 +9,7 @@
  *   openislands infer <file> [dir]      # infer a data file's schema → dataset contract (--bind to write)
  *   openislands sync [dir] [connector]  # one-shot connector pull (cron-able)
  */
-import { createReadStream, existsSync, readFileSync, statSync, writeFileSync, mkdirSync, cpSync, readdirSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync, mkdirSync, cpSync, readdirSync, renameSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -18,7 +18,7 @@ import { Command } from "commander";
 import { compile, inferFile, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
 import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
-import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, envFlag, handleServeRequest, warnRuntimeHostExposed, type McpConfig, type McpHttpHandler } from "./serve.js";
+import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, envFlag, handleServeRequest, newMcpHandlerHolder, warnRuntimeHostExposed, type McpConfig, type McpHandlerHolder } from "./serve.js";
 import { datasetNameFromFile, islandSkeleton, suggestIslands } from "./scaffold.js";
 
 interface FetchServer {
@@ -54,36 +54,75 @@ program
   .version(VERSION);
 
 program
-  .command("init [dir]")
+  .command("init [project]")
   .description("scaffold a new dashboard project from a template (blank by default)")
   .option("-t, --template <name>", "empty | finance | health | operations", "empty")
-  .action((dir: string | undefined, opts: { template: string }) => {
-    const target = resolve(dir ?? ".");
+  .option("--app <id>", "name the app folder under apps/ (defaults to the template's own id)")
+  .action((project: string | undefined, opts: { template: string; app?: string }) => {
+    const dir = project ?? "openislands";
+    const target = resolve(dir);
     const src = join(templatesDir(), opts.template);
     if (!existsSync(src)) {
       console.error(
-        c.red(
-          `Unknown template '${opts.template}'. Available: ${readdirSync(templatesDir()).join(", ")}`,
-        ),
+        c.red(`Unknown template '${opts.template}'. Available: ${readdirSync(templatesDir()).join(", ")}`),
       );
+      process.exit(1);
+    }
+    if (opts.app !== undefined && !isSafeAppId(opts.app)) {
+      console.error(c.red(`invalid app id '${opts.app}' — use letters, digits, '.', '_' or '-'.`));
       process.exit(1);
     }
     mkdirSync(target, { recursive: true });
     cpSync(src, target, { recursive: true });
+    if (opts.app !== undefined) renameScaffoldedApp(target, opts.app);
     console.log(`${c.green("✓")} created ${c.bold(opts.template)} dashboard in ${target}`);
-    const next = dir === undefined ? "openislands serve" : `cd ${dir} && openislands serve`;
-    console.log(c.dim(`  next: ${next}`));
+    console.log(c.dim(`  next: cd ${dir} && openislands serve`));
+  });
+
+/** The single app id under a freshly-copied template's `apps/` (a template ships exactly one app). */
+function templateDefaultAppId(projectDir: string): string {
+  const appsDir = join(projectDir, "apps");
+  const ids = readdirSync(appsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+  if (ids.length !== 1) {
+    console.error(c.red(`expected exactly one app under ${appsDir}, found ${ids.length}: ${ids.join(", ") || "(none)"}`));
+    process.exit(1);
+  }
+  return ids[0]!;
+}
+
+/** Override the scaffolded app folder name when `--app` differs from the template's default. */
+function renameScaffoldedApp(projectDir: string, appId: string): void {
+  const defaultId = templateDefaultAppId(projectDir);
+  if (defaultId === appId) return;
+  const from = join(projectDir, "apps", defaultId);
+  const to = join(projectDir, "apps", appId);
+  if (existsSync(to)) {
+    console.error(c.red(`apps/${appId} already exists in the template — choose a different --app id.`));
+    process.exit(1);
+  }
+  renameSync(from, to);
+}
+
+program
+  .command("validate [project]")
+  .description("validate every app's manifest + check every island against its data")
+  .option("--app <id>", "validate only this app")
+  .action(async (project: string | undefined, opts: { app?: string }) => {
+    const root = resolve(project ?? ".");
+    const apps = resolveApps(root, opts.app);
+    if (apps.length === 0) exitNoApps(root);
+    let failed = false;
+    for (const app of apps) {
+      console.log(c.bold(`\n${app}`));
+      if ((await runValidate(join(root, "apps", app))) !== 0) failed = true;
+    }
+    process.exit(failed ? 1 : 0);
   });
 
 program
-  .command("validate [dir]")
-  .description("validate the manifest + check every island against its data")
-  .action(async (dir: string | undefined) => {
-    process.exit(await runValidate(resolve(dir ?? ".")));
-  });
-
-program
-  .command("serve [dir]")
+  .command("serve [project]")
   .description(
     "run your dashboard as a long-running local app (the live TanStack Start SSR runtime)",
   )
@@ -91,8 +130,8 @@ program
   .option("--host <host>", "bind address (loopback by default — this is your data)", "127.0.0.1")
   .option("--mcp", "also mount the MCP server over Streamable HTTP on the same port")
   .option("--mcp-token <token>", "bearer token required on MCP requests (also $OPENISLANDS_MCP_TOKEN)")
-  .action(async (dir: string | undefined, opts: { port: string; host: string; mcp?: boolean; mcpToken?: string }) => {
-    const root = resolve(dir ?? ".");
+  .action(async (project: string | undefined, opts: { port: string; host: string; mcp?: boolean; mcpToken?: string }) => {
+    const root = resolve(project ?? ".");
     const port = Number(process.env.OPENISLANDS_PORT ?? opts.port);
     const host = process.env.OPENISLANDS_HOST ?? opts.host;
     const mcpEnabled = opts.mcp || envFlag(process.env.OPENISLANDS_MCP);
@@ -100,46 +139,37 @@ program
     assertMcpHostSafe(host, mcpEnabled, mcpToken);
     warnRuntimeHostExposed(host);
 
-    if (existsSync(join(root, "app", "manifest.json"))) {
-      const report = await compile(root);
-      if (!report.ok) {
-        printErrors(report.errors);
-        console.log(c.red("\n✗ refusing to serve a dashboard that can't render — fix the above first."));
-        process.exit(1);
-      }
-      console.log(`${c.green("✓")} ${c.bold(report.manifest!.title)} is valid`);
-      const mcp = mcpEnabled ? { token: mcpToken, mounts: [{ basePath: "/mcp", projectDir: root }] } : undefined;
-      await bootRuntime({ OPENISLANDS_PROJECT_DIR: root }, host, port, mcp);
-      return;
-    }
-
     const apps = findWorkspaceApps(root);
-    if (apps.length === 0) {
-      console.error(
-        c.red(
-          `no app here (no app/manifest.json in ${root}) and no app projects in its subdirectories.`,
-        ),
-      );
+    if (apps.length === 0) exitNoApps(root);
+
+    let failed = false;
+    for (const app of apps) {
+      const report = await compile(join(root, "apps", app));
+      if (report.ok) console.log(`${c.green("✓")} ${c.bold(report.manifest!.title)} ${c.dim(`(${app})`)}`);
+      else {
+        console.log(`${c.red("✗")} ${c.bold(app)} ${c.dim(`(${report.errors.length} error(s))`)}`);
+        printErrors(report.errors);
+        failed = true;
+      }
+    }
+    if (failed) {
+      console.log(c.red("\n✗ refusing to serve a workspace with apps that can't render — fix the above first."));
       process.exit(1);
     }
-    for (const app of apps) {
-      const report = await compile(join(root, app));
-      if (report.ok) console.log(`${c.green("✓")} ${c.bold(report.manifest!.title)} ${c.dim(`(${app})`)}`);
-      else console.log(`${c.red("✗")} ${c.bold(app)} ${c.dim(`(${report.errors.length} error(s) — serving in error state)`)}`);
-    }
+
     writeDefaultWorkspaceConfig(root, apps);
-    const mcp = mcpEnabled
-      ? { token: mcpToken, mounts: apps.map((app) => ({ basePath: `/mcp/${app}`, projectDir: join(root, app) })) }
-      : undefined;
-    await bootRuntime({ OPENISLANDS_WORKSPACE_DIR: root }, host, port, mcp);
+    const mcp: McpConfig | undefined = mcpEnabled ? { token: mcpToken, projectRoot: root } : undefined;
+    await bootRuntime({ OPENISLANDS_PROJECT_DIR: root }, host, port, mcp);
   });
 
 program
-  .command("add <island> [dir]")
+  .command("add <island> [project]")
   .description(`add an island instance (${BUILTIN_ISLAND_TYPES.join(", ")})`)
-  .action((island: string, dir: string | undefined) => {
-    const root = resolve(dir ?? ".");
-    const manifestPath = join(root, "app", "manifest.json");
+  .option("--app <id>", "the app to add to (defaults to the sole app)")
+  .action((island: string, project: string | undefined, opts: { app?: string }) => {
+    const root = resolve(project ?? ".");
+    const app = resolveSingleApp(root, opts.app);
+    const manifestPath = join(root, "apps", app, "app", "manifest.json");
     if (!existsSync(manifestPath)) {
       console.error(c.red(`no manifest at ${manifestPath}`));
       process.exit(1);
@@ -166,20 +196,64 @@ program
   });
 
 program
-  .command("infer <file> [dir]")
+  .command("infer <file> [project]")
   .description("infer a data file's schema, propose a dataset contract + islands; --bind adds it to the manifest")
-  .option("--bind", "add the inferred dataset to the project manifest")
-  .action(async (file: string, dir: string | undefined, opts: { bind?: boolean }) => {
-    process.exit(await runInfer(file, resolve(dir ?? "."), opts.bind ?? false));
+  .option("--app <id>", "the app to bind to (defaults to the sole app)")
+  .option("--bind", "add the inferred dataset to the app's manifest")
+  .action(async (file: string, project: string | undefined, opts: { app?: string; bind?: boolean }) => {
+    const root = resolve(project ?? ".");
+    const app = resolveSingleApp(root, opts.app);
+    process.exit(await runInfer(file, join(root, "apps", app), opts.bind ?? false));
   });
 
 program
-  .command("sync [dir] [connector]")
+  .command("sync [project] [connector]")
   .description(
-    "pull configured connectors once and write their datasets (cron this for headless refresh)",
+    "pull configured connectors once and write their datasets across every app (cron this for headless refresh)",
   )
-  .action(async (dir: string | undefined, connector: string | undefined) => {
-    process.exit(await runSync(resolve(dir ?? "."), connector));
+  .option("--app <id>", "sync only this app")
+  .action(async (project: string | undefined, connector: string | undefined, opts: { app?: string }) => {
+    const root = resolve(project ?? ".");
+    const apps = resolveApps(root, opts.app);
+    if (apps.length === 0) exitNoApps(root);
+    let failed = false;
+    for (const app of apps) {
+      console.log(c.bold(`\n${app}`));
+      if ((await runSync(join(root, "apps", app), connector)) !== 0) failed = true;
+    }
+    process.exit(failed ? 1 : 0);
+  });
+
+program
+  .command("add-app <id> [project]")
+  .description("scaffold one more app into an existing project from a template")
+  .option("-t, --template <name>", "empty | finance | health | operations", "empty")
+  .action((id: string, project: string | undefined, opts: { template: string }) => {
+    const root = resolve(project ?? ".");
+    if (!isSafeAppId(id)) {
+      console.error(c.red(`invalid app id '${id}' — use letters, digits, '.', '_' or '-'.`));
+      process.exit(1);
+    }
+    const appsDir = join(root, "apps");
+    if (!existsSync(appsDir)) {
+      console.error(c.red(`${root} is not an OpenIslands project (no apps/ directory) — run \`openislands init\` first.`));
+      process.exit(1);
+    }
+    const dest = join(appsDir, id);
+    if (existsSync(dest)) {
+      console.error(c.red(`apps/${id} already exists — choose a different id.`));
+      process.exit(1);
+    }
+    const templateRoot = join(templatesDir(), opts.template);
+    if (!existsSync(templateRoot)) {
+      console.error(c.red(`Unknown template '${opts.template}'. Available: ${readdirSync(templatesDir()).join(", ")}`));
+      process.exit(1);
+    }
+    const src = join(templateRoot, "apps", templateDefaultAppId(templateRoot));
+    mkdirSync(dest, { recursive: true });
+    cpSync(src, dest, { recursive: true });
+    console.log(`${c.green("✓")} added app ${c.bold(id)} from ${c.bold(opts.template)} → ${dest}`);
+    console.log(c.dim(`  next: openislands serve`));
   });
 
 /** The file path a dataset should reference: project-relative POSIX if inside the project, else absolute. */
@@ -394,10 +468,10 @@ async function writeWebResponse(response: Response, res: ServerResponse): Promis
 
 /**
  * Boots the built TanStack Start server from @openislands/runtime as a real
- * Node http server, bound to the loopback host. OPENISLANDS_PROJECT_DIR (single
- * app) or OPENISLANDS_WORKSPACE_DIR (a directory of apps) must be set before
- * the bundle is imported — the runtime reads it to find the user's files, and
- * each app's file watcher (live updates) starts on its first SSE client.
+ * Node http server, bound to the loopback host. OPENISLANDS_PROJECT_DIR (the
+ * project/workspace root, scanned for apps/*) must be set before the bundle is
+ * imported — the runtime reads it to find the user's files, and each app's file
+ * watcher (live updates) starts on its first SSE client.
  */
 const ASSET_TYPES: Record<string, string> = {
   ".js": "text/javascript",
@@ -438,12 +512,51 @@ function serveClientAsset(clientDir: string, req: IncomingMessage, res: ServerRe
   return true;
 }
 
-/** Immediate subdirectories of a workspace root that hold an app project. */
+/** A safe app id is a single path segment (it is also a URL segment in the runtime). */
+function isSafeAppId(id: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id);
+}
+
+/** App ids under `<root>/apps` that hold a manifest, sorted. Empty when `<root>/apps` is absent. */
 export function findWorkspaceApps(root: string): string[] {
-  return readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(join(root, d.name, "app", "manifest.json")))
+  const appsDir = join(root, "apps");
+  if (!existsSync(appsDir)) return [];
+  return readdirSync(appsDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && isSafeAppId(d.name) && existsSync(join(appsDir, d.name, "app", "manifest.json")))
     .map((d) => d.name)
     .toSorted();
+}
+
+function exitNoApps(root: string): never {
+  console.error(c.red(`no apps under ${join(root, "apps")} — run \`openislands init\` or \`openislands add-app\` first.`));
+  process.exit(1);
+}
+
+function assertKnownApp(apps: string[], appId: string): void {
+  if (apps.includes(appId)) return;
+  console.error(c.red(`unknown app '${appId}'. Available: ${apps.length ? apps.join(", ") : "(none)"}`));
+  process.exit(1);
+}
+
+/** The app ids `validate`/`sync` operate on: a named app (validated) or every app. */
+function resolveApps(root: string, appOpt: string | undefined): string[] {
+  const apps = findWorkspaceApps(root);
+  if (appOpt === undefined) return apps;
+  assertKnownApp(apps, appOpt);
+  return [appOpt];
+}
+
+/** The single app `add`/`infer` operate on: the named one, or the sole app, else a loud error. */
+function resolveSingleApp(root: string, appOpt: string | undefined): string {
+  const apps = findWorkspaceApps(root);
+  if (appOpt !== undefined) {
+    assertKnownApp(apps, appOpt);
+    return appOpt;
+  }
+  if (apps.length === 1) return apps[0]!;
+  if (apps.length === 0) exitNoApps(root);
+  console.error(c.red(`multiple apps — pass --app <id> (one of: ${apps.join(", ")})`));
+  process.exit(1);
 }
 
 function writeDefaultWorkspaceConfig(root: string, apps: string[]): void {
@@ -453,7 +566,7 @@ function writeDefaultWorkspaceConfig(root: string, apps: string[]): void {
 }
 
 async function bootRuntime(
-  env: { OPENISLANDS_PROJECT_DIR: string } | { OPENISLANDS_WORKSPACE_DIR: string },
+  env: { OPENISLANDS_PROJECT_DIR: string },
   host: string,
   port: number,
   mcp?: McpConfig,
@@ -465,12 +578,12 @@ async function bootRuntime(
   const clientDir = join(dirname(serverEntry), "..", "client");
   const origin = `http://${host}:${port}`;
   const allowedHosts = allowedHostsFromEnv(process.env.OPENISLANDS_ALLOWED_HOSTS);
-  const mcpHandlers = new Map<string, McpHttpHandler>();
+  const mcpHandler = newMcpHandlerHolder();
 
   const server = createServer((req, res) => {
     void (async () => {
       try {
-        if (handleServeRequest(mcp, mcpHandlers, req, res)) return;
+        if (handleServeRequest(mcp, mcpHandler, req, res)) return;
         if (serveClientAsset(clientDir, req, res)) return;
         if ((req.url ?? "/").split("?")[0]!.startsWith("/api/")) {
           const forbidden = apiRequestForbiddenReason(req, host, allowedHosts);
@@ -498,26 +611,25 @@ async function bootRuntime(
     });
   });
   server.on("error", (err) => console.error(c.red(`runtime server error: ${friendlyMessage(err)}`)));
-  installGracefulShutdown(server, mcpHandlers);
+  installGracefulShutdown(server, mcpHandler);
 
   console.log(
     `${c.green("●")} OpenIslands runtime → ${c.bold(origin)}  ${c.dim("live SSR · Ctrl-C to stop")}`,
   );
   if (mcp) {
-    const routes = mcp.mounts.map((m) => m.basePath).join(", ");
     const auth = mcp.token ? "token-protected" : "loopback (no token)";
-    console.log(`${c.green("●")} MCP over HTTP → ${c.bold(routes)}  ${c.dim(`${auth} · Ctrl-C to stop`)}`);
+    console.log(`${c.green("●")} MCP over HTTP → ${c.bold("/mcp")}  ${c.dim(`${auth} · Ctrl-C to stop`)}`);
   }
 }
 
 /** On Ctrl-C / SIGTERM, stop accepting connections and exit cleanly instead of being killed mid-request. */
-function installGracefulShutdown(server: Server, mcpHandlers: Map<string, McpHttpHandler>): void {
+function installGracefulShutdown(server: Server, mcpHandler: McpHandlerHolder): void {
   let closing = false;
   const shutdown = (signal: NodeJS.Signals) => {
     if (closing) return;
     closing = true;
     console.log(c.dim(`\n${signal} — shutting down.`));
-    void Promise.all([...mcpHandlers.values()].map((h) => h.close())).catch(() => {});
+    void mcpHandler.handler?.close().catch(() => {});
     server.close(() => process.exit(0));
     // Long-lived SSE streams keep close() from ever completing — don't hang on them.
     setTimeout(() => process.exit(0), 2000).unref();

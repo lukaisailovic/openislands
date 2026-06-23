@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, handleServeRequest, warnRuntimeHostExposed, type McpConfig, type McpHttpHandler } from "../src/serve.js";
+import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, handleServeRequest, newMcpHandlerHolder, warnRuntimeHostExposed, type McpConfig } from "../src/serve.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -37,7 +37,7 @@ function mockRes(): { res: ServerResponse; status: () => number; body: () => str
   return { res: res as unknown as ServerResponse, status: () => statusCode, body: () => body, headers };
 }
 
-const noHandlers = () => new Map<string, McpHttpHandler>();
+const noHandler = () => newMcpHandlerHolder();
 
 describe("assertMcpHostSafe", () => {
   it("does nothing when MCP is disabled, even on a public host without a token", () => {
@@ -70,7 +70,7 @@ describe("assertMcpHostSafe", () => {
 describe("handleServeRequest", () => {
   it("answers /healthz with 200 ok even when MCP is disabled", () => {
     const { res, status, body } = mockRes();
-    const owned = handleServeRequest(undefined, noHandlers(), mockReq("GET", "/healthz"), res);
+    const owned = handleServeRequest(undefined, noHandler(), mockReq("GET", "/healthz"), res);
     expect(owned).toBe(true);
     expect(status()).toBe(200);
     expect(JSON.parse(body())).toEqual({ status: "ok" });
@@ -78,54 +78,42 @@ describe("handleServeRequest", () => {
 
   it("falls through (returns false) for a non-MCP path when MCP is disabled", () => {
     const { res } = mockRes();
-    expect(handleServeRequest(undefined, noHandlers(), mockReq("GET", "/dashboard"), res)).toBe(false);
+    expect(handleServeRequest(undefined, noHandler(), mockReq("GET", "/dashboard"), res)).toBe(false);
   });
 
-  it("404s a multi-app bare /mcp and lists the valid app ids", () => {
-    const mcp: McpConfig = {
-      token: null,
-      mounts: [
-        { basePath: "/mcp/finance", projectDir: "/tmp/finance" },
-        { basePath: "/mcp/health", projectDir: "/tmp/health" },
-      ],
-    };
+  it("serves exactly /mcp but 404s any /mcp/... subpath (apps are a tool param, not a URL)", () => {
+    const mcp: McpConfig = { token: null, projectRoot: "/tmp/workspace" };
     const { res, status, body } = mockRes();
-    const owned = handleServeRequest(mcp, noHandlers(), mockReq("POST", "/mcp", {}, { jsonrpc: "2.0" }), res);
+    const owned = handleServeRequest(mcp, noHandler(), mockReq("POST", "/mcp/finance", {}, { jsonrpc: "2.0" }), res);
     expect(owned).toBe(true);
     expect(status()).toBe(404);
-    expect(JSON.parse(body()).apps).toEqual(["finance", "health"]);
-  });
-
-  it("404s an unknown appId in multi-app mode", () => {
-    const mcp: McpConfig = { token: null, mounts: [{ basePath: "/mcp/finance", projectDir: "/tmp/finance" }] };
-    const { res, status } = mockRes();
-    handleServeRequest(mcp, noHandlers(), mockReq("POST", "/mcp/ghost", {}, { jsonrpc: "2.0" }), res);
-    expect(status()).toBe(404);
+    expect(JSON.parse(body()).error).toMatch(/POST to \/mcp/);
   });
 
   it("401s an MCP request with a missing bearer token when a token is configured", () => {
-    const mcp: McpConfig = { token: "secret", mounts: [{ basePath: "/mcp", projectDir: "/tmp/app" }] };
+    const mcp: McpConfig = { token: "secret", projectRoot: "/tmp/workspace" };
     const { res, status } = mockRes();
-    handleServeRequest(mcp, noHandlers(), mockReq("POST", "/mcp", {}, { jsonrpc: "2.0" }), res);
+    handleServeRequest(mcp, noHandler(), mockReq("POST", "/mcp", {}, { jsonrpc: "2.0" }), res);
     expect(status()).toBe(401);
   });
 
   it("401s an MCP request with a wrong bearer token", () => {
-    const mcp: McpConfig = { token: "secret", mounts: [{ basePath: "/mcp", projectDir: "/tmp/app" }] };
+    const mcp: McpConfig = { token: "secret", projectRoot: "/tmp/workspace" };
     const { res, status } = mockRes();
-    handleServeRequest(mcp, noHandlers(), mockReq("POST", "/mcp", { authorization: "Bearer wrong" }, { jsonrpc: "2.0" }), res);
+    handleServeRequest(mcp, noHandler(), mockReq("POST", "/mcp", { authorization: "Bearer wrong" }, { jsonrpc: "2.0" }), res);
     expect(status()).toBe(401);
   });
 
-  it("passes auth with the correct bearer token and delegates to the MCP handler", async () => {
-    const mcp: McpConfig = { token: "secret", mounts: [{ basePath: "/mcp", projectDir: "/tmp/app" }] };
-    const handlers = noHandlers();
+  it("passes auth with the correct bearer token and delegates to the lazily-created MCP handler", async () => {
+    const mcp: McpConfig = { token: "secret", projectRoot: "/tmp/workspace" };
+    const holder = newMcpHandlerHolder();
     const { res, status } = mockRes();
     // A correct token gets past the 401 gate and into the real handler, which — given a
-    // bodyless, sessionless, non-initialize POST — answers 400. The point is it is NOT 401.
-    const owned = handleServeRequest(mcp, handlers, mockReq("POST", "/mcp", { authorization: "Bearer secret" }), res);
+    // bodyless, sessionless, non-initialize POST — answers 400. The point is it is NOT 401,
+    // and that the single workspace handler was created on first use.
+    const owned = handleServeRequest(mcp, holder, mockReq("POST", "/mcp", { authorization: "Bearer secret" }), res);
     expect(owned).toBe(true);
-    expect(handlers.has("/mcp")).toBe(true);
+    expect(holder.handler).not.toBeNull();
     await new Promise((r) => setTimeout(r, 20));
     expect(status()).not.toBe(401);
   });

@@ -5,10 +5,12 @@ OpenIslands dashboard. This doc is your briefing. Read it, then drive the steps 
 
 ## What OpenIslands is
 
-A local-first runtime for dashboards that **you** maintain. A dashboard is a typed **manifest**
-(`app/manifest.json`) of reusable visual **islands** (KPI cards, charts, tables, gauges, feeds)
-bound to **typed data contracts** built from the user's local files — CSV, JSON, Parquet, SQLite,
-or markdown. The files never leave their machine; `serve` queries them live on every request.
+A local-first runtime for dashboards that **you** maintain. Every project is a **workspace**: each
+dashboard (an "app") lives under `apps/<id>/`, and its manifest is `apps/<id>/app/manifest.json`. A
+manifest is a typed declaration of reusable visual **islands** (KPI cards, charts, tables, gauges,
+feeds) bound to **typed data contracts** built from the user's local files — CSV, JSON, Parquet,
+SQLite, or markdown. The files never leave their machine; `serve` queries them live on every
+request.
 
 You edit the manifest, never rendering code. The point: the dashboard **fails loudly** when a
 binding and the data disagree, instead of silently rendering a wrong number. That validation is
@@ -20,7 +22,7 @@ validated proposal, and every write is snapshotted for rollback.
 
 ## Get the project running
 
-One command scaffolds a complete, working project:
+One command scaffolds a complete, working project workspace, with its first app under `apps/<id>/`:
 
 ```bash
 npx openislands init my-dashboard
@@ -29,9 +31,10 @@ npx openislands init my-dashboard
 With no flag this scaffolds the `empty` template: a blank starter (one welcome `note.card`, empty
 `data/`) you build up from the user's files. If they'd rather start from a populated example, pass
 `--template`: `finance` (the flagship — net worth, allocation, holdings, transactions over CSVs),
-`health`, or `operations`. Either way, `init` also drops a local `.mcp.json` (already wiring
-`@openislands/mcp`), an `AGENTS.md`, and this skill under `.agents/skills/openislands/` — so you're
-connected over MCP automatically; no manual setup.
+`health`, or `operations`. The first app's id defaults to the template name (or `main` for
+`empty`); `--app <id>` overrides it. Either way, `init` also drops a local `.mcp.json` (already
+wiring `@openislands/mcp` at the project root), an `AGENTS.md`, and this skill under
+`.agents/skills/openislands/` — so you're connected over MCP automatically; no manual setup.
 
 Then serve it so the user can watch every edit land live:
 
@@ -39,10 +42,19 @@ Then serve it so the user can watch every edit land live:
 npx openislands serve        # http://127.0.0.1:4321, live-updates over SSE as files change
 ```
 
-If the project isn't scaffolded from a template, the only hard requirement is an `app/manifest.json`
-and a `.mcp.json` that points `@openislands/mcp` at the project root.
+To add another dashboard to the workspace later: `npx openislands add-app <id> --template <t>`
+scaffolds `apps/<id>/`.
+
+If the project isn't scaffolded from a template, the only hard requirement is at least one
+`apps/<id>/app/manifest.json` and a `.mcp.json` that points `@openislands/mcp` at the project root.
 
 ## The safe edit loop
+
+The MCP server hosts the whole workspace. Every app-scoped tool takes an optional **`app`** param:
+omit it in a single-app project (it resolves to the sole app); when there are several, call
+`list_apps` first, then pass `app: "<id>"` on each tool. `create_app({ id, title? })` adds an app
+and `delete_app({ id })` soft-archives one (reversible). The examples below omit `app` for a
+single-app project — add it once a workspace has more than one.
 
 1. **Read** — start with `get_overview` (the manifest + every dataset's live columns + the declared
    actions/queries/connectors + checkpoint count, in **one call**). Then ground a specific edit with
@@ -163,6 +175,9 @@ the user; don't try to sync. When connected, `run_sync({ name })` pulls into its
 
 ## The full tool set
 
+Every app-scoped tool below takes an optional `app` param (omit in a single-app project).
+
+- **apps** — `list_apps`, `create_app({ id, title? })`, `delete_app({ id })` (soft-archive)
 - **read** — `get_overview({ verbosity? })` (start here), `list_islands`, `get_island_schema(type)`,
   `get_manifest`, `get_data_schema(dataset)`, `run_sql({ dataset | sql, limit })`,
   `validate_manifest({ manifest? })`, `validate_sql({ sql })`, `list_checkpoints`

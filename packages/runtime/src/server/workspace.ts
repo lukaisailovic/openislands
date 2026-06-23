@@ -1,13 +1,12 @@
 /**
- * The workspace registry: which apps this process serves. A workspace is either
- * a single project (`OPENISLANDS_PROJECT_DIR`) or a directory of projects
- * (`OPENISLANDS_WORKSPACE_DIR`) whose immediate subdirectories each hold an
- * `app/manifest.json`. The registry is derived live from disk on every request
- * (behind a short TTL) — adding an app directory shows up on the next page load
- * without a restart, matching the live-everywhere runtime philosophy.
+ * The workspace registry: which apps this process serves. Every project is a
+ * workspace rooted at `OPENISLANDS_PROJECT_DIR`; apps live under `<root>/apps/<id>/`,
+ * each holding an `app/manifest.json`. The registry is derived live from disk on
+ * every request (behind a short TTL) — adding an app directory shows up on the next
+ * page load without a restart, matching the live-everywhere runtime philosophy.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import type { PageIcon } from "@openislands/schema";
 import { type LoadedManifest, loadManifest } from "./project.js";
 
@@ -27,24 +26,17 @@ export interface WorkspaceConfig {
 
 const SCAN_TTL_MS = 1_000;
 
-export function workspaceRoot(): { mode: "single" | "multi"; dir: string } {
-  const single = process.env.OPENISLANDS_PROJECT_DIR;
-  if (single) return { mode: "single", dir: single };
-  const multi = process.env.OPENISLANDS_WORKSPACE_DIR;
-  if (multi) return { mode: "multi", dir: multi };
+export function workspaceRoot(): string {
+  const root = process.env.OPENISLANDS_PROJECT_DIR;
+  if (root) return root;
   throw new Error(
-    "neither OPENISLANDS_PROJECT_DIR nor OPENISLANDS_WORKSPACE_DIR is set — the runtime must be booted by `openislands serve`",
+    "OPENISLANDS_PROJECT_DIR is not set — the runtime must be booted by `openislands serve`",
   );
 }
 
 /** An app id must be a single safe path segment (it is also a URL segment). */
 export function isSafeAppId(id: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id);
-}
-
-function sanitizeAppId(name: string): string {
-  const id = name.replace(/[^A-Za-z0-9._-]/g, "-").replace(/^[._-]+/, "");
-  return id || "app";
 }
 
 export function readWorkspaceConfig(root: string): WorkspaceConfig {
@@ -66,14 +58,16 @@ function appFrom(id: string, dir: string): WorkspaceApp {
   return { id, dir, title: manifest.title, icon: manifest.icon, errors };
 }
 
-/** Project subdirectory names in the workspace, ordered by config then alphabetically. */
+/** App subdirectories under `<root>/apps`, ordered by config then alphabetically. */
 export function scanWorkspaceApps(root: string): { id: string; dir: string }[] {
+  const appsDir = join(root, "apps");
+  if (!existsSync(appsDir)) return [];
   const config = readWorkspaceConfig(root);
   const hidden = new Set(config.hidden ?? []);
-  const found = readdirSync(root, { withFileTypes: true })
+  const found = readdirSync(appsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && isSafeAppId(d.name) && !hidden.has(d.name))
-    .filter((d) => existsSync(join(root, d.name, "app", "manifest.json")))
-    .map((d) => ({ id: d.name, dir: join(root, d.name) }));
+    .filter((d) => existsSync(join(appsDir, d.name, "app", "manifest.json")))
+    .map((d) => ({ id: d.name, dir: join(appsDir, d.name) }));
 
   const rank = new Map((config.order ?? []).map((id, i) => [id, i]));
   return found.toSorted((a, b) => {
@@ -100,16 +94,12 @@ let scanCache: { key: string; at: number; apps: WorkspaceApp[] } | undefined;
 /** The default registry: a live disk scan of the workspace root, behind a short TTL. */
 const localRegistry: WorkspaceRegistry = {
   listApps(): WorkspaceApp[] {
-    const { mode, dir } = workspaceRoot();
-    const key = `${mode}:${dir}`;
-    if (scanCache && scanCache.key === key && Date.now() - scanCache.at < SCAN_TTL_MS) {
+    const dir = workspaceRoot();
+    if (scanCache && scanCache.key === dir && Date.now() - scanCache.at < SCAN_TTL_MS) {
       return scanCache.apps;
     }
-    const apps =
-      mode === "single"
-        ? [appFrom(sanitizeAppId(basename(dir)), dir)]
-        : scanWorkspaceApps(dir).map((found) => appFrom(found.id, found.dir));
-    scanCache = { key, at: Date.now(), apps };
+    const apps = scanWorkspaceApps(dir).map((found) => appFrom(found.id, found.dir));
+    scanCache = { key: dir, at: Date.now(), apps };
     return apps;
   },
 

@@ -1,19 +1,23 @@
 ---
 name: openislands
-description: Build and maintain OpenIslands data dashboards — typed manifests of visual islands bound to local files (CSV / JSON / Parquet / SQLite / markdown), edited safely over the OpenIslands MCP server. Use whenever a project has an app/manifest.json or an .mcp.json naming the openislands MCP server, and you are adding or changing datasets, islands, pages, actions, queries, or connectors, fixing a validation or binding error, or authoring a SQL transform.
+description: Build and maintain OpenIslands data dashboards — typed manifests of visual islands bound to local files (CSV / JSON / Parquet / SQLite / markdown), edited safely over the OpenIslands MCP server. Use whenever a project has apps/<id>/app/manifest.json or an .mcp.json naming the openislands MCP server, and you are adding or changing datasets, islands, pages, actions, queries, or connectors, fixing a validation or binding error, or authoring a SQL transform.
 ---
 
 # Working with OpenIslands
 
-An OpenIslands app is a **manifest** (`app/manifest.json`) of reusable visual **islands** bound to
-**typed data contracts** built from local files. You edit the manifest — never rendering code. The
-data stays in the project's files; `serve` queries them live. The whole point is that the dashboard
-**fails loudly** when a binding and the data disagree, instead of silently rendering a wrong number,
-so an agent can keep it healthy for months.
+Every OpenIslands project is a **workspace**. Apps live under `apps/<id>/`, each its own
+**manifest** (`apps/<id>/app/manifest.json`) of reusable visual **islands** bound to **typed data
+contracts** built from local files. A one-app project is just a workspace with one app. You edit
+the manifest — never rendering code. The data stays in the app's files; `serve` queries them live.
+The whole point is that the dashboard **fails loudly** when a binding and the data disagree, instead
+of silently rendering a wrong number, so an agent can keep it healthy for months.
 
 You make every change through the **OpenIslands MCP server** (`@openislands/mcp`, already wired in
-`.mcp.json`). It is a safety boundary: **read freely, write through one validated pipeline.** Nothing
-is written until you apply a validated proposal, and every write is snapshotted for rollback.
+`.mcp.json`). One MCP endpoint serves the whole project. App-scoped tools take an optional `app`
+param — **omit it when there's only one app**; pass it (the `<id>` under `apps/`) to target a
+specific one. Call **`list_apps`** to see what's there, **`create_app`** to scaffold a new one. The
+server is a safety boundary: **read freely, write through one validated pipeline.** Nothing is
+written until you apply a validated proposal, and every write is snapshotted for rollback.
 
 ## The loop
 

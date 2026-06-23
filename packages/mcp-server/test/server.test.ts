@@ -1,6 +1,6 @@
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { resetCustomSchemaCache } from "@openislands/compiler";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -15,15 +15,23 @@ afterEach(() => {
   for (const dir of roots.splice(0)) resetEngine(dir);
 });
 
+/** The workspace root that owns an app dir laid out as `<workspace>/apps/<id>`. */
+const workspaceOf = (appDir: string): string => dirname(dirname(appDir));
+
+/** A single-app workspace. The fixture's `app/` + `data/` live at `<workspace>/apps/finance/`,
+ * and the returned value is that APP dir — every path helper joins against it, and `connect`
+ * derives the workspace root from it. With one app, every tool resolves it without an `app` arg. */
 function freshProject(): string {
-  const dir = mkdtempSync(join(tmpdir(), "oi-mcp-"));
-  cpSync(FIXTURE, dir, { recursive: true });
-  roots.push(dir);
-  return dir;
+  const workspace = mkdtempSync(join(tmpdir(), "oi-mcp-"));
+  const appDir = join(workspace, "apps", "finance");
+  cpSync(FIXTURE, appDir, { recursive: true });
+  roots.push(appDir);
+  return appDir;
 }
 
-async function connect(root: string): Promise<Client> {
-  const server = createServer(root);
+/** Connect a client to the workspace that owns `appDir`. */
+async function connect(appDir: string): Promise<Client> {
+  const server = createServer(workspaceOf(appDir));
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0" });
   await Promise.all([client.connect(clientT), server.connect(serverT)]);
@@ -568,7 +576,8 @@ export default defineConnector({
 `;
 
 function connectorProject(): string {
-  const dir = mkdtempSync(join(tmpdir(), "oi-mcp-conn-"));
+  const workspace = mkdtempSync(join(tmpdir(), "oi-mcp-conn-"));
+  const dir = join(workspace, "apps", "demo");
   mkdirSync(join(dir, "app"), { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
   mkdirSync(join(dir, "connectors", "demo"), { recursive: true });

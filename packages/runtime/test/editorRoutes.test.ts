@@ -17,7 +17,6 @@ const APP = "kb";
 let root: string;
 let projectDir: string;
 
-const savedWorkspace = process.env.OPENISLANDS_WORKSPACE_DIR;
 const savedProject = process.env.OPENISLANDS_PROJECT_DIR;
 
 function writeManifest(dir: string): void {
@@ -37,18 +36,16 @@ function post(path: string, body: unknown): Request {
 beforeEach(() => {
   delete process.env.OPENISLANDS_PROJECT_DIR;
   root = mkdtempSync(join(tmpdir(), "oi-editor-routes-"));
-  projectDir = join(root, APP);
+  projectDir = join(root, "apps", APP);
   writeManifest(projectDir);
   mkdirSync(join(projectDir, "docs"), { recursive: true });
-  process.env.OPENISLANDS_WORKSPACE_DIR = root;
+  process.env.OPENISLANDS_PROJECT_DIR = root;
   resetWorkspaceCache();
 });
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
-  process.env.OPENISLANDS_WORKSPACE_DIR = savedWorkspace;
   process.env.OPENISLANDS_PROJECT_DIR = savedProject;
-  if (savedWorkspace === undefined) delete process.env.OPENISLANDS_WORKSPACE_DIR;
   if (savedProject === undefined) delete process.env.OPENISLANDS_PROJECT_DIR;
   resetWorkspaceCache();
 });

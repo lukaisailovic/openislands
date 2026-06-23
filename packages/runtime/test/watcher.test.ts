@@ -20,7 +20,7 @@ import {
   type WatchHandle,
 } from "../src/server/watcher.js";
 
-const FINANCE = join(import.meta.dirname, "..", "..", "..", "templates", "finance");
+const FINANCE = join(import.meta.dirname, "..", "..", "..", "templates", "finance", "apps", "finance");
 
 function manifest(datasets: Manifest["datasets"]): Manifest {
   return { version: 1, title: "T", datasets, pages: [] };
