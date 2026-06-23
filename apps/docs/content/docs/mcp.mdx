@@ -28,8 +28,8 @@ sequenceDiagram
 
 ## Wiring it up
 
-The server ships as `@openislands/mcp`. Point your MCP client's config at your project
-directory (the folder that contains `app/manifest.json`):
+The server ships as `@openislands/mcp`. Point your MCP client's config at your **project root** —
+the workspace that holds your apps under `apps/<id>/`:
 
 ```jsonc title=".mcp.json"
 {
@@ -42,19 +42,46 @@ directory (the folder that contains `app/manifest.json`):
 }
 ```
 
-The first positional argument is the project root: the server reads and writes the manifest,
-data, and history under it. `npx` fetches and runs the latest published server on demand; its
-`-y` flag skips the install prompt, so there's nothing to install globally.
+The first positional argument is the project root: the server scans `apps/*`, and reads and writes
+each app's manifest, data, and history under `apps/<id>/`. `npx` fetches and runs the latest
+published server on demand; its `-y` flag skips the install prompt, so there's nothing to install
+globally.
+
+One server hosts the whole workspace. App-scoped tools take an optional **`app`** param naming
+which app to act on; omit it when the project has a single app and it resolves automatically. With
+several apps, pass `app`, or you get an error naming the available ids — call `list_apps` first to
+discover them.
 
 ## Running over HTTP
 
 The config above runs the server over **stdio** — the client spawns it as a child process. For a
 remote or always-on setup, the same server also speaks **Streamable HTTP** (the modern MCP
 transport): `openislands serve --mcp`, or the [Docker image](/self-hosting), mounts it on the
-dashboard's port at `POST/GET/DELETE /mcp` (or `/mcp/<app>` in a multi-app workspace). An
-HTTP-aware client points its `url:` at that endpoint instead of spawning a command; the tool
-surface below is identical either way. Off loopback it requires a bearer token — see
-[Self-hosting](/self-hosting) for the full deployment and security story.
+dashboard's port at `POST/GET/DELETE /mcp`. One endpoint hosts the whole workspace — pick the app
+with the `app` tool param, not the URL. An HTTP-aware client points its `url:` at that endpoint
+instead of spawning a command; the tool surface below is identical either way. Off loopback it
+requires a bearer token — see [Self-hosting](/self-hosting) for the full deployment and security
+story.
+
+## Apps
+
+A project is a **workspace**: every app lives under `apps/<id>/`, and one server hosts them all.
+Three project-level tools manage the set (they take no `app` param — they operate on the
+workspace):
+
+| Tool | What it does |
+| --- | --- |
+| `list_apps` | Lists the apps in the workspace — `{ apps: [{ id, title, dir }] }`. Call it first when a project might hold more than one app, then pass the chosen `id` as the `app` param on the app-scoped tools below. |
+| `create_app({ id, title? })` | Scaffolds `apps/<id>/` with a minimal starter manifest (one welcome note, empty `data/`). Errors if the `id` is unsafe or already taken. |
+| `delete_app({ id })` | **Soft-archive** — moves `apps/<id>/` into the workspace's `.openislands/trash/`. It's reversible (nothing is hard-deleted) but flagged destructive, so a client confirms before it runs. |
+
+Two read-only **resources** expose the same surface for clients that prefer resource reads to tool
+calls: `openislands://apps` (the app list) and `openislands://apps/<id>/manifest.json` (one app's
+current manifest).
+
+Everything below is **app-scoped**: each tool takes an optional `app` param naming which app to act
+on. Omit it in a single-app project — it resolves to the sole app. The two registry tools
+(`list_islands`, `get_island_schema`) are app-independent and take no `app`.
 
 ## The read tools
 

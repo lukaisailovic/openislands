@@ -23,7 +23,7 @@
  */
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { resetCustomSchemaCache, resetEngine } from "@openislands/compiler";
@@ -31,6 +31,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 
 const FIXTURE = join(import.meta.dirname, "fixtures", "finance");
+
+/** The workspace root that owns an app dir laid out as `<workspace>/apps/<id>`. */
+const workspaceOf = (appDir: string): string => dirname(dirname(appDir));
 
 /** Total tool-definition cost must stay well under this. Measured ~4.9k; the inlined-catalog
  * regression hit ~106k, so this ceiling sits far above today's surface yet far below the bloat. */
@@ -49,11 +52,15 @@ afterEach(() => {
   delete process.env.DEMO_TOKEN;
 });
 
+/** A single-app workspace: the finance fixture lives at `<workspace>/apps/finance/`. The returned
+ * value is that APP dir — path helpers join against it, and `connect` derives the workspace root.
+ * With one app, every tool resolves it without an `app` arg, so the assertions stay unchanged. */
 function freshFinance(): string {
-  const dir = mkdtempSync(join(tmpdir(), "oi-surface-"));
-  cpSync(FIXTURE, dir, { recursive: true });
-  roots.push(dir);
-  return dir;
+  const workspace = mkdtempSync(join(tmpdir(), "oi-surface-"));
+  const appDir = join(workspace, "apps", "finance");
+  cpSync(FIXTURE, appDir, { recursive: true });
+  roots.push(appDir);
+  return appDir;
 }
 
 const DEMO_CONNECTOR = `
@@ -76,9 +83,10 @@ export default defineConnector({
 });
 `;
 
-/** A minimal project with one unconnected connector — the root for the connect + sync walkthrough. */
+/** A single-app workspace with one unconnected connector — the root for the connect + sync walkthrough. */
 function connectorProject(): string {
-  const dir = mkdtempSync(join(tmpdir(), "oi-surface-conn-"));
+  const workspace = mkdtempSync(join(tmpdir(), "oi-surface-conn-"));
+  const dir = join(workspace, "apps", "demo");
   mkdirSync(join(dir, "app"), { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
   mkdirSync(join(dir, "connectors", "demo"), { recursive: true });
@@ -95,8 +103,9 @@ function connectorProject(): string {
   return dir;
 }
 
-async function connect(root: string): Promise<Client> {
-  const server = createServer(root);
+/** Connect a client to the workspace that owns `appDir`. */
+async function connect(appDir: string): Promise<Client> {
+  const server = createServer(workspaceOf(appDir));
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "tool-surface", version: "0" });
   await Promise.all([client.connect(clientT), server.connect(serverT)]);
@@ -335,6 +344,9 @@ const MINIMAL_ARGS: Record<string, Record<string, unknown>> = {
   run_query: { name: "nonexistent" },
   list_connectors: {},
   run_sync: { name: "nonexistent" },
+  list_apps: {},
+  create_app: { id: "surface-probe-app" },
+  delete_app: { id: "nonexistent" },
 };
 
 /** List tools and the array key each must envelope (never a bare array). */
@@ -344,6 +356,7 @@ const LIST_TOOLS: Record<string, string> = {
   list_queries: "queries",
   list_connectors: "connectors",
   list_checkpoints: "checkpoints",
+  list_apps: "apps",
 };
 
 describe("result contract", () => {

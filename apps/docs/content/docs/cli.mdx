@@ -45,8 +45,8 @@ npx openislands infer data/spending.csv --bind
 npx openislands add category.bar
 ```
 
-`--bind` re-validates before saving, so a bad write is refused, not persisted. Then open
-`app/manifest.json`, set the island's `dataset`, and fill in its required fields from the
+`--bind` re-validates before saving, so a bad write is refused, not persisted. Then open the app's
+`apps/<id>/app/manifest.json`, set the island's `dataset`, and fill in its required fields from the
 columns `infer` showed you.
 </Step>
 
@@ -65,31 +65,36 @@ Green means the dashboard renders. A binding to a field that doesn't exist fails
 
 ## Commands
 
+Every project is a **workspace**: apps live under `apps/<id>/`, and the commands below run at the
+project root and fan out across them. `--app <id>` narrows a command to one app; `validate` and
+`sync` default to **all** apps.
+
 ### `init`
 
 ```bash
-openislands init [dir] --template <finance|health|operations>
+openislands init [project] --app <id> --template <empty|finance|health|operations>
 ```
 
-Scaffolds a complete, working project into `dir` (default: the current directory). `--template`
-(`-t`) picks the starting point and defaults to `finance` — net worth, allocation, holdings, and
-transactions as typed islands over CSVs you own. `health` and `operations` are the other two.
+Scaffolds a complete, working project workspace into `project` (default: `openislands/`), with the
+first app at `apps/<id>/`. `--template` (`-t`) picks the starting point and defaults to `finance` —
+net worth, allocation, holdings, and transactions as typed islands over CSVs you own; `health`,
+`operations`, and the blank `empty` are the others. `--app` names that first app id; it defaults to
+the template name (`finance`, `health`, …), or `main` for `empty`.
 
 ### `serve`
 
 ```bash
-openislands serve [dir] [--port 4321] [--host 127.0.0.1] [--mcp] [--mcp-token <token>]
+openislands serve [project] [--port 4321] [--host 127.0.0.1] [--mcp] [--mcp-token <token>]
 ```
 
 Boots your dashboard as a long-running local app (the TanStack Start SSR runtime), querying your
-files on every request. It validates first and **refuses to boot a manifest that can't render**,
-naming what's wrong. It binds to loopback by default — this is your data. Leave it running: edit
-a file and the page live-updates over SSE.
+files on every request. It scans `apps/*`, compiles each, and serves them all in one process on one
+port — the UI gets a left rail to switch apps (hidden when there's only one). It binds to loopback
+by default — this is your data. Leave it running: edit a file and the page live-updates over SSE.
 
-Point `serve` at a directory of projects instead of one, and it serves them all as a workspace.
-
-`--mcp` also mounts the MCP server over Streamable HTTP on the same port (at `/mcp`, or
-`/mcp/<app>` per app in a workspace), so a remote agent can drive the dashboard. `--mcp-token`
+`--mcp` also mounts the MCP server over Streamable HTTP on the same port at a single `/mcp`
+endpoint — one server for the whole workspace, with the app chosen by the `app` tool param — so a
+remote agent can drive the dashboard. `--mcp-token`
 sets the bearer token it requires — mandatory when binding off loopback, since MCP is a write
 surface. Every flag has an environment equivalent (`OPENISLANDS_PORT`, `OPENISLANDS_HOST`,
 `OPENISLANDS_MCP`, `OPENISLANDS_MCP_TOKEN`), which is how the [Docker image](/self-hosting) is
@@ -98,43 +103,55 @@ configured; flags win when both are set. See [Self-hosting](/self-hosting) for t
 ### `infer`
 
 ```bash
-openislands infer <file> [dir] [--bind]
+openislands infer <file> [project] [--app <id>] [--bind]
 ```
 
 Reads a data file through the same DuckDB core the runtime uses and prints its columns, a
 proposed dataset contract, and suggested islands. Read-only by default; `--bind` writes the
-dataset into `app/manifest.json` (re-validating first). The file must live inside the project —
-move it under `data/` before binding.
+dataset into the target app's `apps/<id>/app/manifest.json` (re-validating first). The file must
+live inside the app — move it under its `data/` before binding. Operates on one app: it defaults
+to the sole app and errors if the project has several, so pass `--app`.
 
 ### `add`
 
 ```bash
-openislands add <island-type> [dir]
+openislands add <island-type> [project] [--app <id>]
 ```
 
 Appends an island skeleton to the first page, then validates before writing — if the skeleton
-wouldn't render, nothing is saved. Fill in its `dataset` and fields afterward. Any built-in type
-works; see the [island registry](/islands/overview).
+wouldn't render, nothing is saved. Fill in its `dataset` and fields afterward. Targets one app
+(defaults to the sole app; `--app` when there's more than one). Any built-in type works; see the
+[island registry](/islands/overview).
+
+### `add-app`
+
+```bash
+openislands add-app <id> [project] --template <empty|finance|health|operations>
+```
+
+Adds another app to an existing workspace, scaffolding a full template into `apps/<id>/` — the CLI
+parity for the MCP `create_app` tool. The `id` must be a single safe path segment and not already
+exist.
 
 ### `validate`
 
 ```bash
-openislands validate [dir]
+openislands validate [project] [--app <id>]
 ```
 
-Compiles the manifest and checks every island's binding against the live data. On failure it
-names the page, the island, and the missing field, and exits non-zero — the safety net behind
-every edit, agent or human.
+Compiles **every** app's manifest and checks each island's binding against the live data; `--app`
+narrows it to one. On failure it names the app, page, island, and missing field, and exits
+non-zero if any app fails — the safety net behind every edit, agent or human.
 
 ### `sync`
 
 ```bash
-openislands sync [dir] [connector]
+openislands sync [project] [connector] [--app <id>]
 ```
 
-Pulls configured [connectors](/data/connectors) once and writes their datasets — name one
-connector or sync them all. Cron this for headless refresh; an OAuth connector needs to be
-authorized once from the running dashboard first.
+Pulls configured [connectors](/data/connectors) once across **all** apps and writes their datasets;
+name a connector and/or pass `--app` to narrow. Cron this for headless refresh; an OAuth connector
+needs to be authorized once from the running dashboard first.
 
 ## Next
 

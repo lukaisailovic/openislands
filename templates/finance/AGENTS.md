@@ -1,9 +1,11 @@
 # Agent guide
 
-This is an **OpenIslands** data app — a typed `app/manifest.json` of visual *islands* bound to local
-data files (CSV / JSON / Parquet / SQLite / markdown). You build and maintain it by editing the
-manifest through the **OpenIslands MCP server** (`openislands`, already wired in `.mcp.json`), never by
-writing rendering code.
+This is an **OpenIslands** workspace — one or more data apps under `apps/<id>/`, each a typed
+`apps/<id>/app/manifest.json` of visual *islands* bound to local data files (CSV / JSON / Parquet /
+SQLite / markdown). You build and maintain them by editing the manifest through the **OpenIslands MCP
+server** (`openislands`, already wired in `.mcp.json` — one endpoint for the whole workspace), never
+by writing rendering code. Call `list_apps` to see the apps; app-scoped tools take an optional `app`
+param (omit it when there's only one app).
 
 **Start here:** read `.agents/skills/openislands/SKILL.md` — the full guide to the manifest model, the
 safe edit loop, and CRUD recipes for datasets, islands, pages, actions, and queries.
