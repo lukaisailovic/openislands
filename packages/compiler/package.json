@@ -2,6 +2,7 @@
   "name": "@openislands/compiler",
   "version": "0.3.0",
   "description": "OpenIslands compiler — turns local files into typed data contracts and build-time snapshots.",
+  "keywords": ["openislands", "dashboard", "duckdb", "sql", "data-contracts", "arrow", "compiler", "csv", "parquet", "local-first"],
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",

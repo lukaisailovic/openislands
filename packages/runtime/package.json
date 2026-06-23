@@ -2,6 +2,7 @@
   "name": "@openislands/runtime",
   "version": "0.3.0",
   "description": "OpenIslands runtime — the TanStack Start SSR app and island registry.",
+  "keywords": ["openislands", "dashboard", "tanstack-start", "ssr", "react", "island", "duckdb", "data-app", "local-first", "echarts"],
   "type": "module",
   "license": "MIT",
   "homepage": "https://github.com/lukaisailovic/openislands",
