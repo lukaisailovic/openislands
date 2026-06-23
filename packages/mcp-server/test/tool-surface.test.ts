@@ -166,6 +166,23 @@ describe("tool-definition surface + budget", () => {
   });
 });
 
+describe("execute tool metadata", () => {
+  it("takes a required `code` string and embeds the `oi` TypeScript API in its description", async () => {
+    const execute = (await (await connect(freshFinance())).listTools()).tools.find((t) => t.name === "execute");
+    expect(execute, "the execute tool must be registered").toBeTruthy();
+
+    // The agent programs against the API carried in the description — a regression that drops it
+    // would still pass the source-level parity check below, so assert the shipped tool itself.
+    expect(execute!.description).toMatch(/declare const oi/);
+    expect(execute!.description).toMatch(/interface AppApi/);
+    expect(execute!.description).toContain("oi.app()");
+
+    const schema = execute!.inputSchema as { properties?: Record<string, { type?: string }>; required?: string[] };
+    expect(schema.properties?.code?.type, "execute takes a `code` string").toBe("string");
+    expect(schema.required ?? [], "`code` is required").toContain("code");
+  });
+});
+
 describe("canonical task walkthroughs — one execute program each", () => {
   it("orient cold — one program yields a usable map", async () => {
     const { body } = await runCode(await connect(freshFinance()), `
