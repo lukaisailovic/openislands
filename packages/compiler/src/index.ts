@@ -10,7 +10,6 @@
  * datasets via a pre-parsed JSON view). The runtime queries these views live;
  * `compile` reuses them for the contract check.
  */
-import { createHash } from "node:crypto";
 import { join, extname, basename, isAbsolute } from "node:path";
 import duckdb, { type DuckDBValue } from "@duckdb/node-api";
 import { type ContentStore, getContentStore } from "@openislands/storage";
@@ -121,12 +120,6 @@ export interface CompileReport {
   warnings: string[];
   /** schema-level island errors (fail loudly, named) */
   manifestErrors: IslandError[];
-}
-
-export interface CacheRef {
-  dataset: string;
-  path: string;
-  hash: string;
 }
 
 const DEFAULT_ROW_CAP = 10_000;
@@ -1074,16 +1067,4 @@ export async function compile(projectDir: string): Promise<CompileReport> {
 
   report.ok = report.errors.length === 0;
   return report;
-}
-
-// --- Optional Parquet cache (content-addressed, never the source of truth) ------
-
-export async function materialize(projectDir: string, dataset: string): Promise<CacheRef> {
-  const engine = await getEngine(projectDir);
-  if (!engine.registered.has(dataset)) throw unavailableDataset(engine, dataset);
-  const spec = engine.manifest.datasets[dataset]!;
-  const hash = createHash("sha256").update(JSON.stringify({ dataset, spec })).digest("hex").slice(0, 16);
-  const path = await getContentStore(projectDir).cacheTarget(`${dataset}-${hash}.parquet`);
-  await engine.conn.run(`COPY (SELECT * FROM ${quoteIdent(dataset)}) TO ${quoteLiteral(path)} (FORMAT parquet)`);
-  return { dataset, path, hash };
 }

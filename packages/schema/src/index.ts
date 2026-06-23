@@ -777,9 +777,6 @@ export const PAGE_ICONS = [
 export const PageIcon = z.enum(PAGE_ICONS);
 export type PageIcon = z.infer<typeof PageIcon>;
 
-/** The same curated set, used for an app's tile in the workspace app rail. */
-export const APP_ICONS = PAGE_ICONS;
-
 export const Group = z.object({
   id: z.string(),
   title: z.string().optional(),

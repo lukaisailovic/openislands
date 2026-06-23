@@ -2,16 +2,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Manifest, validateManifest } from "@openislands/schema";
 
-/** The absolute path to the user's project, set by `openislands serve` (M2.4). */
-export function projectDir(): string {
-  const dir = process.env.OPENISLANDS_PROJECT_DIR;
-  if (!dir)
-    throw new Error(
-      "OPENISLANDS_PROJECT_DIR is not set — the runtime must be booted by `openislands serve`",
-    );
-  return dir;
-}
-
 export interface LoadedManifest {
   manifest: Manifest;
   errors: { page: string; index: number; type: string; field?: string; message: string }[];

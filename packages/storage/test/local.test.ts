@@ -56,11 +56,10 @@ describe("LocalContentStore", () => {
     await store.remove("docs/missing.md"); // no throw
   });
 
-  it("resolves a source uri to an absolute path and a cache target under data/cache", async () => {
+  it("resolves a source uri to an absolute path", async () => {
     const store = new LocalContentStore(root);
     expect(store.sourceUri("data/x.csv")).toBe(join(root, "data/x.csv"));
     expect(store.sourceUri("/already/abs.csv")).toBe("/already/abs.csv");
-    expect(await store.cacheTarget("m-1.parquet")).toBe(join(root, "data/cache/m-1.parquet"));
   });
 
   it("configures an engine connection with the file search path", async () => {

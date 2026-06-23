@@ -185,16 +185,8 @@ export async function startWatcher(
     pending.clear();
     const rels = changed.map((abs) => normRel(relative(projectDir, abs)));
     try {
-      const seen = new Set<string>();
       const events: RuntimeEvent[] = [];
-      for (const rel of rels) {
-        for (const event of await eventsForChange(projectDir, rel)) {
-          const key = JSON.stringify(event);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          events.push(event);
-        }
-      }
+      for (const rel of rels) events.push(...(await eventsForChange(projectDir, rel)));
       for (const event of mergeEvents(events)) opts.broadcaster.publish(event);
       const fc = filesChangedEvent(projectDir, rels);
       if (fc) opts.broadcaster.publish(fc);
