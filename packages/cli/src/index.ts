@@ -18,7 +18,7 @@ import { Command } from "commander";
 import { compile, discoverApps, inferFile, isSafeAppId, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
 import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
-import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, envFlag, handleServeRequest, newMcpHandlerHolder, warnRuntimeHostExposed, type McpConfig, type McpHandlerHolder } from "./serve.js";
+import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, clientIpAllowed, envFlag, handleServeRequest, newMcpHandlerHolder, parseAllowedIps, warnRuntimeHostExposed, type McpConfig, type McpHandlerHolder } from "./serve.js";
 import { datasetNameFromFile, islandSkeleton, suggestIslands } from "./scaffold.js";
 
 interface FetchServer {
@@ -137,7 +137,7 @@ program
     const mcpEnabled = opts.mcp || envFlag(process.env.OPENISLANDS_MCP);
     const mcpToken = opts.mcpToken ?? process.env.OPENISLANDS_MCP_TOKEN ?? null;
     assertMcpHostSafe(host, mcpEnabled, mcpToken);
-    warnRuntimeHostExposed(host);
+    warnRuntimeHostExposed(host, parseAllowedIps(process.env.OPENISLANDS_ALLOWED_IPS));
 
     const apps = findWorkspaceApps(root);
     if (apps.length === 0) exitNoApps(root);
@@ -432,8 +432,22 @@ async function runValidate(root: string): Promise<number> {
   return 0;
 }
 
-async function toWebRequest(req: IncomingMessage, origin: string): Promise<Request> {
-  const url = `${origin}${req.url ?? "/"}`;
+/**
+ * The client-facing origin of a request, rebuilt from the `Host` header (and `x-forwarded-proto`
+ * behind a TLS-terminating proxy) — not the bind address. TanStack Start's default CSRF middleware
+ * compares this against the request's Origin/Referer, so a `0.0.0.0` bind reached over a LAN IP must
+ * reflect that IP here or every `/_serverFn/*` call 403s. Falls back to the bind origin when no Host.
+ */
+function requestOrigin(req: IncomingMessage, fallback: string): string {
+  const host = req.headers.host;
+  if (!host) return fallback;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const proto = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)?.split(",")[0]?.trim() || "http";
+  return `${proto}://${host}`;
+}
+
+async function toWebRequest(req: IncomingMessage, fallbackOrigin: string): Promise<Request> {
+  const url = `${requestOrigin(req, fallbackOrigin)}${req.url ?? "/"}`;
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue;
@@ -568,11 +582,18 @@ async function bootRuntime(
   const clientDir = join(dirname(serverEntry), "..", "client");
   const origin = `http://${host}:${port}`;
   const allowedHosts = allowedHostsFromEnv(process.env.OPENISLANDS_ALLOWED_HOSTS);
+  const allowedIps = parseAllowedIps(process.env.OPENISLANDS_ALLOWED_IPS);
   const mcpHandler = newMcpHandlerHolder();
 
   const server = createServer((req, res) => {
     void (async () => {
       try {
+        if (!clientIpAllowed(req.socket.remoteAddress, allowedIps)) {
+          res.statusCode = 403;
+          res.setHeader("content-type", "text/plain");
+          res.end(`client IP '${req.socket.remoteAddress ?? "unknown"}' is not allowed — add it to OPENISLANDS_ALLOWED_IPS`);
+          return;
+        }
         if (handleServeRequest(mcp, mcpHandler, req, res)) return;
         if (serveClientAsset(clientDir, req, res)) return;
         if ((req.url ?? "/").split("?")[0]!.startsWith("/api/")) {

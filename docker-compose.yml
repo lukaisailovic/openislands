@@ -8,7 +8,8 @@
 #
 # To reach it from other machines on your LAN/NAS, set OPENISLANDS_BIND=0.0.0.0.
 # Binding off loopback REQUIRES OPENISLANDS_MCP_TOKEN (MCP is a write surface) — or
-# set OPENISLANDS_MCP=0 for a dashboard-only, token-free container.
+# set OPENISLANDS_MCP=0 for a dashboard-only, token-free container. To limit which
+# devices may connect, set OPENISLANDS_ALLOWED_IPS to your LAN subnet (default: all).
 
 services:
   openislands:
@@ -27,6 +28,7 @@ services:
       OPENISLANDS_PORT: "4321"
       OPENISLANDS_MCP: "1"
       OPENISLANDS_MCP_TOKEN: ${OPENISLANDS_MCP_TOKEN:-} # required to bind off loopback
+      # OPENISLANDS_ALLOWED_IPS: 192.168.1.0/24  # restrict which client IPs may connect (default: all)
     volumes:
       # a single app (a dir with manifest.json) OR a workspace dir of such apps.
       # must be writable by uid 1000 — serve writes app state under .openislands/.

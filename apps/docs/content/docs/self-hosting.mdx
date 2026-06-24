@@ -105,6 +105,7 @@ Everything is environment-driven (CLI flags win if you also pass them):
 | `OPENISLANDS_MCP_TOKEN` | *(unset)* | Bearer token required on MCP requests. Required to bind off loopback with MCP on. |
 | `OPENISLANDS_PORT` | `4321` | Port the server listens on **inside** the container. |
 | `OPENISLANDS_HOST` | `0.0.0.0` | Interface the server binds **inside** the container. Leave as is. |
+| `OPENISLANDS_ALLOWED_IPS` | `*` (all) | IP allowlist for the whole port — comma-separated exact IPs and IPv4 CIDRs (e.g. `192.168.1.0/24`). Loopback is always allowed; unset means any host that can reach the port may connect. |
 
 ## Security
 
@@ -117,13 +118,19 @@ Two boundaries, both yours to set:
   **requires** `OPENISLANDS_MCP_TOKEN` or the server exits with a clear error — loopback alone is
   local trust (parity with stdio), but a write surface on the network is not. Generate one with
   `openssl rand -hex 32`.
+- **The IP allowlist is the network ACL on the runtime port.** Once the port is reachable across
+  your LAN, `OPENISLANDS_ALLOWED_IPS` decides which client IPs may connect at all — it gates the
+  dashboard, the API, server functions, and `/mcp` alike, before any handler runs. It defaults to
+  allow-all and always permits loopback. It's an ACL, not authentication: for real per-user auth,
+  front the container with a reverse proxy (Caddy/nginx).
 
 <Callout type="warn" title="Off-loopback needs a token">
 
 To expose OpenIslands on your LAN or NAS, set **both** `OPENISLANDS_BIND=0.0.0.0` **and**
-`OPENISLANDS_MCP_TOKEN=$(openssl rand -hex 32)`. Want the dashboard reachable but no agent write
-path at all? Set `OPENISLANDS_MCP=0` and the container boots token-free — the `/mcp` endpoint is
-simply not mounted.
+`OPENISLANDS_MCP_TOKEN=$(openssl rand -hex 32)`. Lock it to just your devices with
+`OPENISLANDS_ALLOWED_IPS=192.168.1.0/24` (your LAN subnet). Want the dashboard reachable but no
+agent write path at all? Set `OPENISLANDS_MCP=0` and the container boots token-free — the `/mcp`
+endpoint is simply not mounted.
 
 </Callout>
 

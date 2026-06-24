@@ -177,8 +177,9 @@ docker run -d -p 127.0.0.1:4321:4321 \
 ```
 
 Then open [127.0.0.1:4321](http://127.0.0.1:4321). To reach it across your LAN, bind `0.0.0.0` and
-keep the token set; for a dashboard-only container with no agent write path, set `OPENISLANDS_MCP=0`
-to boot token-free. See [Self-hosting](https://openislands.sh/self-hosting) for the full guide.
+keep the token set — and restrict who can connect with `OPENISLANDS_ALLOWED_IPS=192.168.1.0/24`
+(your subnet). For a dashboard-only container with no agent write path, set `OPENISLANDS_MCP=0` to
+boot token-free. See [Self-hosting](https://openislands.sh/self-hosting) for the full guide.
 
 ## Status
 

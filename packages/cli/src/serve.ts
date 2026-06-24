@@ -35,6 +35,83 @@ export function allowedHostsFromEnv(value: string | undefined): Set<string> {
   );
 }
 
+const LOOPBACK_IPS = new Set(["127.0.0.1", "::1"]);
+
+/** An IPv4-mapped IPv6 address (`::ffff:192.168.1.5`) reduced to its IPv4 form; other values pass through. */
+function normalizeIp(ip: string): string {
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  return mapped ? mapped[1]! : ip;
+}
+
+/** A dotted IPv4 string as a 32-bit number, or null when it isn't a valid IPv4 address. */
+function ipv4ToInt(ip: string): number | null {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return null;
+    const octet = Number(part);
+    if (octet > 255) return null;
+    n = n * 256 + octet;
+  }
+  return n;
+}
+
+interface Ipv4Cidr {
+  base: number;
+  mask: number;
+}
+
+/** A parsed `OPENISLANDS_ALLOWED_IPS` value. `any` short-circuits every check (unset / empty / `*`). */
+export interface IpAllowlist {
+  any: boolean;
+  exact: Set<string>;
+  cidrs: Ipv4Cidr[];
+}
+
+/**
+ * Parse `$OPENISLANDS_ALLOWED_IPS` (comma-separated). Entries are exact IPs (IPv4 or IPv6) or IPv4
+ * CIDR ranges (`192.168.1.0/24`). Unset, empty, or any `*` entry means allow all — the default, so
+ * an existing exposed deployment keeps working until the operator opts into a restriction.
+ */
+export function parseAllowedIps(value: string | undefined): IpAllowlist {
+  const entries = (value ?? "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+  if (entries.length === 0 || entries.includes("*")) return { any: true, exact: new Set(), cidrs: [] };
+  const exact = new Set<string>();
+  const cidrs: Ipv4Cidr[] = [];
+  for (const entry of entries) {
+    const slash = entry.indexOf("/");
+    if (slash === -1) {
+      exact.add(normalizeIp(entry));
+      continue;
+    }
+    const base = ipv4ToInt(entry.slice(0, slash));
+    const bits = Number(entry.slice(slash + 1));
+    // ponytail: IPv4 CIDR only; an IPv6 range falls back to an exact match (homelabs use v4 subnets)
+    if (base !== null && Number.isInteger(bits) && bits >= 0 && bits <= 32) {
+      const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
+      cidrs.push({ base: (base & mask) >>> 0, mask });
+    } else {
+      exact.add(normalizeIp(entry));
+    }
+  }
+  return { any: false, exact, cidrs };
+}
+
+/** Whether a client address may reach the runtime port. Loopback is always allowed (local + healthcheck). */
+export function clientIpAllowed(remoteAddress: string | undefined, allow: IpAllowlist): boolean {
+  if (allow.any) return true;
+  const ip = normalizeIp(remoteAddress ?? "");
+  if (LOOPBACK_IPS.has(ip)) return true;
+  if (allow.exact.has(ip)) return true;
+  const asInt = ipv4ToInt(ip);
+  if (asInt === null) return false;
+  return allow.cidrs.some((cidr) => ((asInt & cidr.mask) >>> 0) === cidr.base);
+}
+
 /**
  * Why a runtime `/api/*` request must be refused, or null to allow it. The runtime is
  * unauthenticated and the framework defends neither of the two browser-only threats to a local
@@ -85,15 +162,19 @@ export function apiRequestForbiddenReason(
 /**
  * Binding the runtime beyond loopback exposes its write routes (editor write/delete/move/create,
  * action insert, connector sync) to every host that can reach the port, with no authentication. We
- * can't safely bolt on auth retroactively, but we refuse to expose the write surface silently.
+ * can't safely bolt on auth retroactively, but we refuse to expose the write surface silently and
+ * point at the IP allowlist as the network-level mitigation — loudest when it isn't set yet.
  */
-export function warnRuntimeHostExposed(host: string): void {
+export function warnRuntimeHostExposed(host: string, allowedIps: IpAllowlist): void {
   if (LOOPBACK_HOSTS.has(host)) return;
+  const mitigation = allowedIps.any
+    ? `OPENISLANDS_ALLOWED_IPS is unset, so every host that can reach the port is allowed — set it to your ` +
+      `LAN subnet (e.g. 192.168.1.0/24) to restrict access.`
+    : `Only the IPs in OPENISLANDS_ALLOWED_IPS may connect.`;
   console.error(
     red(
       `\n⚠ Serving on a non-loopback host (${host}) exposes write routes (/api/editor/*, /api/action, ` +
-        `/api/connectors/*/sync) to the network with no authentication. Bind to loopback (127.0.0.1) ` +
-        `unless you trust every host that can reach this port.`,
+        `/api/connectors/*/sync) to the network with no authentication. ${mitigation}`,
     ),
   );
 }
