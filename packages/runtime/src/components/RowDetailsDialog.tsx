@@ -148,6 +148,7 @@ export function RowDetailsDialog({
   onClose: () => void;
 }) {
   const width = drilldown ? "w-[min(92vw,44rem)]" : "w-[min(92vw,28rem)]";
+  const fieldCols = drilldown ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2";
   return (
     <Dialog.Root
       open={row !== null}
@@ -170,9 +171,9 @@ export function RowDetailsDialog({
         {row ? (
           <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2 text-[14px]/[20px]">
             {fields.length > 0 ? (
-              <dl className="flex flex-col gap-3 text-sm">
+              <dl className={`grid ${fieldCols} gap-x-6 gap-y-3 text-sm`}>
                 {fields.map((f) => (
-                  <div key={f.field}>
+                  <div key={f.field} className="min-w-0">
                     <dt className="text-kumo-subtle">{f.label ?? f.field}</dt>
                     <dd className="mt-0.5">
                       <Text size="sm" DANGEROUS_className="break-words whitespace-pre-wrap">
