@@ -66,6 +66,7 @@ export function GaugeRings({ config, data }: IslandRenderProps) {
   const innermost = tracks.at(-1);
   const centerHole = innermost ? innermost.radius - stroke / 2 : 0;
   const hasCenterRoom = centerHole >= CENTER * CENTER_CLEARANCE;
+  const labelSize = Math.round(centerHole * 0.65);
 
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-around">
@@ -95,7 +96,7 @@ export function GaugeRings({ config, data }: IslandRenderProps) {
             textAnchor="middle"
             dominantBaseline="central"
             fill="currentColor"
-            fontSize="26"
+            fontSize={labelSize}
             fontWeight="600"
           >
             {Math.round(primary.pct * 100)}%

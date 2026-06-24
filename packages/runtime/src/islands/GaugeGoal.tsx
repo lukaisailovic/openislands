@@ -149,7 +149,7 @@ export function GaugeGoal({ config, data }: IslandRenderProps) {
 
   return (
     <div
-      className="flex flex-wrap items-start justify-center gap-x-6 gap-y-5"
+      className="flex h-full flex-wrap content-center items-center justify-center gap-x-6 gap-y-5"
       data-testid="gauge-goal"
       data-size={size}
     >
