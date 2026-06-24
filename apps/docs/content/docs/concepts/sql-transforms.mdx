@@ -28,7 +28,7 @@ columns.
 Drop a `.sql` file under `models/` (the convention is `models/transforms/`) and register it as
 a dataset by its `sql` path:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "datasets": {
   "transactions": { "source": "data/transactions.csv" },
   "monthly":      { "sql": "models/transforms/monthly.sql" }
@@ -62,7 +62,7 @@ Because every dataset is a view, a transform can read another transform, not onl
 one rule is order. Datasets register in the order they appear under `datasets`, so a transform
 has to be declared after everything it reads:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "datasets": {
   "transactions": { "source": "data/transactions.csv" },
   "monthly":      { "sql": "models/transforms/monthly.sql" },     // reads transactions

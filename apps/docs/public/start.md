@@ -6,7 +6,7 @@ OpenIslands dashboard. This doc is your briefing. Read it, then drive the steps 
 ## What OpenIslands is
 
 A local-first runtime for dashboards that **you** maintain. Every project is a **workspace**: each
-dashboard (an "app") lives under `apps/<id>/`, and its manifest is `apps/<id>/app/manifest.json`. A
+dashboard (an "app") lives under `apps/<id>/`, and its manifest is `apps/<id>/manifest.json`. A
 manifest is a typed declaration of reusable visual **islands** (KPI cards, charts, tables, gauges,
 feeds) bound to **typed data contracts** built from the user's local files — CSV, JSON, Parquet,
 SQLite, or markdown. The files never leave their machine; `serve` queries them live on every
@@ -48,7 +48,7 @@ To add another dashboard to the workspace later: `npx openislands add-app <id> -
 scaffolds `apps/<id>/`.
 
 If the project isn't scaffolded from a template, the only hard requirement is at least one
-`apps/<id>/app/manifest.json` and a `.mcp.json` that points `@openislands/mcp` at the project root.
+`apps/<id>/manifest.json` and a `.mcp.json` that points `@openislands/mcp` at the project root.
 
 ## Code Mode: one tool, driven with JavaScript
 

@@ -1,7 +1,7 @@
 # Agent guide
 
 This is an **OpenIslands** workspace — one or more data apps under `apps/<id>/`, each a typed
-`apps/<id>/app/manifest.json` of visual *islands* bound to local data files (CSV / JSON / Parquet /
+`apps/<id>/manifest.json` of visual *islands* bound to local data files (CSV / JSON / Parquet /
 SQLite / markdown). You build and maintain them by editing the manifest through the **OpenIslands MCP
 server** (`openislands`, already wired in `.mcp.json` — one endpoint for the whole workspace), never
 by writing rendering code.

@@ -32,4 +32,4 @@ To add a derived contract, drop a `.sql` file in `models/transforms/` and add a
 
 Replace the files in `data/` and `docs/` with your own — same column names, and the
 dashboard queries them live. The sample numbers here are illustrative. Nothing leaves your
-machine; let your agent maintain `app/manifest.json`.
+machine; let your agent maintain `manifest.json`.

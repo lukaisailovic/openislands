@@ -20,6 +20,15 @@ import { checkConnectors } from "./connectors.js";
 import { checkQueries } from "./queries.js";
 
 export { queryResultToArrowIPC } from "./arrow.js";
+export { migrateApp } from "./migrate.js";
+export {
+  discoverApps,
+  isSafeAppId,
+  readWorkspaceConfig,
+  scanWorkspaceApps,
+  type AppRef,
+  type WorkspaceConfig,
+} from "./workspace.js";
 export {
   checkCustomIsland,
   customIslandDir,
@@ -138,7 +147,7 @@ interface Engine {
 
 const engines = new Map<string, Promise<Engine>>();
 
-const MANIFEST_REL = join("app", "manifest.json");
+const MANIFEST_REL = "manifest.json";
 
 function manifestPathFor(projectDir: string): string {
   return join(projectDir, MANIFEST_REL);

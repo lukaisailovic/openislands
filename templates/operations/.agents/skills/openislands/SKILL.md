@@ -1,12 +1,12 @@
 ---
 name: openislands
-description: Build and maintain OpenIslands data dashboards — typed manifests of visual islands bound to local files (CSV / JSON / Parquet / SQLite / markdown), edited safely over the OpenIslands MCP server in Code Mode (one `execute` tool you drive with JavaScript). Use whenever a project has apps/<id>/app/manifest.json or an .mcp.json naming the openislands MCP server, and you are adding or changing datasets, islands, pages, actions, queries, or connectors, fixing a validation or binding error, or authoring a SQL transform.
+description: Build and maintain OpenIslands data dashboards — typed manifests of visual islands bound to local files (CSV / JSON / Parquet / SQLite / markdown), edited safely over the OpenIslands MCP server in Code Mode (one `execute` tool you drive with JavaScript). Use whenever a project has apps/<id>/manifest.json or an .mcp.json naming the openislands MCP server, and you are adding or changing datasets, islands, pages, actions, queries, or connectors, fixing a validation or binding error, or authoring a SQL transform.
 ---
 
 # Working with OpenIslands
 
 Every OpenIslands project is a **workspace**. Apps live under `apps/<id>/`, each its own
-**manifest** (`apps/<id>/app/manifest.json`) of reusable visual **islands** bound to **typed data
+**manifest** (`apps/<id>/manifest.json`) of reusable visual **islands** bound to **typed data
 contracts** built from local files. A one-app project is just a workspace with one app. You edit
 the manifest — never rendering code. The data stays in the app's files; `serve` queries them live.
 The whole point is that the dashboard **fails loudly** when a binding and the data disagree, instead
@@ -98,7 +98,7 @@ persists between calls, so you can stage in one and apply in the next.
 
 - **datasets** — a named map. Exactly one of `source` (a `.csv` / `.json` / `.parquet` / `.sqlite` /
   `.md` file) **or** `sql` (a path to a DuckDB transform). SQLite sources need a `table`. Source files
-  live under `data/`, `models/`, `docs/`, or `app/`.
+  live under `data/`, `models/`, or `docs/`.
 - **pages → islands** — each island has a `type`, an optional `span` (1–12 grid columns), and type-specific
   fields. Data islands name a `dataset` and the columns they bind (e.g. `value`, `x`, `y`, `label`).
   A page uses either a flat `islands` array or tabbed `groups`, not both.
@@ -222,7 +222,7 @@ that to the user; don't try to sync. When connected, `app.runSync(name)` pulls i
   the data, never silence it.
 - **Bind only to columns that exist.** Use `getDataSchema` / `validateSql` to confirm columns before
   binding.
-- **Sources stay under `data/` / `models/` / `docs/` / `app/`.** Secrets (`.env*`) and `.openislands/` are
+- **Sources stay under `data/` / `models/` / `docs/`.** Secrets (`.env*`) and `.openislands/` are
   off-limits.
 - **Prefer `patchManifest`; pass objects.** Re-sending a full manifest is the easiest way to introduce a
   typo.

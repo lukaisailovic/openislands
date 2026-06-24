@@ -5,7 +5,7 @@ real numbers never get committed. The files checked in here are realistic **samp
 stand-ins** — fictional figures — so the example boots before you've dropped anything in.
 
 To make this dashboard yours, replace the sample files with exports of the same shape.
-The manifest (`app/manifest.json`) and the SQL transforms (`models/transforms/`) bind to
+The manifest (`manifest.json`) and the SQL transforms (`models/transforms/`) bind to
 the columns below — keep the column names and the dashboard keeps working. Run
 `openislands validate apps/examples/finance` after any change; a missing column fails the
 build and names the island, so you find out immediately, not silently.

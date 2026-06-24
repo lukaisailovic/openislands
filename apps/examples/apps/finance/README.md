@@ -35,4 +35,4 @@ node_modules/.bin/tsx packages/cli/src/index.ts serve apps/examples/finance
 | `strategy_notes` | `docs/strategy.md` | markdown dataset |
 
 Data shaping (percentages, gain/loss) lives in `models/transforms/`, never in the manifest.
-Edit `app/manifest.json` to change the layout; never hand-edit build output.
+Edit `manifest.json` to change the layout; never hand-edit build output.

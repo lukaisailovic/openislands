@@ -13,7 +13,7 @@ export interface LoadedManifest {
  * renders and tells the user what their agent must fix.
  */
 export function loadManifest(dir: string): LoadedManifest {
-  const path = join(dir, "app", "manifest.json");
+  const path = join(dir, "manifest.json");
   if (!existsSync(path)) {
     return {
       manifest: { version: 1, title: "OpenIslands", datasets: {}, pages: [] },

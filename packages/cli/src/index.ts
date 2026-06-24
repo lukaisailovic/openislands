@@ -15,7 +15,7 @@ import { Readable } from "node:stream";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { compile, inferFile, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
+import { compile, discoverApps, inferFile, isSafeAppId, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
 import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
 import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, envFlag, handleServeRequest, newMcpHandlerHolder, warnRuntimeHostExposed, type McpConfig, type McpHandlerHolder } from "./serve.js";
@@ -169,7 +169,7 @@ program
   .action((island: string, project: string | undefined, opts: { app?: string }) => {
     const root = resolve(project ?? ".");
     const app = resolveSingleApp(root, opts.app);
-    const manifestPath = join(root, "apps", app, "app", "manifest.json");
+    const manifestPath = join(root, "apps", app, "manifest.json");
     if (!existsSync(manifestPath)) {
       console.error(c.red(`no manifest at ${manifestPath}`));
       process.exit(1);
@@ -306,7 +306,7 @@ function printInferPreview(name: string, src: string, schema: SourceSchema): voi
 }
 
 function bindInferredDataset(absFile: string, projectDir: string, name: string, src: string): number {
-  const manifestPath = join(projectDir, "app", "manifest.json");
+  const manifestPath = join(projectDir, "manifest.json");
   if (!existsSync(manifestPath)) {
     console.error(c.red(`no manifest at ${manifestPath}`));
     return 1;
@@ -512,19 +512,9 @@ function serveClientAsset(clientDir: string, req: IncomingMessage, res: ServerRe
   return true;
 }
 
-/** A safe app id is a single path segment (it is also a URL segment in the runtime). */
-function isSafeAppId(id: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id);
-}
-
 /** App ids under `<root>/apps` that hold a manifest, sorted. Empty when `<root>/apps` is absent. */
 export function findWorkspaceApps(root: string): string[] {
-  const appsDir = join(root, "apps");
-  if (!existsSync(appsDir)) return [];
-  return readdirSync(appsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && isSafeAppId(d.name) && existsSync(join(appsDir, d.name, "app", "manifest.json")))
-    .map((d) => d.name)
-    .toSorted();
+  return discoverApps(root).map((app) => app.id);
 }
 
 function exitNoApps(root: string): never {

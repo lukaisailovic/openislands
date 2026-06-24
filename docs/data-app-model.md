@@ -184,7 +184,7 @@ fixtures in `packages/runtime/test/custom.test.ts` show the minimal shape end to
 
 ## Workspaces (multiple apps, one process)
 
-`openislands serve <dir>` serves either a single app project (the dir holds `app/manifest.json`)
+`openislands serve <dir>` serves either a single app project (the dir holds `manifest.json`)
 or a **workspace**: a directory whose immediate subdirectories are app projects (e.g. this
 repo's `apps/examples/`). A workspace runs in ONE process on ONE port — the UI gets a
 Discord-style left rail of app tiles to switch apps; with a single app the rail hides.

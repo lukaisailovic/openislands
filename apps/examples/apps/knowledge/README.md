@@ -52,5 +52,5 @@ the app:
 | `data/glossary.csv` | shared terminology (editable CSV table) |
 
 Edit the files to change the knowledge base — in the workspace (markdown editor or CSV grid) or in
-your own editor, where external changes live-refresh the open workspace. Edit `app/manifest.json` to
+your own editor, where external changes live-refresh the open workspace. Edit `manifest.json` to
 change the layout or the folder grouping. Never hand-edit build output.

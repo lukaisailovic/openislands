@@ -12,7 +12,7 @@
  *     `.openislands/` internals are off-limits to any tool input. (The server
  *     reads/writes `.openislands/` itself via dedicated, fixed paths — never
  *     via a path derived from a tool argument.)
- *   - Writes are confined to `app/manifest.json`. Nothing else is ever written.
+ *   - Writes are confined to `manifest.json`. Nothing else is ever written.
  */
 import { resolveWithinRoot } from "@openislands/storage";
 
@@ -42,7 +42,7 @@ export function confineReadable(projectRoot: string, candidate: string): string 
 /** Top-level dirs a dataset source / sql transform may live under. `docs/` is here
  * because markdown files are a first-class dataset source (a `source.doc` island or
  * a markdown dataset). Action writability is enforced downstream by the writer, not here. */
-const SOURCE_DIRS = ["app", "data", "docs", "models"];
+const SOURCE_DIRS = ["data", "docs", "models"];
 
 /** Assert a dataset source path is allowed to be read (confined + in a source dir). */
 export function confineDatasetSource(projectRoot: string, source: string): string {

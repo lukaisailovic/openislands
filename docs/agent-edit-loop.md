@@ -43,7 +43,7 @@ omitted) — it restores manifest *and* data checkpoints; the id encodes the tar
 raw file-write tool and no git dependency by design — rollback safety is `.openislands/history/`
 snapshots (count + byte capped, oldest pruned first).
 
-Without MCP, the same loop is: edit `app/manifest.json` → `openislands validate` → `openislands serve`.
+Without MCP, the same loop is: edit `manifest.json` → `openislands validate` → `openislands serve`.
 
 ## Actions (the data write path)
 

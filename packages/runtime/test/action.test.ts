@@ -24,9 +24,9 @@ function manifestWith(actions: Record<string, unknown>) {
 
 function project(actions: Record<string, unknown>, files: Record<string, string> = { "data/meals.csv": MEALS_CSV }): string {
   const dir = mkdtempSync(join(tmpdir(), "oi-rt-action-"));
-  mkdirSync(join(dir, "app"), { recursive: true });
+  mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
-  writeFileSync(join(dir, "app", "manifest.json"), JSON.stringify(manifestWith(actions)));
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifestWith(actions)));
   for (const [path, content] of Object.entries(files)) writeFileSync(join(dir, path), content);
   projects.push(dir);
   return dir;

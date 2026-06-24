@@ -20,9 +20,9 @@ export default z.object({
 
 function project(manifest: unknown, opts?: { schema?: string }): string {
   const dir = mkdtempSync(join(tmpdir(), "oi-custom-"));
-  mkdirSync(join(dir, "app"), { recursive: true });
+  mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
-  writeFileSync(join(dir, "app", "manifest.json"), JSON.stringify(manifest));
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));
   writeFileSync(join(dir, "data", "m.csv"), "protein_g,protein_goal_g\n100,120\n");
   if (opts?.schema !== undefined) {
     const sdir = join(dir, "components", "custom", "gauge.ring");

@@ -22,7 +22,7 @@ import { type AppContext, type ApiRuntime, createAppApi, minimalManifest } from 
 import { createCheckpointStore } from "./checkpoints.js";
 import { runCode } from "./codemode.js";
 import { createProposalStore } from "./proposals.js";
-import { isSafeAppId, scanApps } from "./workspace.js";
+import { isSafeAppId, scanWorkspaceApps as scanApps } from "@openislands/compiler";
 
 /** Read from package.json so the MCP handshake version tracks the published release. */
 const SERVER_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
@@ -119,7 +119,7 @@ interface AppResolutionError {
 }
 const isResolutionError = (r: AppContext | AppResolutionError): r is AppResolutionError => "error" in r;
 
-const readManifestText = async (ctx: AppContext): Promise<string> => (await ctx.content.readText("app/manifest.json")) ?? "{}";
+const readManifestText = async (ctx: AppContext): Promise<string> => (await ctx.content.readText("manifest.json")) ?? "{}";
 
 /** Best-effort manifest title for the apps list + resource list — falls back to the id. */
 async function appTitle(ctx: AppContext): Promise<string> {
@@ -174,8 +174,8 @@ export function createServer(projectRoot: string): McpServer {
     if (!isSafeAppId(id)) return { ok: false, error: `invalid app id '${id}' — use one safe path segment (letters, digits, '.', '_', '-')` };
     const dir = join(projectRoot, "apps", id);
     if (existsSync(dir)) return { ok: false, error: `app '${id}' already exists` };
-    for (const sub of ["app", "data", "models", "docs"]) await mkdir(join(dir, sub), { recursive: true });
-    await getContentStore(dir).writeText("app/manifest.json", minimalManifest(title ?? id));
+    for (const sub of ["data", "models", "docs"]) await mkdir(join(dir, sub), { recursive: true });
+    await getContentStore(dir).writeText("manifest.json", minimalManifest(title ?? id));
     contexts.delete(id);
     return { ok: true, id, dir };
   }

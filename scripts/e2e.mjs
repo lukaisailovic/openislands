@@ -25,7 +25,7 @@ const TEMPLATES = [
 ];
 
 function manifestTitle(template, appId) {
-  const manifest = join(repoRoot, "templates", template, "apps", appId, "app", "manifest.json");
+  const manifest = join(repoRoot, "templates", template, "apps", appId, "manifest.json");
   return JSON.parse(readFileSync(manifest, "utf8")).title;
 }
 

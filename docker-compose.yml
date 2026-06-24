@@ -28,6 +28,6 @@ services:
       OPENISLANDS_MCP: "1"
       OPENISLANDS_MCP_TOKEN: ${OPENISLANDS_MCP_TOKEN:-} # required to bind off loopback
     volumes:
-      # a single app (a dir with app/manifest.json) OR a workspace dir of such apps.
+      # a single app (a dir with manifest.json) OR a workspace dir of such apps.
       # must be writable by uid 1000 — serve writes app state under .openislands/.
       - ./project:/project

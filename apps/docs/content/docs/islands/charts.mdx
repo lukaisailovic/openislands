@@ -45,7 +45,7 @@ value appears beneath the chart.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "timeseries.line",
   "title": "Revenue vs target",
@@ -104,7 +104,7 @@ a bar per subgroup, and `stacked: true` to stack those subgroups into one bar pe
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "category.bar",
   "title": "Spend by category",
@@ -156,7 +156,7 @@ accept a single field or an array.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "category.combo",
   "title": "Revenue vs. margin",
@@ -204,7 +204,7 @@ renderer, so the dataset stays a flat list of `(step, delta, kind)` rows.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "waterfall.bars",
   "title": "Operating profit bridge",
@@ -259,7 +259,7 @@ against the largest in the visible set, so the list reads as a ranking at a glan
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "rank.list",
   "title": "Top products by revenue",
@@ -307,7 +307,7 @@ group leaves under a hierarchy.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "breakdown.treemap",
   "title": "Portfolio allocation",
@@ -351,7 +351,7 @@ many of them.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "category.pie",
   "title": "Revenue by product",
@@ -409,7 +409,7 @@ field. The `x`/`y` fields (and their `xFormat`/`format`) drive the axes and the 
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "correlation.scatter",
   "title": "Spend vs. conversions by channel",
@@ -461,7 +461,7 @@ the last value seen for a repeated cell.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "distribution.heatmap",
   "title": "Orders by weekday and hour",
@@ -514,7 +514,7 @@ and rows landing on the same day sum. Give it a half-width or wider tile.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "activity.calendar",
   "title": "Commits per day",
@@ -555,7 +555,7 @@ follow the row order; set `sort` to reorder them.
   )}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "funnel.steps",
   "title": "Signup conversion",
@@ -600,7 +600,7 @@ across every axis when the metrics are on a common scale (e.g. all 0-100 scores)
   height={300}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "compare.radar",
   "title": "Product comparison",
@@ -647,7 +647,7 @@ country name.
   height={320}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "map.choropleth",
   "title": "Revenue by country",
