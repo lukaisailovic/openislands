@@ -43,8 +43,10 @@ jobs:
     permissions:
       contents: write # bump commit, tag, push, GitHub release
       id-token: write # npm OIDC trusted publishing + provenance
-      packages: write # push versioned + :latest images to GHCR
-      attestations: write # image build provenance
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      major_minor: ${{ steps.version.outputs.major_minor }}
     steps:
       # Checkout over SSH with a write deploy key. `main` is protected by the `prod`
       # ruleset (required PR + status checks); the deploy key is on that ruleset's
@@ -140,52 +142,103 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: gh release create "${TAG}" --generate-notes --verify-tag --title "${TAG}" --latest
 
-      # Multi-arch image (amd64 + arm64 — a NAS may be ARM) for the versioned + :latest
-      # tags. Runs AFTER the npm publish on purpose: npm is the source of truth, so a
-      # docker failure here leaves a published, tagged release rather than stranding an
-      # un-tagged npm publish behind a half-built image. Skipped entirely on dry_run.
-      - name: Set up QEMU
-        if: ${{ !inputs.dry_run }}
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        if: ${{ !inputs.dry_run }}
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        if: ${{ !inputs.dry_run }}
-        uses: docker/login-action@v3
+  # Multi-arch image (amd64 + arm64 — a NAS may be ARM) built on NATIVE runners in
+  # parallel (no QEMU emulation), each pushed by digest. `needs: release` keeps the
+  # original ordering: docker runs only after npm is published + tagged, so a docker
+  # failure leaves a published release rather than an un-tagged npm publish behind a
+  # half-built image. The whole docker pipeline is skipped on dry_run.
+  docker-build:
+    name: Build image (${{ matrix.arch }})
+    needs: release
+    if: ${{ !inputs.dry_run }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      # Check out the bump commit (the tag), so the image carries the released version.
+      - uses: actions/checkout@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Image metadata
-        id: meta
-        if: ${{ !inputs.dry_run }}
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ steps.version.outputs.version }}
-            type=raw,value=${{ steps.version.outputs.major_minor }}
-            type=raw,value=latest
-
-      - name: Build and push image
-        id: push
-        if: ${{ !inputs.dry_run }}
+          ref: ${{ needs.release.outputs.tag }}
+          persist-credentials: false
+      - uses: ./.github/actions/ghcr-buildx
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ matrix.platform }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
+  # Combine the per-arch digests into one multi-arch manifest, apply the version
+  # tags, and attest the manifest. Tags pushed: X.Y.Z, X.Y, latest.
+  docker-merge:
+    name: Publish multi-arch manifest
+    needs: [release, docker-build]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # image build provenance
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/ghcr-buildx
+      - name: Create manifest and push tags
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          VERSION: ${{ needs.release.outputs.version }}
+          MAJOR_MINOR: ${{ needs.release.outputs.major_minor }}
+        run: |
+          # shellcheck disable=SC2046 # word-splitting is intentional: one arg per digest
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            -t "${IMAGE}:${MAJOR_MINOR}" \
+            -t "${IMAGE}:latest" \
+            $(printf "${IMAGE}@sha256:%s " *)
+      - name: Resolve manifest digest
+        id: digest
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: echo "digest=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{.Manifest.Digest}}')" >> "$GITHUB_OUTPUT"
+      # Attestation lands in GitHub's native store (verify with `gh attestation verify
+      # oci://...`). Not pushed to the registry — that fallback creates a
+      # `sha256-<digest>` referrer tag that clutters the tag list.
       - name: Attest image provenance
-        if: ${{ !inputs.dry_run }}
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
+          subject-digest: ${{ steps.digest.outputs.digest }}
