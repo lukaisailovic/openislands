@@ -5,8 +5,8 @@ description: The islands that aren't charts of your data — a note for prose, a
 
 The islands that aren't charts of your data: a **note** for prose, a **source doc** for a file
 or link, a **content editor** for a whole workspace of markdown files, a **form entry** for adding
-rows by hand, and a **layout row** to control how a page wraps. See the
-[islands overview](/islands/overview) for the full registry.
+rows by hand, and a **layout row** to control how a page wraps — plus tabbed **groups** to split
+a busy page. See the [islands overview](/islands/overview) for the full registry.
 
 ## `note.card`
 
@@ -274,3 +274,32 @@ There's no live preview for `layout.row` because it's a layout primitive, not a 
 means something in the context of a full page grid. Reach for it when two or three tiles should
 always share a row regardless of what comes before them.
 </Callout>
+
+## Tabs (`groups`)
+
+**What it is.** A page-level split into tabs. A page holds **either** a flat `islands` array
+**or** a `groups` array — never both. Each group is `{ id, title?, islands }` and renders as a
+tab under the page header, deep-linked via `?group=<id>`. **When to use it:** when one page
+carries more than fits a single scroll — split related islands into tabs instead of spilling onto
+a second sidebar page.
+
+```jsonc title="manifest.json"
+{
+  "id": "labs",
+  "groups": [
+    { "id": "latest",  "title": "Latest",  "islands": [ /* ... */ ] },
+    { "id": "panels",  "title": "Panels",  "islands": [ /* ... */ ] },
+    { "id": "history", "title": "History", "islands": [ /* ... */ ] }
+  ]
+}
+```
+
+**Key points.**
+
+- Each group is its own fresh 12-column grid, sized exactly like a flat page.
+- `groups` is **not an island** — it's page structure, the same tier as the page itself. It lives
+  on the page, not in an island list, so it can't sit inside a `layout.row` or another group, and
+  it won't appear in the island catalog or `oi.app().listIslands()`.
+
+See [Pages and groups](/concepts/manifest#pages-and-groups) for the page-level shape and the
+`islands`/`groups` rule.

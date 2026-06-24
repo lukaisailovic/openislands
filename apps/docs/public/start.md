@@ -117,7 +117,9 @@ Prefer `patchManifest` — you never re-send (or re-typo) the whole document.
   `.md` file) **or** `sql` (a path to a DuckDB transform). SQLite sources need a `table`.
 - **pages → islands** — each island has a `type`, an optional `span` (1–12 grid columns), and
   type-specific fields. Data islands name a `dataset` and the columns they bind (`value`, `x`, `y`,
-  `label`, …). A page uses either a flat `islands` array or tabbed `groups`, not both.
+  `label`, …). A page uses either a flat `islands` array or tabbed `groups`, not both — a group is
+  `{ id, title?, islands }` and renders as a tab. Groups are page structure, not an island, so they
+  won't show up in `listIslands()`.
 - **actions** — a typed `insert` into a writable file dataset; append rows with `app.runAction`.
 - **queries** — a typed, parameterized read; run it with `app.runQuery`. No raw SQL — heavy shaping
   lives in a `sql` transform the query reads from.
