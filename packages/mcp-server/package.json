@@ -1,6 +1,6 @@
 {
   "name": "@openislands/mcp",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "OpenIslands MCP server — Code Mode: an agent maintains your dashboard by writing JavaScript against one tool, read-many / write-one, every edit validated + checkpointed.",
   "keywords": [
     "openislands",
