@@ -13,7 +13,7 @@
 import { z } from "zod";
 import type { ActionSpec, FieldSpec, Manifest } from "@openislands/schema";
 import { getAppStateStore, getContentStore } from "@openislands/storage";
-import { inferSchema, readManifest, resetEngine, type Column, type ColumnType } from "./index.js";
+import { inferSchema, invalidateEngineDatasets, readManifest, type Column, type ColumnType } from "./index.js";
 import { resolveWriter, type WriteTarget } from "./writers.js";
 
 export const MAX_SNAPSHOTS_PER_FILE = 20;
@@ -60,7 +60,7 @@ function actionWriteTarget(manifest: Manifest, action: ActionSpec): WriteTarget 
   const spec = manifest.datasets[action.dataset];
   if (!spec) throw new Error(`action targets unknown dataset '${action.dataset}'`);
   if (!spec.source) throw new Error(`action dataset '${action.dataset}' has no source — derived datasets are not writable`);
-  return { source: spec.source, table: spec.table };
+  return { dataset: action.dataset, source: spec.source, table: spec.table };
 }
 
 function baseTypeSchema(type: ColumnType): z.ZodType {
@@ -258,7 +258,8 @@ export { snapshotFile, pruneSnapshots };
  * the dataset's writer — creating a flat file that doesn't exist yet. The shared
  * core under both the action insert path and the connector insert path.
  * All-or-nothing: any invalid row throws an `ActionValidationError` and nothing
- * is written. Resets the engine afterwards so the next query re-reads the data.
+ * is written. Re-registers the written dataset afterwards so the next query
+ * re-reads the data (and its FTS sidecar, if any, is rebuilt).
  */
 export async function insertValidatedRows(
   projectDir: string,
@@ -274,15 +275,15 @@ export async function insertValidatedRows(
   const checkpoint_id = (await writer.exists()) ? await snapshotFile(projectDir, writer.path) : "";
   await writer.insert(validated);
   if (checkpoint_id) await pruneSnapshots(projectDir, writer.path, opts);
-  resetEngine(projectDir);
+  await invalidateEngineDatasets(projectDir, [target.dataset]);
   return { inserted: rows.length, checkpoint_id };
 }
 
 /**
  * Validate rows against a row schema, snapshot the existing target (if any),
  * then overwrite every row through the dataset's writer. A fresh flat file is
- * created with no snapshot (checkpoint_id undefined). Resets the engine so the
- * next query re-reads.
+ * created with no snapshot (checkpoint_id undefined). Re-registers the written
+ * dataset so the next query re-reads (rebuilding its FTS sidecar, if any).
  */
 export async function replaceValidatedRows(
   projectDir: string,
@@ -298,7 +299,7 @@ export async function replaceValidatedRows(
   const checkpoint_id = await snapshotIfExists(projectDir, writer.path);
   await writer.replace(validated);
   if (checkpoint_id) await pruneSnapshots(projectDir, writer.path, opts);
-  resetEngine(projectDir);
+  await invalidateEngineDatasets(projectDir, [target.dataset]);
   return { replaced: rows.length, checkpoint_id };
 }
 

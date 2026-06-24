@@ -11,9 +11,10 @@
  * `compile` reuses them for the contract check.
  */
 import { join, extname, basename, isAbsolute } from "node:path";
+import { createHash } from "node:crypto";
 import duckdb, { type DuckDBValue } from "@duckdb/node-api";
 import { type ContentStore, getContentStore, isHiddenPath, resolveWithinRoot } from "@openislands/storage";
-import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, lintManifest, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType } from "@openislands/schema";
+import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, lintManifest, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType, type QuerySearch } from "@openislands/schema";
 import { queryResultToArrowIPC } from "./arrow.js";
 import { checkCustomIsland } from "./customSchema.js";
 import { checkConnectors } from "./connectors.js";
@@ -137,12 +138,25 @@ const DEFAULT_ROW_CAP = 10_000;
 
 interface Engine {
   conn: DuckDBConnection;
+  instance: InstanceType<typeof DuckDBInstance>;
   manifest: Manifest;
   registered: Set<string>;
   /** Datasets that failed to register, mapped to the real reason. A failed dataset
    * no longer aborts the whole engine — healthy siblings still register, and the
    * captured message surfaces instead of a blanket "unknown or unreadable". */
   failures: Map<string, string>;
+  /** Datasets that back an FTS index → the sidecar table(s) to (re)build for them.
+   * A query declaring `search` materializes its dataset into one of these so DuckDB
+   * can index it (a view can't be indexed). Keyed by dataset so invalidation reuses it. */
+  ftsTargets: Map<string, FtsTarget[]>;
+}
+
+/** One materialized FTS sidecar: the temp table holding the dataset's rows + a synthetic `_rowid`, indexed over `fields`. */
+interface FtsTarget {
+  table: string;
+  fields: string[];
+  stemmer: string;
+  stopwords: string;
 }
 
 const engines = new Map<string, Promise<Engine>>();
@@ -171,11 +185,13 @@ async function registerDatasets(
   conn: DuckDBConnection,
   store: ContentStore,
   manifest: Manifest,
+  ftsTargets: Map<string, FtsTarget[]>,
 ): Promise<{ registered: Set<string>; failures: Map<string, string> }> {
   const specs = Object.values(manifest.datasets);
   if (specs.some((spec) => spec.source && isSqliteSource(spec.source))) {
     await conn.run("INSTALL sqlite; LOAD sqlite;");
   }
+  if (ftsTargets.size > 0) await conn.run("INSTALL fts; LOAD fts;");
   const registered = new Set<string>();
   const failures = new Map<string, string>();
   for (const [name, spec] of Object.entries(manifest.datasets)) {
@@ -184,7 +200,9 @@ async function registerDatasets(
       registered.add(name);
     } catch (e) {
       failures.set(name, (e as Error).message);
+      continue;
     }
+    await buildFtsIndexes(conn, name, ftsTargets.get(name));
   }
   return { registered, failures };
 }
@@ -195,8 +213,9 @@ async function buildEngine(projectDir: string): Promise<Engine> {
   const instance = await DuckDBInstance.create(":memory:");
   const conn = await instance.connect();
   await store.configureEngine(conn);
-  const { registered, failures } = await registerDatasets(projectDir, conn, store, manifest);
-  return { conn, manifest, registered, failures };
+  const ftsTargets = ftsTargetsForManifest(manifest);
+  const { registered, failures } = await registerDatasets(projectDir, conn, store, manifest, ftsTargets);
+  return { conn, instance, manifest, registered, failures, ftsTargets };
 }
 
 function getEngine(projectDir: string): Promise<Engine> {
@@ -207,9 +226,51 @@ function getEngine(projectDir: string): Promise<Engine> {
   return created;
 }
 
-/** Drops the cached engine so the next call re-reads the manifest and files. */
+/** Drops the cached engine so the next call re-reads the manifest and files. Closes the dropped
+ * instance's native handle (FTS materialized tables make a leak costlier); the close is best-effort. */
 export function resetEngine(projectDir: string): void {
+  const existing = engines.get(projectDir);
   engines.delete(projectDir);
+  if (!existing) return;
+  void existing
+    .then((engine) => {
+      engine.conn.closeSync();
+      engine.instance.closeSync();
+    })
+    .catch(() => {});
+}
+
+/**
+ * Re-register only the named datasets on the live engine instead of dropping it — the data/model
+ * file-change path. A plain view auto-reflects a content change on the next query (the reader
+ * re-executes), but a markdown dataset bakes its content into the view at registration and an FTS
+ * sidecar is materialized, so both need an explicit rebuild. Mutates the cached engine IN PLACE:
+ * never swaps the promise, which would orphan the live connection in-flight queries hold. A no-op
+ * when no engine is cached (the next getEngine builds fresh). Per-dataset failures are isolated.
+ */
+export async function invalidateEngineDatasets(projectDir: string, names: string[]): Promise<void> {
+  const cached = engines.get(projectDir);
+  if (!cached) return;
+  const engine = await cached;
+  const store = getContentStore(projectDir);
+  for (const name of names) {
+    const spec = engine.manifest.datasets[name];
+    if (!spec) {
+      engine.registered.delete(name);
+      engine.failures.delete(name);
+      continue;
+    }
+    try {
+      await registerDataset(projectDir, engine.conn, store, name, spec);
+      engine.registered.add(name);
+      engine.failures.delete(name);
+    } catch (e) {
+      engine.registered.delete(name);
+      engine.failures.set(name, (e as Error).message);
+      continue;
+    }
+    await buildFtsIndexes(engine.conn, name, engine.ftsTargets.get(name));
+  }
 }
 
 /** Why a dataset isn't queryable: its real registration failure if it had one, else just unknown. */
@@ -227,6 +288,59 @@ function quoteLiteral(value: string): string {
 
 export function resolveSourcePath(projectDir: string, source: string): string {
   return isAbsolute(source) ? source : join(projectDir, source);
+}
+
+// --- FTS sidecar tables (full-text search) --------------------------------------
+
+/** A search config's identity: dataset + sorted fields + stemmer + stopwords. Two queries with the
+ * same config share one index. Stemmer/stopwords carry their Zod defaults by the time a spec validates. */
+function ftsSignature(dataset: string, search: QuerySearch): string {
+  return JSON.stringify([dataset, search.fields.toSorted(), search.stemmer, search.stopwords]);
+}
+
+/** The temp table name an FTS query reads from — a deterministic, identifier-safe hash of its config so
+ * build and query-translation agree without sharing engine state. Exported for queries.ts. */
+export function ftsTableName(dataset: string, search: QuerySearch): string {
+  return `_fts_${createHash("sha1").update(ftsSignature(dataset, search)).digest("hex").slice(0, 16)}`;
+}
+
+/** Map of dataset → its FTS sidecar targets, deduped by signature. A dataset is a target when some
+ * query's `search.fields` references it. */
+function ftsTargetsForManifest(manifest: Manifest): Map<string, FtsTarget[]> {
+  const targets = new Map<string, FtsTarget[]>();
+  const seen = new Set<string>();
+  for (const spec of Object.values(manifest.queries ?? {})) {
+    if (!spec.search) continue;
+    const dataset = spec.dataset;
+    const sig = ftsSignature(dataset, spec.search);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    const list = targets.get(dataset) ?? [];
+    list.push({ table: ftsTableName(dataset, spec.search), fields: spec.search.fields, stemmer: spec.search.stemmer, stopwords: spec.search.stopwords });
+    targets.set(dataset, list);
+  }
+  return targets;
+}
+
+/** (Re)build one FTS sidecar: materialize the dataset's rows under a synthetic `_rowid`, then index it.
+ * Idempotent (CREATE OR REPLACE + overwrite=1) so engine build and invalidation share this one path. */
+async function buildFtsIndex(conn: DuckDBConnection, dataset: string, target: FtsTarget): Promise<void> {
+  const table = quoteIdent(target.table);
+  await conn.run(`CREATE OR REPLACE TEMP TABLE ${table} AS SELECT row_number() OVER () AS _rowid, * FROM ${quoteIdent(dataset)}`);
+  const cols = target.fields.map(quoteLiteral).join(", ");
+  // ponytail: drop_fts_index/create_fts_index isn't atomic like CREATE OR REPLACE VIEW, so a concurrent
+  // SSR read during a reindex may briefly error; the client refetches on the datasets-changed event that
+  // follows. Single-user local dev — no mutex.
+  await conn.run(
+    `PRAGMA create_fts_index(${quoteLiteral(target.table)}, '_rowid', ${cols}, stemmer=${quoteLiteral(target.stemmer)}, stopwords=${quoteLiteral(target.stopwords)}, strip_accents=1, lower=1, overwrite=1)`,
+  );
+}
+
+/** Build a dataset's FTS sidecars best-effort. A build failure — realistically only a bad search field,
+ * which checkQueries reports as a clean named error — must not fail the queryable view; the index is a
+ * search-query optimization, not part of the dataset contract. */
+async function buildFtsIndexes(conn: DuckDBConnection, dataset: string, targets: FtsTarget[] | undefined): Promise<void> {
+  for (const target of targets ?? []) await buildFtsIndex(conn, dataset, target).catch(() => {});
 }
 
 /**
@@ -273,7 +387,7 @@ async function registerDataset(projectDir: string, conn: DuckDBConnection, store
     confineSource(projectDir, spec.sql);
     const body = await store.readText(spec.sql);
     if (body === null) throw new Error(`dataset '${name}': sql transform not found: ${spec.sql}`);
-    await conn.run(`CREATE VIEW ${view} AS ${body.trim().replace(/;\s*$/, "")}`);
+    await conn.run(`CREATE OR REPLACE VIEW ${view} AS ${body.trim().replace(/;\s*$/, "")}`);
     return;
   }
   if (!spec.source) throw new Error(`dataset '${name}': no source`);
@@ -287,11 +401,11 @@ async function registerDataset(projectDir: string, conn: DuckDBConnection, store
     if (!spec.table) throw new Error(`dataset '${name}': a sqlite source needs a 'table'`);
     if (!(await store.exists(spec.source))) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
     const path = await store.localPath(spec.source);
-    await conn.run(`CREATE VIEW ${view} AS SELECT * FROM sqlite_scan(${quoteLiteral(path)}, ${quoteLiteral(spec.table)})`);
+    await conn.run(`CREATE OR REPLACE VIEW ${view} AS SELECT * FROM sqlite_scan(${quoteLiteral(path)}, ${quoteLiteral(spec.table)})`);
     return;
   }
   if (!spec.source.includes("*") && !(await store.exists(spec.source))) throw new Error(`dataset '${name}': source not found: ${spec.source}`);
-  await conn.run(`CREATE VIEW ${view} AS SELECT * FROM ${fileReaderExpr(spec.source, store.sourceUri(spec.source))}`);
+  await conn.run(`CREATE OR REPLACE VIEW ${view} AS SELECT * FROM ${fileReaderExpr(spec.source, store.sourceUri(spec.source))}`);
 }
 
 // --- Markdown datasets ----------------------------------------------------------
@@ -340,7 +454,7 @@ async function registerMarkdownDataset(conn: DuckDBConnection, store: ContentSto
   const keys = Object.keys(row);
   const cols = keys.map(quoteIdent).join(", ");
   const values = keys.map((k) => scalarToSql(row[k]!)).join(", ");
-  await conn.run(`CREATE VIEW ${quoteIdent(name)} AS SELECT * FROM (VALUES (${values})) AS _md(${cols})`);
+  await conn.run(`CREATE OR REPLACE VIEW ${quoteIdent(name)} AS SELECT * FROM (VALUES (${values})) AS _md(${cols})`);
 }
 
 // --- DuckDB value + type mapping ------------------------------------------------
@@ -682,7 +796,7 @@ export async function inspectManifestDatasets(
   const conn = await instance.connect();
   try {
     await store.configureEngine(conn);
-    const { registered, failures } = await registerDatasets(projectDir, conn, store, manifest);
+    const { registered, failures } = await registerDatasets(projectDir, conn, store, manifest, new Map());
     const columns = new Map<string, Column[]>();
     for (const name of registered) {
       const reader = await conn.runAndReadAll(`SELECT * FROM ${quoteIdent(name)} LIMIT 0`);
@@ -1051,7 +1165,17 @@ function formatContractError(e: ContractError): string {
   return `[${e.page}#${e.index} ${e.type}] ${e.message}`;
 }
 
+/** The cold compile: drops any cached engine so the contract check runs against a freshly built one.
+ * The CLI `validate` + MCP propose/validate paths use this — a full manifest/structure re-read. */
 export async function compile(projectDir: string): Promise<CompileReport> {
+  resetEngine(projectDir);
+  return compileWarm(projectDir);
+}
+
+/** The warm compile: same contract check against the CURRENTLY cached engine (built fresh only if none
+ * cached). The watcher's data/model path calls this after a targeted `invalidateEngineDatasets`, so the
+ * surgical re-register isn't thrown away by a reset. Still re-reads + validates the manifest at the top. */
+export async function compileWarm(projectDir: string): Promise<CompileReport> {
   const report: CompileReport = {
     ok: false,
     snapshots: {},
@@ -1084,7 +1208,6 @@ export async function compile(projectDir: string): Promise<CompileReport> {
   const manifest = validation.manifest;
   report.manifest = manifest;
 
-  resetEngine(projectDir);
   let engine: Engine;
   try {
     engine = await getEngine(projectDir);

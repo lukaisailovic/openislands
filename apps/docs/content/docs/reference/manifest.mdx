@@ -187,6 +187,7 @@ points at.
 | `groupBy` | `array of string` | no | Columns to group by, for aggregate `select` entries. |
 | `orderBy` | `array of object` | no | Sort keys, each `{ field, dir? }` where `dir` is `asc` / `desc` (default `asc`). |
 | `limit` | `number` | no | Max rows returned. |
+| `search` | `object` | no | Make the query a relevance-ranked full-text search over text columns (see query search). |
 | `params` | `object` | no | A map of parameter name to a parameter declaration (see query params). |
 | `description` | `string` | no | Free-form note describing the query. |
 
@@ -208,6 +209,19 @@ declared param) or `value` (a literal). The ops are `eq`, `ne`, `lt`, `lte`, `gt
 `gte`, `contains` (case-insensitive substring), `sameDay` (match a timestamp field to a
 date), and `in` (a literal `value` array). A filter bound to an **optional** param the
 caller omits is dropped, so the query runs without it.
+
+A **query search** (`search`) turns the query into a relevance-ranked full-text (BM25)
+search over text columns, distinct from a `contains` filter's unranked substring match.
+It requires a `source` dataset (not a `sql` transform). An omitted `orderBy` ranks by
+relevance; an explicit `orderBy` overrides it.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `fields` | `array of string` | yes | Text columns to index and search across; each must be a real column of the dataset. |
+| `param` | `string` | yes | Name of a declared `string` param holding the search term. |
+| `stemmer` | `"porter" \| "none"` | no | Token stemmer. `porter` (default) folds plurals / tenses; `none` matches exact tokens. |
+| `stopwords` | `"english" \| "none"` | no | Drop common words from the index and term. `english` (default) drops them; `none` keeps them. |
+| `scoreField` | `string` | no | Name a column to expose the BM25 score under; omit to keep the score internal. |
 
 ## Connectors
 

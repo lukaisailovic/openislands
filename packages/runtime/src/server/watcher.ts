@@ -1,6 +1,6 @@
 import { join, normalize, relative, sep } from "node:path";
 import type { FSWatcher } from "chokidar";
-import { compile, resetCustomSchemaCache, resetEngine } from "@openislands/compiler";
+import { compile, compileWarm, invalidateEngineDatasets, readManifest, resetCustomSchemaCache, resetEngine } from "@openislands/compiler";
 import type { Manifest } from "@openislands/schema";
 import type { IslandValidationError, RuntimeEvent } from "../types.js";
 import { resetCustomBuildCache } from "./custom.js";
@@ -83,6 +83,33 @@ export function broadcasterFor(appId: string): RuntimeEventBroadcaster {
 }
 
 /**
+ * Recompile for one changed file, doing the least engine work the change demands. A component change
+ * rebuilds custom caches; the manifest may have moved bindings or sources, so it gets a full reset. A
+ * data/model file only changes its own datasets — surgically re-register those (cheap for plain views,
+ * necessary for markdown/FTS) and run the warm compile so the targeted work isn't dropped by a reset.
+ * Falls back to a full reset when the manifest can't be read (a transient half-write).
+ */
+async function recompileForChange(projectDir: string, changedRel: string): ReturnType<typeof compile> {
+  if (isComponentChange(changedRel)) {
+    resetCustomBuildCache();
+    resetCustomSchemaCache();
+    return compile(projectDir);
+  }
+  if (normRel(changedRel) === normRel(MANIFEST_REL)) {
+    resetEngine(projectDir);
+    return compile(projectDir);
+  }
+  try {
+    const manifest = await readManifest(projectDir);
+    await invalidateEngineDatasets(projectDir, affectedDatasets(manifest, changedRel));
+    return compileWarm(projectDir);
+  } catch {
+    resetEngine(projectDir);
+    return compile(projectDir);
+  }
+}
+
+/**
  * Maps a watched file change to the runtime events the clients need. A change
  * that breaks validation yields a `validation` event (the affected islands flip
  * to fail-loudly) instead of throwing; otherwise a `datasets-changed` event
@@ -93,12 +120,7 @@ export async function eventsForChange(
   projectDir: string,
   changedRel: string,
 ): Promise<RuntimeEvent[]> {
-  resetEngine(projectDir);
-  if (isComponentChange(changedRel)) {
-    resetCustomBuildCache();
-    resetCustomSchemaCache();
-  }
-  const report = await compile(projectDir);
+  const report = await recompileForChange(projectDir, changedRel);
   if (!report.ok) {
     const failed = report.islandChecks.filter((c) => !c.ok);
     const errors: IslandValidationError[] = failed.flatMap((c) =>

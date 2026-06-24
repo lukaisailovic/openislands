@@ -13,7 +13,7 @@
  */
 import { z } from "zod";
 import type { Manifest, QueryColumn, QueryFilter, QueryParam, QuerySpec } from "@openislands/schema";
-import { inferSchema, queryWithParams, quoteIdent, readManifest, type Column, type ColumnType, type Row } from "./index.js";
+import { ftsTableName, inferSchema, queryWithParams, quoteIdent, readManifest, type Column, type ColumnType, type Row } from "./index.js";
 
 export interface ParamError {
   param: string;
@@ -185,11 +185,39 @@ export function buildQuerySql(spec: QuerySpec, columns: Column[], values: Record
     if (clause) conds.push(clause);
   }
 
+  if (spec.search) return buildSearchSql(spec, conds, bind, values);
+
   let sql = `SELECT ${selectClause(spec)} FROM ${quoteIdent(spec.dataset)}`;
   if (conds.length > 0) sql += ` WHERE ${conds.join(" AND ")}`;
   if (spec.groupBy && spec.groupBy.length > 0) sql += ` GROUP BY ${spec.groupBy.map(quoteIdent).join(", ")}`;
   if (spec.orderBy && spec.orderBy.length > 0) {
     sql += ` ORDER BY ${spec.orderBy.map((o) => `${quoteIdent(o.field)} ${(o.dir ?? "asc").toUpperCase()}`).join(", ")}`;
+  }
+  if (spec.limit !== undefined) sql += ` LIMIT ${Math.max(0, Math.floor(spec.limit))}`;
+  return { sql, params: bind };
+}
+
+/**
+ * The FTS branch: read from the materialized sidecar table (with the synthetic `_rowid` projected
+ * away), keep only rows the BM25 search matches, and order by relevance unless the spec names an
+ * explicit `orderBy`. The search term binds as the `search.param` value — added to the bind map even
+ * when no `where` filter references it. `where` filters AND on top of the match.
+ */
+function buildSearchSql(spec: QuerySpec, conds: string[], bind: Record<string, unknown>, values: Record<string, unknown>): BuiltQuery {
+  const search = spec.search!;
+  const table = ftsTableName(spec.dataset, search);
+  const scoreExpr = `fts_main_${table}.match_bm25(_rowid, $${search.param})`;
+  bind[search.param] = values[search.param];
+
+  const projection = spec.select && spec.select.length > 0 ? selectClause(spec) : "* EXCLUDE (_rowid)";
+  const select = search.scoreField ? `${projection}, ${scoreExpr} AS ${quoteIdent(search.scoreField)}` : projection;
+
+  let sql = `SELECT ${select} FROM ${quoteIdent(table)} WHERE ${scoreExpr} IS NOT NULL`;
+  for (const cond of conds) sql += ` AND ${cond}`;
+  if (spec.orderBy && spec.orderBy.length > 0) {
+    sql += ` ORDER BY ${spec.orderBy.map((o) => `${quoteIdent(o.field)} ${(o.dir ?? "asc").toUpperCase()}`).join(", ")}`;
+  } else {
+    sql += ` ORDER BY ${scoreExpr} DESC`;
   }
   if (spec.limit !== undefined) sql += ` LIMIT ${Math.max(0, Math.floor(spec.limit))}`;
   return { sql, params: bind };
@@ -203,6 +231,7 @@ function selectAliases(spec: QuerySpec): Set<string> {
     const item = normalizeColumn(raw);
     if (item.as) aliases.add(item.as);
   }
+  if (spec.search?.scoreField) aliases.add(spec.search.scoreField);
   return aliases;
 }
 
@@ -215,6 +244,7 @@ function fieldRefs(spec: QuerySpec): { field: string; where: string }[] {
   }
   for (const filter of spec.where ?? []) refs.push({ field: filter.field, where: "where" });
   for (const field of spec.groupBy ?? []) refs.push({ field, where: "groupBy" });
+  for (const field of spec.search?.fields ?? []) refs.push({ field, where: "search" });
   return refs;
 }
 
@@ -258,19 +288,21 @@ export async function runQuery(projectDir: string, name: string, params?: unknow
   return { columns: result.columns, rows: result.rows };
 }
 
-/** The result columns a query produces — for `list_queries` grounding. Plain columns keep their live type; aggregates report number (count/sum/avg) or the field's type (min/max). */
+/** The result columns a query produces — for `list_queries` grounding. Plain columns keep their live type; aggregates report number (count/sum/avg) or the field's type (min/max). An FTS `scoreField` is appended as a number. */
 export async function queryColumns(projectDir: string, name: string): Promise<Column[]> {
   const manifest = await readManifest(projectDir);
   const spec = lookupQuery(manifest, name);
   const base = await datasetColumns(projectDir, spec.dataset);
-  if (!spec.select || spec.select.length === 0) return base;
+  const scoreCol: Column[] = spec.search?.scoreField ? [{ name: spec.search.scoreField, type: "number" }] : [];
+  if (!spec.select || spec.select.length === 0) return [...base, ...scoreCol];
   const baseType = new Map(base.map((c) => [c.name, c.type] as const));
-  return spec.select.map((raw) => {
+  const projected = spec.select.map((raw) => {
     const item = normalizeColumn(raw);
     let type: ColumnType = baseType.get(item.field) ?? "string";
     if (item.fn === "count" || item.fn === "sum" || item.fn === "avg") type = "number";
     return { name: columnAlias(item), type };
   });
+  return [...projected, ...scoreCol];
 }
 
 /**
@@ -308,6 +340,10 @@ export async function checkQueries(
     const available = `Available: ${columns.map((c) => c.name).join(", ")}`;
     for (const miss of missingFields(spec, columns)) {
       errors.push({ query: name, field: miss.where, message: `field '${miss.field}' (${miss.where}) not in dataset '${spec.dataset}'. ${available}` });
+    }
+    const scoreField = spec.search?.scoreField;
+    if (scoreField && columns.some((c) => c.name === scoreField)) {
+      errors.push({ query: name, field: "search", message: `search.scoreField '${scoreField}' collides with dataset column` });
     }
   }
   return errors;

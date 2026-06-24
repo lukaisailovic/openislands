@@ -1,0 +1,16 @@
+name,brand,category,kcal_per_100g,protein_g_per_100g,carb_g_per_100g,fat_g_per_100g
+Greek Yogurt,Fage,dairy,59,10.3,3.6,0.4
+Greek Yogurt,Generic,dairy,59,10,3.6,0.4
+Olympus Yogurt,Olympus,dairy,61,4.4,5.7,3.3
+Skyr,Siggi's,dairy,63,11,4.2,0.2
+Cottage Cheese,Good Culture,dairy,98,11.5,3.4,4.3
+Rolled Oats,Bob's Red Mill,grains,389,16.9,66.3,6.9
+Brown Rice,Lundberg,grains,123,2.7,25.6,1
+Whole Wheat Bread,Dave's Killer Bread,grains,247,12.5,43.8,3.6
+Banana,Generic,fruit,89,1.1,22.8,0.3
+Blueberries,Generic,fruit,57,0.7,14.5,0.3
+Chicken Breast,Generic,protein,165,31,0,3.6
+Salmon Fillet,Generic,protein,208,20,0,13
+Almonds,Blue Diamond,nuts,579,21.2,21.6,49.9
+Peanut Butter,RXBAR,nuts,588,25,20,50
+Olive Oil,California Olive Ranch,fats,884,0,0,100
