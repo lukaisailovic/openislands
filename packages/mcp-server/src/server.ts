@@ -22,7 +22,7 @@ import { type AppContext, type ApiRuntime, createAppApi, minimalManifest } from 
 import { createCheckpointStore } from "./checkpoints.js";
 import { runCode } from "./codemode.js";
 import { createProposalStore } from "./proposals.js";
-import { isSafeAppId, scanApps } from "./workspace.js";
+import { isSafeAppId, scanWorkspaceApps as scanApps } from "@openislands/compiler";
 
 /** Read from package.json so the MCP handshake version tracks the published release. */
 const SERVER_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;

@@ -15,7 +15,7 @@ import { Readable } from "node:stream";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { compile, inferFile, listConnectorStatuses, migrateApp, runConnectorSync } from "@openislands/compiler";
+import { compile, discoverApps, inferFile, isSafeAppId, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
 import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
 import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, envFlag, handleServeRequest, newMcpHandlerHolder, warnRuntimeHostExposed, type McpConfig, type McpHandlerHolder } from "./serve.js";
@@ -512,23 +512,9 @@ function serveClientAsset(clientDir: string, req: IncomingMessage, res: ServerRe
   return true;
 }
 
-/** A safe app id is a single path segment (it is also a URL segment in the runtime). */
-function isSafeAppId(id: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id);
-}
-
 /** App ids under `<root>/apps` that hold a manifest, sorted. Empty when `<root>/apps` is absent. */
 export function findWorkspaceApps(root: string): string[] {
-  const appsDir = join(root, "apps");
-  if (!existsSync(appsDir)) return [];
-  const candidates = readdirSync(appsDir, { withFileTypes: true }).filter(
-    (d) => d.isDirectory() && isSafeAppId(d.name),
-  );
-  for (const d of candidates) migrateApp(join(appsDir, d.name));
-  return candidates
-    .filter((d) => existsSync(join(appsDir, d.name, "manifest.json")))
-    .map((d) => d.name)
-    .toSorted();
+  return discoverApps(root).map((app) => app.id);
 }
 
 function exitNoApps(root: string): never {

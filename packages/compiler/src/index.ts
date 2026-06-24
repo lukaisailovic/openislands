@@ -22,6 +22,14 @@ import { checkQueries } from "./queries.js";
 export { queryResultToArrowIPC } from "./arrow.js";
 export { migrateApp } from "./migrate.js";
 export {
+  discoverApps,
+  isSafeAppId,
+  readWorkspaceConfig,
+  scanWorkspaceApps,
+  type AppRef,
+  type WorkspaceConfig,
+} from "./workspace.js";
+export {
   checkCustomIsland,
   customIslandDir,
   customSchemaFile,
