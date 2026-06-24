@@ -80,6 +80,10 @@ Each type links to its section with a live preview and full configuration.
 | [`layout.row`](/islands/content-and-layout#layoutrow) | `islands` | A full-width structural row holding other islands. |
 | [`form.entry`](/islands/content-and-layout#formentry) | `action` | A data-entry form bound to an action; one typed input per field inserts a row. No data binding of its own. |
 
+One layout construct isn't in the table because it isn't an island: a page can split into tabbed
+[`groups`](/islands/content-and-layout#tabs-groups). Groups are page structure, not a tile, so
+they won't appear in `oi.app().listIslands()` either — see [Pages and groups](/concepts/manifest#pages-and-groups).
+
 Browse the per-category pages for the full picture: [Metrics & Gauges](/islands/metrics-and-gauges),
 [Charts](/islands/charts), [Tables & Feeds](/islands/tables-and-feeds),
 [Content & Layout](/islands/content-and-layout), and [Custom Islands](/islands/custom).

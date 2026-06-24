@@ -101,7 +101,9 @@ persists between calls, so you can stage in one and apply in the next.
   live under `data/`, `models/`, or `docs/`.
 - **pages → islands** — each island has a `type`, an optional `span` (1–12 grid columns), and type-specific
   fields. Data islands name a `dataset` and the columns they bind (e.g. `value`, `x`, `y`, `label`).
-  A page uses either a flat `islands` array or tabbed `groups`, not both.
+  A page uses either a flat `islands` array or tabbed `groups`, not both. A group is
+  `{ id, title?, islands }` and renders as a tab (deep-linked via `?group=<id>`) — reach for groups
+  to split a busy page instead of adding a second sidebar page.
 - **actions** — declare a typed `insert` into a writable dataset; run rows through `runAction`.
 - **queries** — declare a typed, parameterized read; run it through `runQuery`. No raw SQL in queries —
   heavy shaping lives in a `sql` transform the query reads from.
@@ -118,6 +120,9 @@ Island configs are the keystone schema and can change. Always ground an edit in 
 - `oi.app().getIslandSchema(type)` → the full JSON Schema for one type, plus its `layout`
   (`{ minSpan, recommendedSpan, maxSpan }`) and `notes`. **Check this before setting `span`** — see
   [Layout & sizing](#layout--sizing).
+
+Tabbed `groups` are **page** structure, not an island, so they **won't** appear in `listIslands()`
+— their shape (`{ id, title?, islands }`) is in the manifest anatomy above.
 
 Built-ins span metrics (`metric.kpi`, `metric.scorecard`), charts (`timeseries.line`, `category.bar`,
 `category.combo`, `category.pie`, `waterfall.bars`, `breakdown.treemap`, `correlation.scatter`,
