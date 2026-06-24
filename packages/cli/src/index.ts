@@ -432,8 +432,22 @@ async function runValidate(root: string): Promise<number> {
   return 0;
 }
 
-async function toWebRequest(req: IncomingMessage, origin: string): Promise<Request> {
-  const url = `${origin}${req.url ?? "/"}`;
+/**
+ * The client-facing origin of a request, rebuilt from the `Host` header (and `x-forwarded-proto`
+ * behind a TLS-terminating proxy) — not the bind address. TanStack Start's default CSRF middleware
+ * compares this against the request's Origin/Referer, so a `0.0.0.0` bind reached over a LAN IP must
+ * reflect that IP here or every `/_serverFn/*` call 403s. Falls back to the bind origin when no Host.
+ */
+function requestOrigin(req: IncomingMessage, fallback: string): string {
+  const host = req.headers.host;
+  if (!host) return fallback;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const proto = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)?.split(",")[0]?.trim() || "http";
+  return `${proto}://${host}`;
+}
+
+async function toWebRequest(req: IncomingMessage, fallbackOrigin: string): Promise<Request> {
+  const url = `${requestOrigin(req, fallbackOrigin)}${req.url ?? "/"}`;
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue;
