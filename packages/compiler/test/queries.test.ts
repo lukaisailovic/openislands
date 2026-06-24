@@ -6,6 +6,7 @@ import type { Column } from "../src/index.js";
 import {
   buildQuerySql,
   checkQueries,
+  ftsTableName,
   queryColumns,
   queryParamSchema,
   readManifest,
@@ -269,6 +270,61 @@ describe("buildQuerySql", () => {
   });
 });
 
+describe("buildQuerySql (FTS search branch)", () => {
+  const columns: Column[] = [
+    { name: "name", type: "string" },
+    { name: "brand", type: "string" },
+    { name: "kcal", type: "number" },
+  ];
+  const search = { fields: ["name", "brand"], param: "q", stemmer: "porter" as const, stopwords: "english" as const };
+
+  it("reads from the sidecar table, filters on a non-null BM25 match, and orders by relevance", () => {
+    const built = buildQuerySql({ dataset: "ingredients", search } as never, columns, { q: "greek yogurt" });
+    const table = ftsTableName("ingredients", search);
+    const score = `fts_main_${table}.match_bm25(_rowid, $q)`;
+    expect(built.sql).toBe(`SELECT * EXCLUDE (_rowid) FROM "${table}" WHERE ${score} IS NOT NULL ORDER BY ${score} DESC`);
+  });
+
+  it("binds the search param even without a where filter", () => {
+    const built = buildQuerySql({ dataset: "ingredients", search } as never, columns, { q: "yogurt" });
+    expect(built.params).toEqual({ q: "yogurt" });
+  });
+
+  it("projects the explicit select instead of excluding _rowid when select is given", () => {
+    const built = buildQuerySql({ dataset: "ingredients", select: ["name", "brand"], search } as never, columns, { q: "yogurt" });
+    const table = ftsTableName("ingredients", search);
+    expect(built.sql).toContain(`SELECT "name", "brand" FROM "${table}"`);
+    expect(built.sql).not.toContain("EXCLUDE");
+  });
+
+  it("projects the BM25 score under scoreField when set, and omits it when not", () => {
+    const table = ftsTableName("ingredients", search);
+    const score = `fts_main_${table}.match_bm25(_rowid, $q)`;
+    const scored = buildQuerySql({ dataset: "ingredients", search: { ...search, scoreField: "relevance" } } as never, columns, { q: "yogurt" });
+    expect(scored.sql).toContain(`${score} AS "relevance"`);
+    const plain = buildQuerySql({ dataset: "ingredients", search } as never, columns, { q: "yogurt" });
+    expect(plain.sql).not.toContain(" AS ");
+  });
+
+  it("lets an explicit orderBy win over relevance ranking", () => {
+    const built = buildQuerySql({ dataset: "ingredients", search, orderBy: [{ field: "name", dir: "asc" }] } as never, columns, { q: "yogurt" });
+    expect(built.sql).toContain('ORDER BY "name" ASC');
+    expect(built.sql).not.toContain("ORDER BY fts_main");
+  });
+
+  it("ANDs a where filter on top of the match and appends a LIMIT", () => {
+    const table = ftsTableName("ingredients", search);
+    const score = `fts_main_${table}.match_bm25(_rowid, $q)`;
+    const built = buildQuerySql(
+      { dataset: "ingredients", search, where: [{ field: "kcal", op: "gte", value: 100 }], limit: 5 } as never,
+      columns,
+      { q: "yogurt" },
+    );
+    expect(built.sql).toBe(`SELECT * EXCLUDE (_rowid) FROM "${table}" WHERE ${score} IS NOT NULL AND "kcal" >= $_v0 ORDER BY ${score} DESC LIMIT 5`);
+    expect(built.params).toEqual({ q: "yogurt", _v0: 100 });
+  });
+});
+
 describe("queryColumns", () => {
   it("returns the dataset columns when no select is given", async () => {
     const dir = project(manifestWith({ q: { dataset: "meals" } }), { "data/meals.csv": MEALS_CSV });
@@ -334,5 +390,23 @@ describe("checkQueries", () => {
       { "data/meals.csv": MEALS_CSV },
     );
     expect(await checkQueries(dir, await readManifest(dir))).toEqual([]);
+  });
+
+  it("flags a search field that is not a dataset column, naming it", async () => {
+    const dir = project(
+      manifestWith({ q: { dataset: "meals", params: { q: { type: "string" } }, search: { fields: ["name", "flavor"], param: "q" } } }),
+      { "data/meals.csv": MEALS_CSV },
+    );
+    const errors = await checkQueries(dir, await readManifest(dir));
+    expect(errors.some((e) => e.query === "q" && e.field === "search" && e.message.includes("flavor"))).toBe(true);
+  });
+
+  it("flags a scoreField that collides with a dataset column", async () => {
+    const dir = project(
+      manifestWith({ q: { dataset: "meals", params: { q: { type: "string" } }, search: { fields: ["name"], param: "q", scoreField: "kcal" } } }),
+      { "data/meals.csv": MEALS_CSV },
+    );
+    const errors = await checkQueries(dir, await readManifest(dir));
+    expect(errors.some((e) => e.query === "q" && e.field === "search" && /collides with dataset column/.test(e.message))).toBe(true);
   });
 });

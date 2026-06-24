@@ -23,6 +23,8 @@ const { DuckDBInstance } = duckdb;
 
 /** Where a dataset's rows physically live: its content source, plus the table name when that source is a SQLite database. */
 export interface WriteTarget {
+  /** the dataset name the rows belong to — the unit the engine re-registers after the write */
+  dataset: string;
   /** the dataset's source within the content store (relative or absolute) */
   source: string;
   /** the SQLite table to write into — required for a sqlite source, ignored otherwise */

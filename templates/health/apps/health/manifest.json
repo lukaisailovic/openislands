@@ -5,7 +5,8 @@
     "macros_daily": { "source": "data/macros_daily.csv", "description": "daily nutrition totals + goals (kcal band, protein/carb/fat)" },
     "meals": { "source": "data/meals.csv", "description": "one row per meal: typed, timed, per-meal macros, note" },
     "weight": { "source": "data/weight.csv", "description": "body weight over time" },
-    "biomarkers": { "source": "data/biomarkers.csv", "description": "blood-panel marker history: one row per marker per draw, with reference + optimal ranges" }
+    "biomarkers": { "source": "data/biomarkers.csv", "description": "blood-panel marker history: one row per marker per draw, with reference + optimal ranges" },
+    "ingredients": { "source": "data/ingredients.csv", "description": "branded + generic foods with per-100g macros, for logging lookups" }
   },
   "actions": {
     "log_meal": {
@@ -19,6 +20,16 @@
         "carb_g": { "min": 0, "max": 1000 },
         "fat_g": { "min": 0, "max": 500 }
       }
+    }
+  },
+  "queries": {
+    "search_ingredients": {
+      "dataset": "ingredients",
+      "description": "Relevance-ranked full-text search over foods by name + brand, for logging lookups",
+      "params": { "q": { "type": "string" } },
+      "select": ["name", "brand", "kcal_per_100g", "protein_g_per_100g"],
+      "search": { "fields": ["name", "brand"], "param": "q" },
+      "limit": 10
     }
   },
   "pages": [

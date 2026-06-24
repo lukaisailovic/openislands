@@ -462,7 +462,7 @@ async function doSync(projectDir: string, name: string, opts: RetentionOpts): Pr
     const dataset = resolveOutputDataset(spec, def, output);
     const datasetSpec = manifest.datasets[dataset];
     if (!datasetSpec?.source) throw new Error(`dataset '${dataset}' has no writable source`);
-    return { dataset, target: { source: datasetSpec.source, table: datasetSpec.table } };
+    return { dataset, target: { dataset, source: datasetSpec.source, table: datasetSpec.table } };
   };
 
   const ctx: ConnectorContext = {

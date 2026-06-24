@@ -84,6 +84,39 @@ identifiers are quoted).
   all columns. `groupBy`: array of column names. `orderBy`: array of `{ field, dir? }` (asc|desc).
   `limit`: integer.
 
+### `search` (FTS)
+
+`search: { fields, param, stemmer?, stopwords?, scoreField? }` turns the query into a
+relevance-ranked full-text search over text columns — DuckDB FTS / BM25, not the `contains`
+filter. `contains` is a whole-phrase substring match, unranked; `search` tokenizes both the columns
+and the term, so a multi-word term matches rows sharing **any** token, ranked by BM25. Searching
+`"greek yogurt"` returns `Greek Yogurt` above `Olympus Yogurt` (shares the token *yogurt*) and
+excludes `Banana`. `fields` are the text columns to index + search across (each a real column,
+validated like any binding); `param` names a declared **string** `param` holding the term;
+`stemmer` (`porter`|`none`, default `porter`) and `stopwords` (`english`|`none`, default `english`)
+control tokenization; optional `scoreField` exposes the BM25 score as a column.
+
+Two constraints: `search` requires a `source` dataset, **not** a `sql` transform (the watcher can't
+see upstream-file changes through a transform, so an index on one would silently go stale), and
+because FTS can't index a view, declaring `search` materializes the dataset into an indexed sidecar
+table at engine build — gated by the manifest, transparent to the query. Composes with the rest:
+`where` further filters the matched rows; an omitted `orderBy` defaults to **relevance DESC**, an
+explicit `orderBy` wins; `limit` caps as usual.
+
+```jsonc
+"queries": {
+  "search_ingredients": {
+    "dataset": "ingredients",
+    "params": { "q": { "type": "string" } },
+    "search": { "fields": ["name", "brand"], "param": "q", "scoreField": "score" },
+    "limit": 20
+  }
+}
+```
+
+`runQuery("search_ingredients", { q: "greek yogurt" })` ranks `Greek Yogurt` first; with
+`scoreField` set, each row carries a `score` column.
+
 Discover with `oi.app().listQueries()` (each query's `name`, `description`, `params` as JSON Schema,
 result `columns`), then `oi.app().runQuery(name, params?, { limit? })` — params validated, `limit`
 1–500, result row-capped. Success is `{ ok: true, rowCount, columns, rows }`; a bad param is

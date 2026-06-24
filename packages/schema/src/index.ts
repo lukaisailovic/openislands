@@ -981,6 +981,23 @@ export const QueryOrder = z.object({
 export type QueryOrder = z.infer<typeof QueryOrder>;
 
 /**
+ * A relevance-ranked full-text search over text columns. Tokenizes both the
+ * columns and the query (porter stemmer + english stopwords by default), so a
+ * multi-word term matches rows sharing ANY token, ranked by BM25 — "greek
+ * yogurt" returns "Greek Yogurt" above "Olympus Yogurt". Compiles to DuckDB's
+ * FTS extension. Distinct from a `where` `contains` filter, which is a
+ * whole-phrase substring match, unranked. The term is bound as a string param.
+ */
+export const QuerySearch = z.object({
+  fields: z.array(z.string()).min(1).describe("text columns to index + search across; each must be a real column of the query's dataset"),
+  param: z.string().describe("name of a declared string `param` holding the search term"),
+  stemmer: z.enum(["porter", "none"]).default("porter").describe("token stemmer: 'porter' folds plurals/tenses, 'none' matches exact tokens"),
+  stopwords: z.enum(["english", "none"]).default("english").describe("drop common words from index + query; 'none' keeps them"),
+  scoreField: z.string().optional().describe("name a column to expose the BM25 relevance score under; omit to keep score internal (ordering only)"),
+});
+export type QuerySearch = z.infer<typeof QuerySearch>;
+
+/**
  * A manifest-declared, read-only query: an opinionated, declarative SELECT over
  * one dataset (a source or a `sql` transform), translated to parameterized DuckDB
  * SQL by the compiler. The read mirror of an action — discovered with
@@ -999,6 +1016,7 @@ export const QuerySpec = z.object({
   groupBy: z.array(z.string()).optional(),
   orderBy: z.array(QueryOrder).optional(),
   limit: z.number().int().positive().optional(),
+  search: QuerySearch.optional().describe("a full-text, relevance-ranked search over text columns; declaring this makes the query an FTS query"),
 });
 export type QuerySpec = z.infer<typeof QuerySpec>;
 
@@ -1140,12 +1158,14 @@ export function validateManifest(input: unknown): ValidationResult {
 
   // queries
   const queries = root.queries === undefined ? undefined : (root.queries as Record<string, unknown>);
+  const normalizedQueries: Record<string, QuerySpec> = {};
   for (const [name, spec] of Object.entries(queries ?? {})) {
     const r = QuerySpec.safeParse(spec);
     if (!r.success) {
       rootError(`queries.${name}: ${r.error.issues[0]?.message ?? "invalid"}`);
       continue;
     }
+    normalizedQueries[name] = r.data;
     const declaredParams = r.data.params ?? {};
     r.data.where?.forEach((filter, i) => {
       const hasParam = filter.param !== undefined;
@@ -1154,6 +1174,19 @@ export function validateManifest(input: unknown): ValidationResult {
       if (filter.op === "in" && hasValue && !Array.isArray(filter.value)) rootError(`queries.${name}: where[${i}] op 'in' needs an array 'value'`);
       if (hasParam && !(filter.param! in declaredParams)) rootError(`queries.${name}: where[${i}] references undeclared param '${filter.param}'`);
     });
+    const search = r.data.search;
+    if (search) {
+      const declared = declaredParams[search.param];
+      if (!declared) rootError(`queries.${name}: search.param '${search.param}' is not a declared param`);
+      else if (declared.type && declared.type !== "string") rootError(`queries.${name}: search.param '${search.param}' must be a string param`);
+      if (search.scoreField) {
+        const aliases = new Set((r.data.select ?? []).map((c) => (typeof c === "string" ? c : c.as)).filter((a): a is string => a !== undefined));
+        if (aliases.has(search.scoreField)) rootError(`queries.${name}: search.scoreField '${search.scoreField}' collides with a select alias`);
+      }
+      const target = (datasets as Record<string, DatasetSpec | undefined>)[r.data.dataset];
+      if (target?.sql) rootError(`queries.${name}: search requires a source dataset; '${r.data.dataset}' is a sql transform`);
+      if (r.data.groupBy && r.data.groupBy.length > 0) rootError(`queries.${name}: search cannot be combined with groupBy`);
+    }
   }
 
   const pages = Array.isArray(root.pages) ? (root.pages as Record<string, unknown>[]) : [];
@@ -1381,7 +1414,7 @@ export function validateManifest(input: unknown): ValidationResult {
     pages: normalizedPages,
     actions: actions as Record<string, ActionSpec> | undefined,
     connectors: connectors as Record<string, ConnectorSpec> | undefined,
-    queries: queries as Record<string, QuerySpec> | undefined,
+    queries: queries === undefined ? undefined : normalizedQueries,
   };
   return { ok: true, manifest, errors, custom };
 }

@@ -121,6 +121,46 @@ with `groupBy`, a list of columns to group by:
 `orderBy` is a list of `{ field, dir? }` sort keys (`dir` is `asc` or `desc`, default `asc`), and
 `limit` caps the rows.
 
+### Search
+
+`search` turns a query into a relevance-ranked full-text search over text columns. It compiles to
+DuckDB's full-text index and ranks rows by BM25, so a multi-word term matches rows that share *any*
+token, best match first. That's the difference from a `contains` filter: `contains` is a
+whole-phrase, case-insensitive substring match and returns rows unranked; `search` tokenizes both
+the columns and the term and orders by likeliness. Searching `greek yogurt` returns `Greek Yogurt`
+above `Olympus Yogurt` — which only shares the token *yogurt* — and excludes `Banana`.
+
+```jsonc title="manifest.json"
+"queries": {
+  "search_ingredients": {
+    "description": "Find ingredients by name or brand, best match first.",
+    "dataset": "ingredients",
+    "params": { "q": { "type": "string" } },
+    "search": { "fields": ["name", "brand"], "param": "q", "scoreField": "score" },
+    "limit": 20
+  }
+}
+```
+
+A `search` clause names:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `fields` | `array of string` | The text columns to index and search across. Each must be a real column of the dataset, checked like any other field. |
+| `param` | `string` | The name of a declared **string** `param` that holds the search term. |
+| `stemmer` | `"porter" \| "none"` | How tokens are folded. `porter` (default) collapses plurals and tenses; `none` matches exact tokens. |
+| `stopwords` | `"english" \| "none"` | Whether to drop common words from the index and the term. `english` (default) drops them; `none` keeps them. |
+| `scoreField` | `string` | Optional. Names a column to expose the BM25 relevance score under; omit to keep the score internal (ordering only). |
+
+`search` composes with the rest of the spec. A `where` clause further filters the matched rows; an
+omitted `orderBy` defaults to relevance (highest BM25 first), and an explicit `orderBy` overrides
+that order; `limit` caps the rows as always.
+
+`search` reads a `source` dataset, not a `sql` transform. (A full-text index can't track changes to
+the files a transform reads, so it would silently go stale.) Because the index needs a real table,
+declaring `search` materializes the dataset into an indexed table at build time — the manifest gates
+that, and it's invisible to the query.
+
 ## Running a query
 
 Queries belong to the agent edit loop, not to a CLI command. An agent:

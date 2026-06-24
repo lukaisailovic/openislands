@@ -729,6 +729,76 @@ describe("validateManifest — queries", () => {
   });
 });
 
+const searchManifest = {
+  version: 1,
+  title: "T",
+  datasets: { ingredients: { source: "data/ingredients.csv" }, joined: { sql: "models/joined.sql" } },
+  pages: [{ id: "overview", islands: [{ type: "note.card", markdown: "x" }] }],
+  queries: {
+    search_ingredients: {
+      dataset: "ingredients",
+      params: { q: { type: "string" } },
+      select: ["name", "brand"],
+      search: { fields: ["name", "brand"], param: "q" },
+    },
+  },
+};
+
+type LooseSearch = typeof searchManifest & { queries: Record<string, Record<string, unknown>> };
+
+describe("validateManifest — query search (FTS)", () => {
+  it("accepts a valid search query and carries it into the normalized manifest, defaulted", () => {
+    const r = validateManifest(searchManifest);
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    const search = r.manifest!.queries!.search_ingredients!.search!;
+    expect(search.fields).toEqual(["name", "brand"]);
+    expect(search.param).toBe("q");
+    expect(search.stemmer).toBe("porter");
+    expect(search.stopwords).toBe("english");
+  });
+
+  it("rejects a search.param that is not a declared param", () => {
+    const m = structuredClone(searchManifest) as LooseSearch;
+    (m.queries.search_ingredients.search as Record<string, unknown>).param = "nope";
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /search\.param 'nope' is not a declared param/.test(e.message))).toBe(true);
+  });
+
+  it("rejects a search.param that is not a string param", () => {
+    const m = structuredClone(searchManifest) as LooseSearch;
+    m.queries.search_ingredients.params = { q: { type: "number" } };
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /search\.param 'q' must be a string param/.test(e.message))).toBe(true);
+  });
+
+  it("rejects search on a sql transform dataset", () => {
+    const m = structuredClone(searchManifest) as LooseSearch;
+    m.queries.search_ingredients.dataset = "joined";
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /search requires a source dataset/.test(e.message))).toBe(true);
+  });
+
+  it("rejects search combined with groupBy", () => {
+    const m = structuredClone(searchManifest) as LooseSearch;
+    m.queries.search_ingredients.groupBy = ["brand"];
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /search cannot be combined with groupBy/.test(e.message))).toBe(true);
+  });
+
+  it("rejects a scoreField that collides with a select alias", () => {
+    const m = structuredClone(searchManifest) as LooseSearch;
+    m.queries.search_ingredients.select = [{ field: "name", as: "relevance" }];
+    (m.queries.search_ingredients.search as Record<string, unknown>).scoreField = "relevance";
+    const r = validateManifest(m);
+    expect(r.ok).toBe(false);
+    expect(r.errors.some((e) => /search\.scoreField 'relevance' collides with a select alias/.test(e.message))).toBe(true);
+  });
+});
+
 // --- Per-island schema coverage: a valid case and an invalid case each ----------
 
 const validIslands: Record<IslandType, Record<string, unknown>> = {
