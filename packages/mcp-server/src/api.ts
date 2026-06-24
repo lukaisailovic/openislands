@@ -129,7 +129,7 @@ export const minimalManifest = (title: string): string =>
 
 function manifestDiff(base: string, proposed: string): string {
   if (base === proposed) return "(no changes)";
-  return createTwoFilesPatch("app/manifest.json", "app/manifest.json", base, proposed);
+  return createTwoFilesPatch("manifest.json", "manifest.json", base, proposed);
 }
 
 /** Trim a row set to a character budget, returning whether it was truncated. */
@@ -325,7 +325,7 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
     return result;
   };
 
-  const readManifestText = async (): Promise<string> => (await ctx.content.readText("app/manifest.json")) ?? "{}";
+  const readManifestText = async (): Promise<string> => (await ctx.content.readText("manifest.json")) ?? "{}";
 
   /** Serialize a proposed manifest, diff it against the base, dry-check it, and either return the
    * validation errors or save a staged proposal. Shared by replaceManifest + patchManifest. */
@@ -475,8 +475,8 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
         return { ok: false, error: "stale proposal: the manifest changed since this edit was staged. Re-stage the edit." };
       }
 
-      const checkpoint = (await ctx.content.exists("app/manifest.json")) ? await ctx.checkpoints.snapshotManifest(base) : null;
-      await ctx.content.writeText("app/manifest.json", proposal.manifest);
+      const checkpoint = (await ctx.content.exists("manifest.json")) ? await ctx.checkpoints.snapshotManifest(base) : null;
+      await ctx.content.writeText("manifest.json", proposal.manifest);
       await ctx.proposals.remove(proposalId);
       await ctx.checkpoints.prune(MAX_CHECKPOINTS).catch(() => {});
       markDirty();

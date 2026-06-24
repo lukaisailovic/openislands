@@ -110,7 +110,7 @@ async function runResult<T>(client: Client, code: string): Promise<T> {
   return out.result;
 }
 
-const validManifest = (root: string) => readFileSync(join(root, "app", "manifest.json"), "utf8");
+const validManifest = (root: string) => readFileSync(join(root, "manifest.json"), "utf8");
 
 describe("read tools", () => {
   it("list_islands returns contracts with required fields", async () => {
@@ -185,7 +185,7 @@ describe("get_overview — one-call orientation", () => {
     const root = freshProject();
     const m = JSON.parse(validManifest(root));
     m.version = "not-a-number";
-    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    writeFileSync(join(root, "manifest.json"), JSON.stringify(m));
     const client = await connect(root);
     const ov = (await call(client, "get_overview")) as { ok: boolean; errors: unknown[]; checkpoints: { count: number } };
     expect(ov.ok).toBe(false);
@@ -374,7 +374,7 @@ describe("data actions", () => {
     const root = freshProject();
     const m = JSON.parse(validManifest(root));
     delete m.actions;
-    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    writeFileSync(join(root, "manifest.json"), JSON.stringify(m));
     const client = await connect(root);
     const { actions } = (await call(client, "list_actions")) as { actions: unknown[] };
     expect(actions).toEqual([]);
@@ -472,7 +472,7 @@ describe("data actions", () => {
     // A payload that escapes the enum is rejected; use an action without the enum to prove cell-confinement.
     const m = JSON.parse(validManifest(root));
     m.actions.log_note = { dataset: "notes", mode: "insert" };
-    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    writeFileSync(join(root, "manifest.json"), JSON.stringify(m));
     const client2 = await connect(root);
 
     const written = (await call(client2, "run_action", { name: "log_note", rows: [{ id: 9, note: payload }] })) as { ok: boolean };
@@ -500,7 +500,7 @@ describe("read queries", () => {
   function withQuery(root: string, queries: Record<string, unknown>): string {
     const m = JSON.parse(validManifest(root));
     m.queries = queries;
-    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    writeFileSync(join(root, "manifest.json"), JSON.stringify(m));
     return root;
   }
 
@@ -640,7 +640,7 @@ export default defineConnector({
 function connectorProject(): string {
   const workspace = mkdtempSync(join(tmpdir(), "oi-mcp-conn-"));
   const dir = join(workspace, "apps", "demo");
-  mkdirSync(join(dir, "app"), { recursive: true });
+  mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
   mkdirSync(join(dir, "connectors", "demo"), { recursive: true });
   const manifest = {
@@ -650,7 +650,7 @@ function connectorProject(): string {
     pages: [{ id: "p", islands: [{ type: "note.card", markdown: "x" }] }],
     connectors: { demo: { module: "connectors/demo", datasets: { logs: "logs" }, config: { count: 2 } } },
   };
-  writeFileSync(join(dir, "app", "manifest.json"), JSON.stringify(manifest));
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));
   writeFileSync(join(dir, "connectors", "demo", "index.ts"), DEMO_CONNECTOR);
   roots.push(dir);
   return dir;
@@ -1177,7 +1177,7 @@ describe("result contract", () => {
     writeFileSync(join(root, "data", "wide.csv"), `id,blob\n${csvRows}\n`);
     const m = JSON.parse(validManifest(root));
     m.datasets.wide = { source: "data/wide.csv" };
-    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m));
+    writeFileSync(join(root, "manifest.json"), JSON.stringify(m));
     const client = await connect(root);
 
     // The capped row sets are too big to return whole through execute's response cap, so the

@@ -3,7 +3,7 @@
 These are the files the `content.editor` island edits in place. Unlike the other examples, there
 is **no dataset and no SQL transform** — the editor reads and writes these files directly, and the
 files are the source of truth. Add a `.md` file under `data/` (or one of its subfolders) and it
-shows up in the workspace; the `groups` in `app/manifest.json` decide which virtual folder it lands
+shows up in the workspace; the `groups` in `manifest.json` decide which virtual folder it lands
 in.
 
 The committed files here are realistic **sample content** for a fictional engineering team, so the

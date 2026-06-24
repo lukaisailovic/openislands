@@ -91,7 +91,7 @@ export default defineConnector({
 function connectorProject(): string {
   const workspace = mkdtempSync(join(tmpdir(), "oi-surface-conn-"));
   const dir = join(workspace, "apps", "demo");
-  mkdirSync(join(dir, "app"), { recursive: true });
+  mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
   mkdirSync(join(dir, "connectors", "demo"), { recursive: true });
   const manifest = {
@@ -101,7 +101,7 @@ function connectorProject(): string {
     pages: [{ id: "p", islands: [{ type: "note.card", markdown: "x" }] }],
     connectors: { demo: { module: "connectors/demo", datasets: { logs: "logs" }, config: { count: 2 } } },
   };
-  writeFileSync(join(dir, "app", "manifest.json"), JSON.stringify(manifest));
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));
   writeFileSync(join(dir, "connectors", "demo", "index.ts"), DEMO_CONNECTOR);
   roots.push(dir);
   return dir;
@@ -212,7 +212,7 @@ describe("canonical task walkthroughs — one execute program each", () => {
     `);
     expect(body.ok).toBe(true);
     expect(body.result).toMatchObject({ ok: true });
-    expect(JSON.parse(readFileSync(join(root, "app", "manifest.json"), "utf8")).datasets.crypto.source).toBe("data/crypto.csv");
+    expect(JSON.parse(readFileSync(join(root, "manifest.json"), "utf8")).datasets.crypto.source).toBe("data/crypto.csv");
   });
 
   it("author + run a query — declare a typed read and run it in one program", async () => {
@@ -244,9 +244,9 @@ describe("canonical task walkthroughs — one execute program each", () => {
 
   it("fix a binding error — validate surfaces it, then patch the real column in one program", async () => {
     const root = freshFinance();
-    const m = JSON.parse(readFileSync(join(root, "app", "manifest.json"), "utf8"));
+    const m = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
     m.pages[0].islands[0].value = "does_not_exist";
-    writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(m, null, 2));
+    writeFileSync(join(root, "manifest.json"), JSON.stringify(m, null, 2));
 
     const { body } = await runCode(await connect(root), `
       const app = oi.app();
@@ -323,7 +323,7 @@ describe("execute composition + safety", () => {
     expect(body.result).toEqual({ original: "Finance Overview", afterApply: "Renamed in script", restored: true, afterRollback: "Finance Overview" });
     // The applyEdit checkpoint is reported; the rollback restores it, leaving the file as it began.
     expect(body.checkpoints_created?.length).toBe(1);
-    expect(readFileSync(join(root, "app", "manifest.json"), "utf8")).toBe(readFileSync(join(FIXTURE, "app", "manifest.json"), "utf8"));
+    expect(readFileSync(join(root, "manifest.json"), "utf8")).toBe(readFileSync(join(FIXTURE, "manifest.json"), "utf8"));
   });
 
   it("a write then a read in the same script sees the new row (the engine resets on the dirty bit)", async () => {

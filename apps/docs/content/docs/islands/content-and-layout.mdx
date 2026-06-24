@@ -24,7 +24,7 @@ callout that stands out from the prose around it.
   height={160}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "note.card",
   "title": "How to read this page",
@@ -53,7 +53,7 @@ commentary.
   height={140}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "note.card",
   "title": "Heads up",
@@ -86,7 +86,7 @@ that opens the source in a new tab. Set `kind` to choose how it renders, and giv
   height={120}
 />
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "source.doc",
   "title": "Methodology",
@@ -124,7 +124,7 @@ full-width `span` of `12`; its minimum is `6`.
 
 Point it at **either** a single `file` or a whole `dir` — exactly one, never both:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "content.editor",
   "title": "Runbook",
@@ -133,7 +133,7 @@ Point it at **either** a single `file` or a whole `dir` — exactly one, never b
 }
 ```
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "content.editor",
   "title": "Docs",
@@ -203,7 +203,7 @@ action gives it a `default`. On submit it inserts a row through the **same path*
 `oi.app().runAction` — the row is validated, snapshotted to history for `rollback`, then inserted —
 and the bound dataset's islands refresh live.
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "form.entry",
   "title": "Report incident",
@@ -238,7 +238,7 @@ Its children render on their own fresh 12-column grid row, each sized by its own
 itself is transparent to island indexing: a validation error names the child island, not the
 row.
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "type": "layout.row",
   "islands": [

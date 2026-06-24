@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Validate every template under templates/ — each immediate subdirectory that
- * holds at least one app under apps/<id>/app/manifest.json. Dynamic, so a newly
+ * holds at least one app under apps/<id>/manifest.json. Dynamic, so a newly
  * added template is covered the moment it lands, with no hardcoded list to keep
  * in sync.
  *
@@ -24,7 +24,7 @@ function hasApp(templateDir) {
   const appsDir = join(templateDir, "apps");
   if (!existsSync(appsDir)) return false;
   return readdirSync(appsDir, { withFileTypes: true }).some(
-    (d) => d.isDirectory() && existsSync(join(appsDir, d.name, "app", "manifest.json")),
+    (d) => d.isDirectory() && existsSync(join(appsDir, d.name, "manifest.json")),
   );
 }
 
@@ -34,7 +34,7 @@ const templates = readdirSync(templatesDir, { withFileTypes: true })
   .toSorted();
 
 if (templates.length === 0) {
-  console.error("no templates found under templates/ (expected subdirectories with apps/<id>/app/manifest.json)");
+  console.error("no templates found under templates/ (expected subdirectories with apps/<id>/manifest.json)");
   process.exit(1);
 }
 

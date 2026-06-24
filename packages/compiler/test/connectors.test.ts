@@ -104,10 +104,10 @@ function demoManifest(extra?: Record<string, unknown>) {
 
 function project(manifest: unknown, files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), "oi-conn-"));
-  mkdirSync(join(dir, "app"), { recursive: true });
+  mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
   mkdirSync(join(dir, "connectors", "demo"), { recursive: true });
-  writeFileSync(join(dir, "app", "manifest.json"), JSON.stringify(manifest));
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));
   for (const [path, content] of Object.entries(files)) {
     const full = join(dir, path);
     mkdirSync(join(full, ".."), { recursive: true });

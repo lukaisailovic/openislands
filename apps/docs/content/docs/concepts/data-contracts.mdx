@@ -13,7 +13,7 @@ of date.
 
 `datasets` maps a name to a source. A dataset is one of three shapes:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "datasets": {
   "net_worth": { "source": "data/net_worth_monthly.csv" },   // a file you own
   "allocation": { "sql": "models/transforms/allocation.sql" }, // a SQL transform over other datasets
@@ -51,7 +51,7 @@ GROUP BY class
 ORDER BY value_eur DESC;
 ```
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "datasets": {
   "holdings":   { "source": "data/holdings.csv" },
   "allocation": { "sql": "models/transforms/allocation.sql" }

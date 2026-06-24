@@ -22,7 +22,7 @@ Server-side and ESM-only, Node ≥ 20. Pulls in a native DuckDB binding (`@duckd
 ```ts
 import { compile, query, inferFile } from "@openislands/compiler";
 
-// Compile a project (a directory holding app/manifest.json):
+// Compile a project (a directory holding manifest.json):
 // validates the manifest and checks every island binding against the live files.
 const report = await compile(projectDir);
 if (!report.ok) {

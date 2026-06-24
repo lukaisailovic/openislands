@@ -5,7 +5,7 @@ import { getContentStore, isHiddenPath, resolveWithinRoot } from "@openislands/s
  * `?path=` input must stay under the project root, clear the dotfile/secret
  * denylist, and live in a content directory — never reach config or escape the root.
  */
-const ALLOWED_DIRS = ["data", "docs", "app"];
+const ALLOWED_DIRS = ["data", "docs"];
 
 const CONTENT_TYPES: Record<string, string> = {
   md: "text/markdown; charset=utf-8",

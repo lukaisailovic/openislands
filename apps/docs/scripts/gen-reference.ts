@@ -196,7 +196,7 @@ island bound to a field that doesn't exist fails the build and names the island.
 
 A manifest is a JSON object with the following top-level shape:
 
-\`\`\`jsonc title="app/manifest.json"
+\`\`\`jsonc title="manifest.json"
 {
   "version": 1,                  // required: the manifest format version, always 1
   "title": "Finance Overview",   // required: the app title
@@ -225,7 +225,7 @@ A manifest is a JSON object with the following top-level shape:
 \`datasets\` maps each dataset name to a source. A dataset is one of three shapes: a
 file source, a SQL transform, or a SQLite table.
 
-\`\`\`jsonc title="app/manifest.json"
+\`\`\`jsonc title="manifest.json"
 "datasets": {
   "net_worth": { "source": "data/net_worth.csv" },            // a CSV / JSON / Parquet / SQLite file
   "monthly":   { "sql": "models/transforms/monthly.sql" },    // a DuckDB SQL transform over other datasets
@@ -249,7 +249,7 @@ target of an action or a connector.
 Each entry in \`pages\` is a page: one sidebar entry. A page holds **either** a flat
 \`islands\` list **or** tabbed \`groups\`, never both:
 
-\`\`\`jsonc title="app/manifest.json"
+\`\`\`jsonc title="manifest.json"
 {
   "id": "overview",       // required: unique page id, used in the URL
   "title": "Overview",    // optional: sidebar label
@@ -280,7 +280,7 @@ maps each affected dataset to the column the filter applies to; islands whose \`
 in \`bind\` re-query when the filter changes, and the rest ignore it. Two kinds are supported: a
 \`daterange\` over a date column, and a \`select\` that narrows a categorical column.
 
-\`\`\`jsonc title="app/manifest.json"
+\`\`\`jsonc title="manifest.json"
 "filters": [
   { "id": "period", "type": "daterange", "label": "Period",
     "bind": { "net_worth": "month", "transactions": "ts" } },
@@ -305,7 +305,7 @@ dataset is never writable). \`mode: "insert"\` appends rows: an append for a fla
 (CSV / JSON(L)), an \`INSERT\` for a SQLite table. The row schema is derived from the
 live data; \`fields\` only narrows or annotates it.
 
-\`\`\`jsonc title="app/manifest.json"
+\`\`\`jsonc title="manifest.json"
 "actions": {
   "log_meal": {
     "dataset": "meals",
@@ -344,7 +344,7 @@ param and value (so it's injection-safe). Its \`dataset\` is a \`source\` datase
 \`sql\` transform; there are no joins, so heavy shaping lives in a transform the query
 points at.
 
-\`\`\`jsonc title="app/manifest.json"
+\`\`\`jsonc title="manifest.json"
 "queries": {
   "get_daily_macros": {
     "description": "Macros + goals for one day; omit date for the latest.",
@@ -393,7 +393,7 @@ A **connector** is a vendored integration that syncs a provider's data into \`so
 datasets through the same checkpointed write path actions use. The integration code
 lives in the user's project at \`<module>/index.ts\`; the manifest declares an instance:
 
-\`\`\`jsonc title="app/manifest.json"
+\`\`\`jsonc title="manifest.json"
 "connectors": {
   "whoop": {
     "module": "connectors/whoop",                  // connector directory, relative to project root

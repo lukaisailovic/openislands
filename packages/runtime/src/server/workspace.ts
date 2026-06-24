@@ -1,12 +1,13 @@
 /**
  * The workspace registry: which apps this process serves. Every project is a
  * workspace rooted at `OPENISLANDS_PROJECT_DIR`; apps live under `<root>/apps/<id>/`,
- * each holding an `app/manifest.json`. The registry is derived live from disk on
+ * each holding a `manifest.json`. The registry is derived live from disk on
  * every request (behind a short TTL) — adding an app directory shows up on the next
  * page load without a restart, matching the live-everywhere runtime philosophy.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { migrateApp } from "@openislands/compiler";
 import type { PageIcon } from "@openislands/schema";
 import { type LoadedManifest, loadManifest } from "./project.js";
 
@@ -64,9 +65,12 @@ export function scanWorkspaceApps(root: string): { id: string; dir: string }[] {
   if (!existsSync(appsDir)) return [];
   const config = readWorkspaceConfig(root);
   const hidden = new Set(config.hidden ?? []);
-  const found = readdirSync(appsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && isSafeAppId(d.name) && !hidden.has(d.name))
-    .filter((d) => existsSync(join(appsDir, d.name, "app", "manifest.json")))
+  const candidates = readdirSync(appsDir, { withFileTypes: true }).filter(
+    (d) => d.isDirectory() && isSafeAppId(d.name) && !hidden.has(d.name),
+  );
+  for (const d of candidates) migrateApp(join(appsDir, d.name));
+  const found = candidates
+    .filter((d) => existsSync(join(appsDir, d.name, "manifest.json")))
     .map((d) => ({ id: d.name, dir: join(appsDir, d.name) }));
 
   const rank = new Map((config.order ?? []).map((id, i) => [id, i]));

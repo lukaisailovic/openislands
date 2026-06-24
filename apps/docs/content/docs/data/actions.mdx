@@ -27,7 +27,7 @@ not a file. Pointing an action at a `sql` dataset is a named validation error.
 An action names its target dataset and a `mode`. The only mode today is `insert`, which appends
 rows:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "actions": {
   "log_meal": {
     "dataset": "meals",
@@ -48,7 +48,7 @@ single row.
 
 A `fields.<column>` entry narrows one column:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "actions": {
   "log_meal": {
     "dataset": "meals",

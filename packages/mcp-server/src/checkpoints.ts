@@ -57,7 +57,7 @@ export function createCheckpointStore(projectRoot: string, appState: AppStateSto
       }
       const text = await appState.getText(keyFor(id));
       if (text === null) throw new Error(`checkpoint '${id}' has no stored manifest`);
-      await content.writeText("app/manifest.json", text);
+      await content.writeText("manifest.json", text);
       return { restoredData: false };
     },
     async prune(keep) {

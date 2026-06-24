@@ -53,7 +53,7 @@ transform do the joins and aggregation, and let the query parameterize the read.
 A query names its `dataset` and, optionally, the `params` it accepts and how to `where` / `select`
 / `orderBy` / `limit` the rows:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "queries": {
   "get_daily_macros": {
     "description": "Macros + goals for one day; omit date for the latest.",
@@ -106,7 +106,7 @@ disappears, leaving `order by date desc limit 1`.
 or `{ field, fn?, as? }`, where `fn` is `sum`, `avg`, `count`, `min`, or `max`. Aggregates pair
 with `groupBy`, a list of columns to group by:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 "queries": {
   "spend_by_category": {
     "dataset": "transactions",
@@ -139,7 +139,7 @@ Queries belong to the agent edit loop, not to a CLI command. An agent:
 Because a query is declarative JSON, an agent writes one end-to-end through the same
 `oi.app().patchManifest` → `applyEdit` loop it uses for islands and actions. No new tool, no file
 write. It reads the data, drafts the `queries` block, stages the change, reviews the diff, and
-applies it. The MCP write path only ever writes `app/manifest.json`, so a JSON spec is what lets
+applies it. The MCP write path only ever writes `manifest.json`, so a JSON spec is what lets
 an agent create a read tool, not just run one.
 
 `patchManifest` / `replaceManifest` and `validate` enforce the same checks: the `dataset` must

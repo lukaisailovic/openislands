@@ -12,8 +12,8 @@ import {
 import { broadcasterFor } from "../src/server/watcher.js";
 
 function writeApp(root: string, name: string, content: Record<string, unknown>): void {
-  mkdirSync(join(root, "apps", name, "app"), { recursive: true });
-  writeFileSync(join(root, "apps", name, "app", "manifest.json"), JSON.stringify(content));
+  mkdirSync(join(root, "apps", name), { recursive: true });
+  writeFileSync(join(root, "apps", name, "manifest.json"), JSON.stringify(content));
 }
 
 function manifest(title: string, icon?: string): Record<string, unknown> {
@@ -45,7 +45,7 @@ describe("workspaceRoot", () => {
 });
 
 describe("listApps", () => {
-  it("scans apps/ subdirs with an app/manifest.json, alphabetically", () => {
+  it("scans apps/ subdirs with a manifest.json, alphabetically", () => {
     const root = mkdtempSync(join(tmpdir(), "oi-ws-"));
     writeApp(root, "finance", manifest("Finance Overview", "wallet"));
     writeApp(root, "health", manifest("Health"));
@@ -56,6 +56,15 @@ describe("listApps", () => {
     expect(apps.map((a) => a.id)).toEqual(["finance", "health"]);
     expect(apps[0]).toMatchObject({ title: "Finance Overview", icon: "wallet", errors: [] });
     expect(apps[1]!.icon).toBeUndefined();
+  });
+
+  it("auto-migrates a legacy app/manifest.json layout so the scan still finds it", () => {
+    const root = mkdtempSync(join(tmpdir(), "oi-ws-"));
+    mkdirSync(join(root, "apps", "legacy", "app"), { recursive: true });
+    writeFileSync(join(root, "apps", "legacy", "app", "manifest.json"), JSON.stringify(manifest("Legacy")));
+    process.env.OPENISLANDS_PROJECT_DIR = root;
+
+    expect(listApps().map((a) => a.id)).toEqual(["legacy"]);
   });
 
   it("applies openislands.json order and hidden", () => {

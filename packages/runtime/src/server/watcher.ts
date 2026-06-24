@@ -7,9 +7,9 @@ import { resetCustomBuildCache } from "./custom.js";
 import { isEditableTextFile, takeSelfWrite } from "./editorSync.js";
 import { appDir } from "./workspace.js";
 
-const MANIFEST_REL = join("app", "manifest.json");
+const MANIFEST_REL = "manifest.json";
 const COMPONENTS_DIR = "components";
-const WATCH_DIRS = ["data", "docs", "models", "app", COMPONENTS_DIR] as const;
+const WATCH_DIRS = ["data", "docs", "models", COMPONENTS_DIR] as const;
 
 function isComponentChange(changedRel: string): boolean {
   return normRel(changedRel).startsWith(`${COMPONENTS_DIR}/`);
@@ -173,7 +173,8 @@ export async function startWatcher(
 ): Promise<WatchHandle> {
   const { default: chokidar } = await import("chokidar");
   const debounceMs = opts.debounceMs ?? 120;
-  const paths = WATCH_DIRS.map((d) => join(projectDir, d));
+  // The manifest now sits at the app root (not under a watched subdir), so watch the file itself.
+  const paths = [...WATCH_DIRS.map((d) => join(projectDir, d)), join(projectDir, MANIFEST_REL)];
   const watcher: FSWatcher = chokidar.watch(paths, { ignoreInitial: true, persistent: true });
 
   const pending = new Set<string>();

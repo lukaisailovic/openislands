@@ -37,4 +37,4 @@ and reversible — without hand-editing the file.
 
 Replace the files in `data/` and `docs/` with your own — same column names, and the
 dashboard queries them live. The sample numbers here are illustrative. Edit
-`app/manifest.json`; never hand-edit build output.
+`manifest.json`; never hand-edit build output.

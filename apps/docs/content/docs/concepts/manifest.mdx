@@ -16,7 +16,7 @@ without the dashboard rotting.
 Every manifest has the same spine: a version, a title, the datasets it reads, and the pages
 that render them.
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "version": 1,
   "title": "Finance Overview",
@@ -60,7 +60,7 @@ Each page is one entry in the left sidebar (a single-page app stays chrome-free)
 holds **either** a flat list of `islands` **or** tabbed `groups`, never both. Groups render
 as tabs under the page header, deep-linked via `?group=<id>`:
 
-```jsonc title="app/manifest.json"
+```jsonc title="manifest.json"
 {
   "id": "holdings",
   "groups": [

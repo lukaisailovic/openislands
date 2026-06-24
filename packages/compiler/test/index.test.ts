@@ -22,11 +22,11 @@ afterEach(() => {
 
 function project(manifest: unknown, files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), "oi-"));
-  mkdirSync(join(dir, "app"), { recursive: true });
+  mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "data"), { recursive: true });
   mkdirSync(join(dir, "models"), { recursive: true });
   mkdirSync(join(dir, "content"), { recursive: true });
-  writeFileSync(join(dir, "app", "manifest.json"), JSON.stringify(manifest));
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest));
   for (const [path, content] of Object.entries(files)) writeFileSync(join(dir, path), content);
   projects.push(dir);
   return dir;

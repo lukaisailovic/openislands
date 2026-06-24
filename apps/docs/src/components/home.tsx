@@ -96,7 +96,7 @@ export function Home() {
         <div className="oi-split">
           <figure className="oi-panel oi-panel-code">
             <figcaption className="oi-panel-head" translate="no">
-              app/manifest.json
+              manifest.json
             </figcaption>
             <pre className="oi-code" translate="no">
               <code>{kpiManifest}</code>

@@ -42,7 +42,7 @@ describe("affectedDatasets", () => {
 
   it("treats a manifest change as touching every dataset", () => {
     const m = manifest({ a: { source: "data/a.csv" }, b: { source: "data/b.csv" } });
-    expect(affectedDatasets(m, "app/manifest.json").toSorted()).toEqual(["a", "b"]);
+    expect(affectedDatasets(m, "manifest.json").toSorted()).toEqual(["a", "b"]);
   });
 
   it("matches a glob source by directory and extension", () => {

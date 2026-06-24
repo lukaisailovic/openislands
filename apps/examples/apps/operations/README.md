@@ -71,5 +71,5 @@ Three insert actions let an agent record operational events: `log_incident` (ope
 incident), `log_incident_update` (append a status update sharing the same `incident_id`), and
 `log_deploy` (record a deploy). Discover them with `oi.app().listActions()`, write rows with
 `oi.app().runAction(...)` (inside the `execute` tool); every row is validated against the resolved
-schema before anything is written, and the views update live. Edit `app/manifest.json` to change the
+schema before anything is written, and the views update live. Edit `manifest.json` to change the
 layout; never hand-edit build output.

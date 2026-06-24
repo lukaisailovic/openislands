@@ -1,7 +1,7 @@
 /**
  * Multi-app workspace behavior for @openislands/mcp — the "multi-app by default" surface.
  *
- * createServer roots a WORKSPACE (a dir of `apps/<id>/app/manifest.json`). Since the pivot to pure
+ * createServer roots a WORKSPACE (a dir of `apps/<id>/manifest.json`). Since the pivot to pure
  * Code Mode there are NO native app/workspace tools — every operation is a method on `oi` inside
  * the single execute tool. These tests cover what server.test.ts's single-app fixture can't:
  *  - resolveApp via oi.app(id) inside execute (sole default, ambiguous error, explicit select,
@@ -39,15 +39,15 @@ const noteManifest = (title: string): string =>
     pages: [{ id: "overview", title: "Overview", islands: [{ type: "note.card", markdown: "hi", span: 12 }] }],
   });
 
-/** Scaffold `apps/<id>/app/manifest.json` (a copy of the finance fixture, or a note manifest)
+/** Scaffold `apps/<id>/manifest.json` (a copy of the finance fixture, or a note manifest)
  * inside `root`, tracking the app dir for engine cleanup. */
 function addApp(root: string, id: string, opts: { fromFixture?: boolean; title?: string } = {}): string {
   const dir = join(root, "apps", id);
   if (opts.fromFixture) {
     cpSync(FIXTURE, dir, { recursive: true });
   } else {
-    mkdirSync(join(dir, "app"), { recursive: true });
-    writeFileSync(join(dir, "app", "manifest.json"), noteManifest(opts.title ?? id));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "manifest.json"), noteManifest(opts.title ?? id));
   }
   appDirs.push(dir);
   return dir;
@@ -198,8 +198,8 @@ describe("oi.createApp", () => {
     expect(created.ok).toBe(true);
     expect(created.id).toBe("ops");
     appDirs.push(created.dir);
-    for (const sub of ["app", "data", "models", "docs"]) expect(existsSync(join(created.dir, sub))).toBe(true);
-    expect(existsSync(join(created.dir, "app", "manifest.json"))).toBe(true);
+    for (const sub of ["data", "models", "docs"]) expect(existsSync(join(created.dir, sub))).toBe(true);
+    expect(existsSync(join(created.dir, "manifest.json"))).toBe(true);
 
     const { apps } = await runResult<{ apps: { id: string }[] }>(client, `return await oi.listApps();`);
     expect(apps.map((a) => a.id).toSorted()).toEqual(["finance", "ops"]);

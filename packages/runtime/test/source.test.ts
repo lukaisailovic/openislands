@@ -9,7 +9,6 @@ const SQL = "SELECT class, SUM(value_eur) AS value_eur FROM holdings GROUP BY cl
 
 beforeAll(() => {
   root = realpathSync(mkdtempSync(join(tmpdir(), "oi-source-")));
-  mkdirSync(join(root, "app"));
   mkdirSync(join(root, "models", "transforms"), { recursive: true });
   writeFileSync(join(root, "models", "transforms", "allocation.sql"), SQL);
   const manifest = {
@@ -23,7 +22,7 @@ beforeAll(() => {
     },
     pages: [],
   };
-  writeFileSync(join(root, "app", "manifest.json"), JSON.stringify(manifest));
+  writeFileSync(join(root, "manifest.json"), JSON.stringify(manifest));
 });
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));

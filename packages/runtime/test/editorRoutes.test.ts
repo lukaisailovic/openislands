@@ -20,8 +20,8 @@ let projectDir: string;
 const savedProject = process.env.OPENISLANDS_PROJECT_DIR;
 
 function writeManifest(dir: string): void {
-  mkdirSync(join(dir, "app"), { recursive: true });
-  writeFileSync(join(dir, "app", "manifest.json"), JSON.stringify({ version: 1, title: "KB", datasets: {}, pages: [] }));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "manifest.json"), JSON.stringify({ version: 1, title: "KB", datasets: {}, pages: [] }));
 }
 
 function get(path: string, query: Record<string, string>): Request {
@@ -68,7 +68,7 @@ describe("writeResponse", () => {
   });
 
   it("rejects a non-text extension with 400", async () => {
-    const res = await writeResponse(post("write", { path: "app/evil.js", content: "x" }));
+    const res = await writeResponse(post("write", { path: "docs/evil.js", content: "x" }));
     expect(res.status).toBe(400);
   });
 

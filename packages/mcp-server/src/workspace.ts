@@ -1,12 +1,13 @@
 /**
  * Workspace app discovery for the MCP server. A project is a workspace rooted at
  * the dir passed to {@link createServer}; apps live under `<root>/apps/<id>/`, each
- * holding an `app/manifest.json`. This mirrors the runtime's scan (order from
+ * holding a `manifest.json`. This mirrors the runtime's scan (order from
  * `<root>/openislands.json`, then alphabetical, `hidden` filtered) but stays local
  * so the MCP server doesn't take a dependency on `@openislands/runtime`.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { migrateApp } from "@openislands/compiler";
 
 export interface ScannedApp {
   id: string;
@@ -43,9 +44,12 @@ export function scanApps(root: string): ScannedApp[] {
   if (!existsSync(appsDir)) return [];
   const config = readWorkspaceConfig(root);
   const hidden = new Set(config.hidden ?? []);
-  const found = readdirSync(appsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && isSafeAppId(d.name) && !hidden.has(d.name))
-    .filter((d) => existsSync(join(appsDir, d.name, "app", "manifest.json")))
+  const candidates = readdirSync(appsDir, { withFileTypes: true }).filter(
+    (d) => d.isDirectory() && isSafeAppId(d.name) && !hidden.has(d.name),
+  );
+  for (const d of candidates) migrateApp(join(appsDir, d.name));
+  const found = candidates
+    .filter((d) => existsSync(join(appsDir, d.name, "manifest.json")))
     .map((d) => ({ id: d.name, dir: join(appsDir, d.name) }));
 
   const rank = new Map((config.order ?? []).map((id, i) => [id, i]));

@@ -6,7 +6,7 @@ stand-ins** — fictional figures, one consistent recent story — so the exampl
 before you've dropped anything in.
 
 To make this dashboard yours, replace the sample files with exports of the same shape.
-The manifest (`app/manifest.json`) and the SQL transforms (`models/transforms/`) bind to
+The manifest (`manifest.json`) and the SQL transforms (`models/transforms/`) bind to
 the columns below — keep the column names and the dashboard keeps working. Run
 `openislands validate apps/examples/operations` after any change; a missing column fails
 the build and names the island, so you find out immediately, not silently.

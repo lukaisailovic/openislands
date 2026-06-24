@@ -46,7 +46,7 @@ npx openislands add category.bar
 ```
 
 `--bind` re-validates before saving, so a bad write is refused, not persisted. Then open the app's
-`apps/<id>/app/manifest.json`, set the island's `dataset`, and fill in its required fields from the
+`apps/<id>/manifest.json`, set the island's `dataset`, and fill in its required fields from the
 columns `infer` showed you.
 </Step>
 
@@ -108,7 +108,7 @@ openislands infer <file> [project] [--app <id>] [--bind]
 
 Reads a data file through the same DuckDB core the runtime uses and prints its columns, a
 proposed dataset contract, and suggested islands. Read-only by default; `--bind` writes the
-dataset into the target app's `apps/<id>/app/manifest.json` (re-validating first). The file must
+dataset into the target app's `apps/<id>/manifest.json` (re-validating first). The file must
 live inside the app — move it under its `data/` before binding. Operates on one app: it defaults
 to the sole app and errors if the project has several, so pass `--app`.
 
