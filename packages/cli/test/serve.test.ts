@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, handleServeRequest, newMcpHandlerHolder, warnRuntimeHostExposed, type McpConfig } from "../src/serve.js";
+import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, clientIpAllowed, handleServeRequest, newMcpHandlerHolder, parseAllowedIps, warnRuntimeHostExposed, type McpConfig } from "../src/serve.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -186,13 +186,75 @@ describe("allowedHostsFromEnv", () => {
 });
 
 describe("warnRuntimeHostExposed", () => {
+  const openList = parseAllowedIps(undefined);
+
   it("warns on a non-loopback bind, stays silent on loopback", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    warnRuntimeHostExposed("127.0.0.1");
-    warnRuntimeHostExposed("localhost");
+    warnRuntimeHostExposed("127.0.0.1", openList);
+    warnRuntimeHostExposed("localhost", openList);
     expect(err).not.toHaveBeenCalled();
-    warnRuntimeHostExposed("0.0.0.0");
+    warnRuntimeHostExposed("0.0.0.0", openList);
     expect(err).toHaveBeenCalledOnce();
     expect(err.mock.calls[0]![0]).toMatch(/non-loopback/i);
+  });
+
+  it("nudges toward OPENISLANDS_ALLOWED_IPS when the list is open, confirms it when set", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    warnRuntimeHostExposed("0.0.0.0", openList);
+    expect(err.mock.calls[0]![0]).toMatch(/OPENISLANDS_ALLOWED_IPS is unset/i);
+    warnRuntimeHostExposed("0.0.0.0", parseAllowedIps("192.168.1.0/24"));
+    expect(err.mock.calls[1]![0]).toMatch(/Only the IPs in OPENISLANDS_ALLOWED_IPS/i);
+  });
+});
+
+describe("parseAllowedIps", () => {
+  it("treats unset / empty / a `*` entry as allow-all", () => {
+    expect(parseAllowedIps(undefined).any).toBe(true);
+    expect(parseAllowedIps("").any).toBe(true);
+    expect(parseAllowedIps("  ").any).toBe(true);
+    expect(parseAllowedIps("192.168.1.5, *").any).toBe(true);
+  });
+
+  it("collects exact IPs and IPv4 CIDRs, trimming blanks", () => {
+    const list = parseAllowedIps(" 10.0.0.4 , 192.168.1.0/24 ,, ::1 ");
+    expect(list.any).toBe(false);
+    expect(list.exact.has("10.0.0.4")).toBe(true);
+    expect(list.exact.has("::1")).toBe(true);
+    expect(list.cidrs).toHaveLength(1);
+  });
+
+  it("falls back to an exact match for an unparseable / IPv6 CIDR", () => {
+    const list = parseAllowedIps("fe80::/10, 1.2.3.4/99");
+    expect(list.cidrs).toHaveLength(0);
+    expect(list.exact.has("fe80::/10")).toBe(true);
+    expect(list.exact.has("1.2.3.4/99")).toBe(true);
+  });
+});
+
+describe("clientIpAllowed", () => {
+  const list = parseAllowedIps("203.0.113.7, 192.168.1.0/24");
+
+  it("allows everything when the list is open", () => {
+    const open = parseAllowedIps("*");
+    expect(clientIpAllowed("8.8.8.8", open)).toBe(true);
+    expect(clientIpAllowed(undefined, open)).toBe(true);
+  });
+
+  it("always allows loopback regardless of the list", () => {
+    expect(clientIpAllowed("127.0.0.1", list)).toBe(true);
+    expect(clientIpAllowed("::1", list)).toBe(true);
+  });
+
+  it("allows exact matches and addresses inside a CIDR, blocks the rest", () => {
+    expect(clientIpAllowed("203.0.113.7", list)).toBe(true);
+    expect(clientIpAllowed("192.168.1.42", list)).toBe(true);
+    expect(clientIpAllowed("192.168.2.42", list)).toBe(false);
+    expect(clientIpAllowed("8.8.8.8", list)).toBe(false);
+    expect(clientIpAllowed(undefined, list)).toBe(false);
+  });
+
+  it("normalizes IPv4-mapped IPv6 before matching", () => {
+    expect(clientIpAllowed("::ffff:192.168.1.42", list)).toBe(true);
+    expect(clientIpAllowed("::ffff:203.0.113.7", list)).toBe(true);
   });
 });

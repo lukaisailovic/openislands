@@ -17,6 +17,8 @@
 # surface (apply_edit / run_action), so when it's on (the default) and bound off
 # loopback, serve refuses to start without OPENISLANDS_MCP_TOKEN — set the token,
 # or set OPENISLANDS_MCP=0 for a dashboard-only container. See /self-hosting.
+# Set OPENISLANDS_ALLOWED_IPS (comma-separated IPs / IPv4 CIDRs) to restrict which
+# client IPs may connect once the port is exposed off loopback (default: all).
 #
 # DuckDB ships glibc-only native bindings, so the base image must be glibc
 # (node:22-slim / Debian), never alpine/musl.

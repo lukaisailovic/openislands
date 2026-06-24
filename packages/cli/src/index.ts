@@ -18,7 +18,7 @@ import { Command } from "commander";
 import { compile, discoverApps, inferFile, isSafeAppId, listConnectorStatuses, runConnectorSync } from "@openislands/compiler";
 import type { ConnectorStatus, SourceSchema, SyncResult } from "@openislands/compiler";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, validateManifest } from "@openislands/schema";
-import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, envFlag, handleServeRequest, newMcpHandlerHolder, warnRuntimeHostExposed, type McpConfig, type McpHandlerHolder } from "./serve.js";
+import { allowedHostsFromEnv, apiRequestForbiddenReason, assertMcpHostSafe, clientIpAllowed, envFlag, handleServeRequest, newMcpHandlerHolder, parseAllowedIps, warnRuntimeHostExposed, type McpConfig, type McpHandlerHolder } from "./serve.js";
 import { datasetNameFromFile, islandSkeleton, suggestIslands } from "./scaffold.js";
 
 interface FetchServer {
@@ -137,7 +137,7 @@ program
     const mcpEnabled = opts.mcp || envFlag(process.env.OPENISLANDS_MCP);
     const mcpToken = opts.mcpToken ?? process.env.OPENISLANDS_MCP_TOKEN ?? null;
     assertMcpHostSafe(host, mcpEnabled, mcpToken);
-    warnRuntimeHostExposed(host);
+    warnRuntimeHostExposed(host, parseAllowedIps(process.env.OPENISLANDS_ALLOWED_IPS));
 
     const apps = findWorkspaceApps(root);
     if (apps.length === 0) exitNoApps(root);
@@ -582,11 +582,18 @@ async function bootRuntime(
   const clientDir = join(dirname(serverEntry), "..", "client");
   const origin = `http://${host}:${port}`;
   const allowedHosts = allowedHostsFromEnv(process.env.OPENISLANDS_ALLOWED_HOSTS);
+  const allowedIps = parseAllowedIps(process.env.OPENISLANDS_ALLOWED_IPS);
   const mcpHandler = newMcpHandlerHolder();
 
   const server = createServer((req, res) => {
     void (async () => {
       try {
+        if (!clientIpAllowed(req.socket.remoteAddress, allowedIps)) {
+          res.statusCode = 403;
+          res.setHeader("content-type", "text/plain");
+          res.end(`client IP '${req.socket.remoteAddress ?? "unknown"}' is not allowed — add it to OPENISLANDS_ALLOWED_IPS`);
+          return;
+        }
         if (handleServeRequest(mcp, mcpHandler, req, res)) return;
         if (serveClientAsset(clientDir, req, res)) return;
         if ((req.url ?? "/").split("?")[0]!.startsWith("/api/")) {

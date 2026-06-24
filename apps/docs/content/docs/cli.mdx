@@ -98,7 +98,9 @@ remote agent can drive the dashboard. `--mcp-token`
 sets the bearer token it requires — mandatory when binding off loopback, since MCP is a write
 surface. Every flag has an environment equivalent (`OPENISLANDS_PORT`, `OPENISLANDS_HOST`,
 `OPENISLANDS_MCP`, `OPENISLANDS_MCP_TOKEN`), which is how the [Docker image](/self-hosting) is
-configured; flags win when both are set. See [Self-hosting](/self-hosting) for the container story.
+configured; flags win when both are set. When you bind off loopback, `OPENISLANDS_ALLOWED_IPS`
+restricts which client IPs may reach the port (comma-separated IPs and IPv4 CIDRs; default allow-all).
+See [Self-hosting](/self-hosting) for the container story.
 
 ### `infer`
 
