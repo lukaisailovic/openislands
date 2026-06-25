@@ -59,7 +59,7 @@
       "title": "Holdings",
       "icon": "wallet",
       "filters": [
-        { "id": "period", "type": "daterange", "label": "Period", "bind": { "transactions": "ts" } }
+        { "id": "period", "type": "daterange", "label": "Period", "bind": { "transactions": "ts" }, "default": "last-90-days" }
       ],
       "groups": [
         {

@@ -88,7 +88,9 @@ Two kinds:
 **`daterange`** — a shared date range. State lives in `?from=&to=` as `YYYY-MM-DD`. The range
 compares correctly whether the column is a `DATE`/`TIMESTAMP` or a string: a `YYYY-MM` month
 string is matched against the `YYYY-MM` prefix of the bound, so a `from`/`to` inside a month
-still includes that month.
+still includes that month. An optional `default` sets the initial period applied when the URL
+sets no range, resolved live against today (so it never goes stale); omitting it means all-time.
+One of `today`, `last-7-days`, `last-30-days`, `last-90-days`, `this-month`, `last-month`.
 
 **`select`** — a categorical narrowing on the bound column. Fields:
 

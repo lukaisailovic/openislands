@@ -797,6 +797,10 @@ const DateRangeFilter = z.object({
   type: z.literal("daterange"),
   label: z.string().optional(),
   bind: z.record(z.string(), z.string()).describe("dataset → date column the range applies to"),
+  default: z
+    .enum(["today", "last-7-days", "last-30-days", "last-90-days", "this-month", "last-month"])
+    .optional()
+    .describe("initial period applied when the URL sets no range; omitted means all-time"),
 });
 
 const SelectFilter = z.object({

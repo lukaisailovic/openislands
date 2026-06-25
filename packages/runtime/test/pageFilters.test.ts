@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Page, validateManifest } from "@openislands/schema";
-import { activeRanges, activeSelects } from "../src/client/pageFilters.js";
+import { activeRanges, activeSelects, defaultRangeBounds, presetBounds } from "../src/client/pageFilters.js";
 
 function pageWithFilters(filters: unknown[]): Page {
   const result = validateManifest({
@@ -53,5 +53,31 @@ describe("activeRanges", () => {
   it("is empty when no bound is set", () => {
     const page = pageWithFilters([{ id: "period", type: "daterange", bind: { services: "day" } }]);
     expect(activeRanges(page, {}).size).toBe(0);
+  });
+});
+
+describe("presetBounds", () => {
+  const today = new Date(2026, 5, 25);
+
+  it("resolves last-30-days relative to today", () => {
+    expect(presetBounds("last-30-days", today)).toEqual({ from: "2026-05-27", to: "2026-06-25" });
+  });
+
+  it("resolves this-month to the calendar month", () => {
+    expect(presetBounds("this-month", today)).toEqual({ from: "2026-06-01", to: "2026-06-30" });
+  });
+});
+
+describe("defaultRangeBounds", () => {
+  const today = new Date(2026, 5, 25);
+
+  it("resolves the first daterange filter's default preset", () => {
+    const page = pageWithFilters([{ id: "period", type: "daterange", bind: { services: "day" }, default: "last-30-days" }]);
+    expect(defaultRangeBounds(page, today)).toEqual({ from: "2026-05-27", to: "2026-06-25" });
+  });
+
+  it("is empty when no daterange filter declares a default", () => {
+    const page = pageWithFilters([{ id: "period", type: "daterange", bind: { services: "day" } }]);
+    expect(defaultRangeBounds(page, today)).toEqual({});
   });
 });
