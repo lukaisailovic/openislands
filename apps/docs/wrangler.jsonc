@@ -1,15 +1,20 @@
 {
-  // OpenIslands docs — fully static (SPA + prerender) output served as Cloudflare
-  // Workers static assets. There is no server: `vite build` prerenders every page,
-  // the per-page markdown (`/introduction.md`), the LLM indexes (`/llms.txt`,
-  // `/llms-full.txt`), and the Orama search index (`/api/search`) into .output/public,
-  // and Workers serves that directory. Deploy with `pnpm deploy` (build + wrangler).
+  // OpenIslands docs — static (SPA + prerender) output served as Cloudflare Workers static
+  // assets, fronted by a thin content-negotiation Worker (worker.ts). `vite build`
+  // prerenders every page, the per-page markdown (`/introduction.md`), the LLM indexes
+  // (`/llms.txt`, `/llms-full.txt`), and the Orama search index (`/api/search`) into
+  // .output/public. The Worker runs first (`run_worker_first`) and, for agents that send
+  // `Accept: text/markdown`, serves the prebuilt markdown at the same URL via the ASSETS
+  // binding; everyone else gets the prerendered site. Deploy with `pnpm deploy`.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "openislands-docs",
   "compatibility_date": "2026-06-22",
+  "main": "./worker.ts",
   "assets": {
     "directory": "./.output/public",
+    "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
   }
 }

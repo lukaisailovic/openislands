@@ -2,7 +2,7 @@
 // static-asset serving expects `index.html` both for `/` and as the single-page-app
 // fallback (`not_found_handling: "single-page-application"`). Materialize the shell as
 // index.html so the home route and client-side navigation both resolve on Workers.
-import { copyFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +20,16 @@ if (!existsSync(shell)) {
 
 copyFileSync(shell, index);
 console.log(`postbuild: wrote ${index} from _shell.html`);
+
+// Nitro drops a wrangler "redirected configuration" at .wrangler/deploy/config.json that
+// points to .output/server/wrangler.json — a file only the Cloudflare preset writes. Under
+// our pinned node-server preset it dangles, and wrangler then refuses to deploy/dev ("the
+// redirected configuration path does not exist") instead of falling back to the root
+// wrangler.jsonc. We deploy that root config (static assets + the content-negotiation
+// worker), so remove the stale redirect.
+const deployRedirect = resolve(here, "../.wrangler/deploy/config.json");
+rmSync(deployRedirect, { force: true });
+console.log(`postbuild: removed stale wrangler redirect ${deployRedirect}`);
 
 // Build sitemap.xml from the pages actually prerendered (every route is `<path>/index.html`,
 // the root is `index.html` straight in publicDir) so the sitemap can never drift from the
