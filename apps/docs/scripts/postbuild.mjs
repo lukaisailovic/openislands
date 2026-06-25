@@ -2,7 +2,7 @@
 // static-asset serving expects `index.html` both for `/` and as the single-page-app
 // fallback (`not_found_handling: "single-page-application"`). Materialize the shell as
 // index.html so the home route and client-side navigation both resolve on Workers.
-import { copyFileSync, existsSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,8 +18,23 @@ if (!existsSync(shell)) {
   process.exit(1);
 }
 
-copyFileSync(shell, index);
-console.log(`postbuild: wrote ${index} from _shell.html`);
+// index.html is served for `/` AND every unmatched path (Workers SPA fallback), and it's
+// the one surface with no prerendered content — fetch `/` or guess a wrong URL and you get
+// only the empty shell. The shell carries <noscript>/<link rel=alternate> pointers, but
+// HTML→markdown extractors (e.g. agents' WebFetch) drop both, so inject a *visible* pointer
+// as real body text. The inline script removes it before React hydrates (classic inline
+// scripts run during parse, ahead of the deferred module bundle), so JS users never see it
+// and hydration still matches; no-JS clients and markdown extractors keep it.
+const AGENT_POINTER = `<div id="oi-agents" style="padding:1rem;font-family:system-ui;font-size:14px">OpenIslands docs for AI agents — plain text: <a href="/llms.txt">/llms.txt</a> (index), <a href="/llms-full.txt">/llms-full.txt</a> (every page in one file). Append <code>.md</code> to any page URL for its markdown (e.g. <a href="/introduction.md">/introduction.md</a>). Agent onboarding: <a href="/start.md">/start.md</a>.</div><script>document.getElementById("oi-agents")?.remove()</script>`;
+
+const shellHtml = readFileSync(shell, "utf8");
+const withPointer = shellHtml.replace(/(<body[^>]*>)/, `$1${AGENT_POINTER}`);
+if (withPointer === shellHtml) {
+  console.error("postbuild: no <body> tag in the shell — could not inject the agent pointer");
+  process.exit(1);
+}
+writeFileSync(index, withPointer);
+console.log(`postbuild: wrote ${index} from _shell.html with the agent docs pointer`);
 
 // Build sitemap.xml from the pages actually prerendered (every route is `<path>/index.html`,
 // the root is `index.html` straight in publicDir) so the sitemap can never drift from the
