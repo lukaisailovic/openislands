@@ -2,6 +2,7 @@ import { createFileRoute, notFound, useLoaderData } from "@tanstack/react-router
 import { Text } from "@cloudflare/kumo";
 import type { Page } from "@openislands/schema";
 import { Dashboard } from "../../components/Dashboard.js";
+import { defaultRangeBounds } from "../../client/pageFilters.js";
 import { getDashboard, getFilterOptions } from "../../server/dashboard.js";
 
 export interface PageSearch {
@@ -64,12 +65,15 @@ function PageView() {
     selected[key] = value.split(",").filter(Boolean);
   }
 
+  const hasUrlRange = search.from !== undefined || search.to !== undefined;
+  const range = hasUrlRange ? { from: search.from, to: search.to } : defaultRangeBounds(page, new Date());
+
   return (
     <Dashboard
       manifest={manifest}
       page={page}
       activeGroup={activeGroupFor(page, search.group)}
-      range={{ from: search.from, to: search.to }}
+      range={range}
       selected={selected}
       filterOptions={filterOptions}
       customIslands={customIslands}

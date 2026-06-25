@@ -2,7 +2,7 @@ import { useState } from "react";
 import { CalendarDots, Funnel, X } from "@phosphor-icons/react";
 import { Button, Checkbox, DatePicker, Popover, Select, type DateRange } from "@cloudflare/kumo";
 import type { PageFilter } from "@openislands/schema";
-import type { RangeBounds } from "../client/pageFilters.js";
+import { PERIOD_PRESETS, presetBounds, toDay, type RangeBounds } from "../client/pageFilters.js";
 import { formatValue } from "../islands/format.js";
 
 interface Props {
@@ -19,38 +19,14 @@ interface Preset {
   bounds: Required<RangeBounds>;
 }
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
-function toDay(date: Date): string {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
 function parseDay(day: string | undefined): Date | undefined {
   if (day === undefined) return undefined;
   const [year, month, date] = day.split("-").map(Number);
   return new Date(year!, month! - 1, date);
 }
 
-function daysAgo(today: Date, days: number): Date {
-  return new Date(today.getFullYear(), today.getMonth(), today.getDate() - days);
-}
-
 function buildPresets(today: Date): Preset[] {
-  const span = (from: Date, to: Date) => ({ from: toDay(from), to: toDay(to) });
-  return [
-    { label: "Today", bounds: span(today, today) },
-    { label: "Last 7 days", bounds: span(daysAgo(today, 6), today) },
-    { label: "Last 30 days", bounds: span(daysAgo(today, 29), today) },
-    { label: "Last 90 days", bounds: span(daysAgo(today, 89), today) },
-    {
-      label: "This month",
-      bounds: span(new Date(today.getFullYear(), today.getMonth(), 1), new Date(today.getFullYear(), today.getMonth() + 1, 0)),
-    },
-    {
-      label: "Last month",
-      bounds: span(new Date(today.getFullYear(), today.getMonth() - 1, 1), new Date(today.getFullYear(), today.getMonth(), 0)),
-    },
-  ];
+  return PERIOD_PRESETS.map(({ key, label }) => ({ label, bounds: presetBounds(key, today) }));
 }
 
 const boundLabel = (value: string | undefined) => (value === undefined ? "…" : formatValue(value, "date"));

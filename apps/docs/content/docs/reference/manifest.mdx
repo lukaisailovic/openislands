@@ -100,11 +100,13 @@ A **group** is `{ id, title?, islands }`: a string `id`, an optional `title`, an
 A page's optional `filters` declare shared controls in the page header. Each filter's `bind`
 maps each affected dataset to the column the filter applies to; islands whose `dataset` appears
 in `bind` re-query when the filter changes, and the rest ignore it. Two kinds are supported: a
-`daterange` over a date column, and a `select` that narrows a categorical column.
+`daterange` over a date column, and a `select` that narrows a categorical column. A `daterange`
+may set a `default` initial period (resolved live against today) applied when the URL sets no
+range; without it the page opens to all-time.
 
 ```jsonc title="manifest.json"
 "filters": [
-  { "id": "period", "type": "daterange", "label": "Period",
+  { "id": "period", "type": "daterange", "label": "Period", "default": "last-90-days",
     "bind": { "net_worth": "month", "transactions": "ts" } },
   { "id": "team", "type": "select", "label": "Team", "multiple": true,
     "bind": { "services": "owner" } }
@@ -117,6 +119,7 @@ in `bind` re-query when the filter changes, and the rest ignore it. Two kinds ar
 | `type` | `string` | yes | The filter kind: `daterange` or `select`. |
 | `label` | `string` | no | Label shown on the control. |
 | `bind` | `object` | yes | A map of dataset name to the column the filter applies to. Each column is validated against the live data. |
+| `default` | `string` | no | `daterange` only: initial period when the URL sets no range, resolved live against today. One of `today`, `last-7-days`, `last-30-days`, `last-90-days`, `this-month`, `last-month`. Omitted means all-time. |
 | `multiple` | `boolean` | no | `select` only: allow several values (`IN`); default single (`=`). |
 | `options` | `array of string` | no | `select` only: explicit choices; when omitted, the bound column's live distinct values are used. |
 
