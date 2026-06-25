@@ -36,3 +36,16 @@ export async function getLLMText(page: (typeof source)["$inferPage"]) {
 
 ${processed}`;
 }
+
+const INTERNAL_DOC_LINK = /\]\((\/[^)\s#]*)(#[^)\s]*)?\)/g;
+
+// An agent that opens one page's .md and follows a link should land on the next page's
+// .md, not the JS-rendered HTML. Rewrite internal absolute doc links to their .md sibling
+// (the same /foo → /foo.md mapping the site already serves), leaving the site root and
+// asset files (anything with an extension) and external links untouched.
+export function linkToMarkdownSiblings(md: string): string {
+  return md.replace(INTERNAL_DOC_LINK, (match, path: string, anchor = "") => {
+    if (path === "/" || /\.[a-z0-9]+$/i.test(path)) return match;
+    return `](${path}.md${anchor})`;
+  });
+}

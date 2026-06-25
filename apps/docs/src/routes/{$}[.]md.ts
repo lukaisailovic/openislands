@@ -1,5 +1,12 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { getLLMText, markdownPathToSlugs, source } from "@/lib/source";
+import { getLLMText, linkToMarkdownSiblings, markdownPathToSlugs, source } from "@/lib/source";
+
+const MARKDOWN_FOOTER = `
+
+---
+
+*This is one page of the OpenIslands docs. Every page in one file: [/llms-full.txt](/llms-full.txt). Page index: [/llms.txt](/llms.txt). Links above point to \`.md\` siblings — append \`.md\` to any page URL for its raw markdown.*
+`;
 
 export const Route = createFileRoute("/{$}.md")({
   server: {
@@ -9,7 +16,8 @@ export const Route = createFileRoute("/{$}.md")({
         const page = source.getPage(slugs);
         if (!page) throw notFound();
 
-        return new Response(await getLLMText(page), {
+        const markdown = linkToMarkdownSiblings(await getLLMText(page)) + MARKDOWN_FOOTER;
+        return new Response(markdown, {
           headers: {
             "Content-Type": "text/markdown",
           },

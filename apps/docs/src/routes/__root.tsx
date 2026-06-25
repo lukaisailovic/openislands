@@ -19,6 +19,15 @@ export const Route = createRootRoute({
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      // Agent/LLM discovery: every page advertises the plain-text docs. Pairs with the
+      // <noscript> below so a JS-less fetch of ANY url (incl. wrong guesses → the SPA
+      // shell) finds /llms.txt instead of an empty "OpenIslands" page.
+      {
+        rel: "alternate",
+        type: "text/markdown",
+        href: "/llms.txt",
+        title: "OpenIslands docs as plain text (for LLMs)",
+      },
     ],
   }),
   component: RootComponent,
@@ -58,6 +67,29 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body className="flex flex-col min-h-screen">
+        {/* Rendered into the static shell that serves every unmatched path. A JS-less
+            client (WebFetch, crawlers, agents) sees this pointer home instead of a blank
+            page; real JS clients never paint it. */}
+        <noscript>
+          <p>
+            These docs render with JavaScript. Reading as an LLM or agent? Plain-text docs:
+          </p>
+          <ul>
+            <li>
+              <a href="/llms-full.txt">/llms-full.txt</a> — every page, one file
+            </li>
+            <li>
+              <a href="/llms.txt">/llms.txt</a> — page index
+            </li>
+            <li>
+              Any page as Markdown: append <code>.md</code> (e.g.{" "}
+              <a href="/introduction.md">/introduction.md</a>)
+            </li>
+            <li>
+              <a href="/start.md">/start.md</a> — agent onboarding
+            </li>
+          </ul>
+        </noscript>
         <RootProvider theme={{ defaultTheme: "dark", enabled: false }} search={{ SearchDialog }}>
           <Outlet />
         </RootProvider>
