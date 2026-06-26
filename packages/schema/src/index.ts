@@ -18,25 +18,28 @@ const Span = z.number().int().min(1).max(12).optional();
 
 /** The display formats a numeric value can be rendered in. */
 export const ValueFormat = z
-  .enum([
-    "usd",
-    "eur",
-    "gbp",
-    "jpy",
-    "int",
-    "decimal",
-    "pct",
-    "compact",
-    "kg",
-    "bytes",
-    "duration",
-    "date",
-    "datetime",
-    "time",
-    "month",
+  .union([
+    z.enum([
+      "usd",
+      "eur",
+      "gbp",
+      "jpy",
+      "int",
+      "decimal",
+      "pct",
+      "compact",
+      "kg",
+      "bytes",
+      "duration",
+      "date",
+      "datetime",
+      "time",
+      "month",
+    ]),
+    z.string().regex(/^currency:[A-Za-z]{3}$/, "currency code must be 'currency:' + a 3-letter ISO code, e.g. currency:RSD"),
   ])
   .describe(
-    "Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats).",
+    "Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. For any other ISO 4217 currency use 'currency:<CODE>' (e.g. currency:RSD). See the Value formats reference (/reference/value-formats).",
   );
 export type ValueFormat = z.infer<typeof ValueFormat>;
 
@@ -887,14 +890,18 @@ export type FieldSpec = z.infer<typeof FieldSpec>;
 
 /**
  * A manifest-declared write into a `source` dataset (never `sql` — derived
- * datasets aren't writable). `mode: "insert"` adds rows — an append for a
- * flat-file source (CSV / JSON(L)), an INSERT for a SQLite table — so the
- * storage backing the dataset never changes the contract. The row schema is
+ * datasets aren't writable). Four modes:
+ *   - insert  — append rows (CSV/JSON(L)) or INSERT for SQLite
+ *   - replace — overwrite all rows in the dataset
+ *   - delete  — drop rows matching an equality predicate supplied at call time
+ *   - update  — patch rows matching an equality predicate supplied at call time
+ * The match predicate and new values for delete/update are supplied at call
+ * time via the MCP `runActions` API, not declared here. The row schema is
  * derived from the live data; `fields` only narrows it.
  */
 export const ActionSpec = z.object({
   dataset: z.string(),
-  mode: z.literal("insert"),
+  mode: z.enum(["insert", "replace", "delete", "update"]).default("insert"),
   description: z.string().optional(),
   fields: z.record(z.string(), FieldSpec).optional(),
 });
@@ -1137,6 +1144,7 @@ export function validateManifest(input: unknown): ValidationResult {
   // actions
   const rootError = (message: string) => errors.push({ page: "-", index: -1, type: "-", message });
   const actions = root.actions === undefined ? undefined : (root.actions as Record<string, unknown>);
+  const normalizedActions: Record<string, ActionSpec> = {};
   for (const [name, spec] of Object.entries(actions ?? {})) {
     const r = ActionSpec.safeParse(spec);
     if (!r.success) {
@@ -1154,8 +1162,10 @@ export function validateManifest(input: unknown): ValidationResult {
     }
     const source = target.source ?? "";
     if (!isWritableSource(source)) {
-      rootError(`actions.${name}: source '${source}' is not writable — insert supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
+      rootError(`actions.${name}: source '${source}' is not writable — write supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
+      continue;
     }
+    normalizedActions[name] = r.data;
   }
 
   // connectors
@@ -1443,7 +1453,7 @@ export function validateManifest(input: unknown): ValidationResult {
     icon: appIcon,
     datasets: datasets as Record<string, DatasetSpec>,
     pages: normalizedPages,
-    actions: actions as Record<string, ActionSpec> | undefined,
+    actions: actions === undefined ? undefined : normalizedActions,
     connectors: connectors as Record<string, ConnectorSpec> | undefined,
     queries: queries === undefined ? undefined : normalizedQueries,
   };

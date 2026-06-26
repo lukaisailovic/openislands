@@ -565,10 +565,28 @@ describe("validateManifest — actions", () => {
 
   it("rejects a malformed action spec", () => {
     const m = structuredClone(actionManifest) as typeof actionManifest & { actions: Record<string, Record<string, unknown>> };
-    m.actions.log_entry.mode = "update";
+    m.actions.log_entry.mode = "upsert";
     const r = validateManifest(m);
     expect(r.ok).toBe(false);
     expect(r.errors.some((e) => e.page === "-" && /actions\.log_entry/.test(e.message))).toBe(true);
+  });
+
+  it("accepts mode: delete, update, and replace on a writable-source dataset", () => {
+    for (const mode of ["delete", "update", "replace"] as const) {
+      const m = structuredClone(actionManifest) as typeof actionManifest & { actions: Record<string, Record<string, unknown>> };
+      m.actions.log_entry.mode = mode;
+      const r = validateManifest(m);
+      expect(r.ok, `mode=${mode}: ${JSON.stringify(r.errors)}`).toBe(true);
+      expect(r.manifest!.actions!.log_entry!.mode).toBe(mode);
+    }
+  });
+
+  it("defaults mode to insert when omitted", () => {
+    const m = structuredClone(actionManifest) as typeof actionManifest & { actions: Record<string, Record<string, unknown>> };
+    delete m.actions.log_entry.mode;
+    const r = validateManifest(m);
+    expect(r.ok, JSON.stringify(r.errors)).toBe(true);
+    expect(r.manifest!.actions!.log_entry!.mode).toBe("insert");
   });
 });
 
@@ -1254,9 +1272,12 @@ describe("JSON Schema emission", () => {
   });
 
   it("encodes the format enum values where format appears", () => {
-    const enums: string[] = [];
-    collectKeys(jsonSchemaFor("metric.kpi"), "enum", enums);
-    expect(enums).toContain(JSON.stringify(ValueFormat.options));
+    const schema = JSON.stringify(jsonSchemaFor("metric.kpi"));
+    // ValueFormat is now a union — verify both the built-in enum codes and the
+    // currency pattern are represented in the emitted JSON Schema.
+    expect(schema).toContain('"usd"');
+    expect(schema).toContain('"month"');
+    expect(schema).toContain("currency");
   });
 
   it("encodes the source.doc kind enum", () => {
@@ -1460,5 +1481,31 @@ describe("validation errors carry a copyable correct-shape example", () => {
     const err = r.errors.find((e) => e.page === "overview" && e.message.startsWith("filters:"));
     expect(err).toBeDefined();
     expect(err!.message).not.toContain(`"bind":{"sales":"region"}`);
+  });
+});
+
+// --- ValueFormat: built-in codes + currency:<ISO> extension ---------------------
+
+describe("ValueFormat", () => {
+  it("accepts all built-in format codes", () => {
+    for (const code of ["usd", "eur", "gbp", "jpy", "int", "decimal", "pct", "compact", "kg", "bytes", "duration", "date", "datetime", "time", "month"]) {
+      expect(ValueFormat.safeParse(code).success, code).toBe(true);
+    }
+  });
+
+  it("accepts currency:<CODE> with an uppercase 3-letter ISO code", () => {
+    expect(ValueFormat.safeParse("currency:RSD").success).toBe(true);
+  });
+
+  it("accepts currency:<code> with a lowercase 3-letter code", () => {
+    expect(ValueFormat.safeParse("currency:eur").success).toBe(true);
+  });
+
+  it("rejects currency:<EURO> — four-letter code", () => {
+    expect(ValueFormat.safeParse("currency:EURO").success).toBe(false);
+  });
+
+  it("rejects a completely unknown format string", () => {
+    expect(ValueFormat.safeParse("bogus").success).toBe(false);
   });
 });
