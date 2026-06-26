@@ -37,7 +37,7 @@ row, each filling toward its goal column.
 
 The single **action** — `log_meal`, a typed insert write — lets an agent log a meal.
 An agent discovers it with `oi.app().listActions()` and writes rows with
-`oi.app().runAction(...)` (inside the `execute` tool); the views update live.
+`oi.app().runActions(...)` (inside the `execute` tool); the views update live.
 
 Swap `data/` for your own export and rebuild. Nothing leaves your machine.
 

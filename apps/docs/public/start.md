@@ -120,7 +120,7 @@ Prefer `patchManifest` — you never re-send (or re-typo) the whole document.
   `label`, …). A page uses either a flat `islands` array or tabbed `groups`, not both — a group is
   `{ id, title?, islands }` and renders as a tab. Groups are page structure, not an island, so they
   won't show up in `listIslands()`.
-- **actions** — a typed `insert` into a writable file dataset; append rows with `app.runAction`.
+- **actions** — a typed `insert` into a writable file dataset; append rows with `app.runActions`.
 - **queries** — a typed, parameterized read; run it with `app.runQuery`. No raw SQL — heavy shaping
   lives in a `sql` transform the query reads from.
 
@@ -179,10 +179,42 @@ return s.ok ? await app.applyEdit(s.proposal_id) : s.errors;
 await app.patchManifest({ actions: { log_txn: { dataset: "transactions", mode: "insert",
   fields: { amount: { type: "number", min: 0 }, kind: { type: "string", enum: ["in", "out"] } } } } });
 // ...applyEdit, then append rows:
-return await app.runAction("log_txn", [{ amount: 50, kind: "in" }]);
+return await app.runActions([{ action: "log_txn", rows: [{ amount: 50, kind: "in" }] }]);
 ```
 
 Every row is validated all-or-nothing and the file is snapshotted for rollback.
+
+**Atomic multi-write (parent + children).** `app.runActions(calls, { atomic })` runs several
+action inserts as one rollback-safe unit. `atomic` defaults to `true` — if any row fails
+validation, nothing is written; if a write fails mid-batch, earlier writes are rolled back
+automatically (no manual reverse-rollback of a half-applied multi-write):
+
+```js
+// Insert a parent row and its children atomically — if any row is invalid, nothing is written.
+return await app.runActions([
+  { action: "add_order", rows: [{ id: "o-1001", customer: "Acme", total: 250 }] },
+  { action: "add_line_item", rows: [
+    { order_id: "o-1001", sku: "A-1", qty: 2 },
+    { order_id: "o-1001", sku: "B-7", qty: 1 },
+  ]},
+], { atomic: true });
+```
+
+Success result: `{ ok: true, results: [{ action, inserted, checkpoint_id }], checkpoint_ids: [...] }`.
+If a call fails validation the result names it and nothing is written.
+
+**Derive a metric with a SQL transform.** Computed values belong in the data/SQL layer — not in
+island configs or action fields. Define a `sql` transform dataset, bind islands/queries to it, then
+verify the computed rows:
+
+```js
+// Derive a metric with a SQL transform instead of computing it in the agent.
+await app.patchManifest({ datasets: {
+  daily_totals: { sql: "SELECT date_trunc('day', ts) AS day, sum(amount) AS total FROM txns GROUP BY 1 ORDER BY 1" }
+}});
+// bind an island or query to `daily_totals`, then verify the computed rows:
+return await app.runSql({ dataset: "daily_totals" });
+```
 
 **Add a typed read (query).** Declarative, parameterized, no raw SQL:
 
@@ -215,7 +247,7 @@ the user; don't try to sync. When connected, `app.runSync(name)` pulls into its 
   `app.listCheckpoints()`
 - **write** — `app.patchManifest({ ... })`, `app.replaceManifest(manifest)`,
   `app.applyEdit(proposal_id)`, `app.rollback(checkpoint_id?)`, `app.pruneCheckpoints(keep?)`
-- **data** — `app.listActions()`, `app.runAction(name, rows)`
+- **data** — `app.listActions()`, `app.runActions(calls, { atomic })` (atomic multi-action insert)
 - **queries** — `app.listQueries()`, `app.runQuery(name, params?, { limit? })`
 - **connectors** — `app.listConnectors()`, `app.runSync(name)`
 

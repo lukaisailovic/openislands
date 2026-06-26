@@ -50,7 +50,7 @@ returns the app-scoped API — **omit `id` when there's only one app**, else pas
   `replaceManifest(manifest)` (full rewrite) → returns a `proposal_id` + a diff, writes **nothing** →
   `applyEdit(proposal_id)` writes it and returns a `checkpoint_id` → `rollback(checkpoint_id?)` undoes
   it. `listCheckpoints()` / `pruneCheckpoints(keep?)`.
-- **Typed data:** `listActions()` / `runAction(name, rows)` (typed appends); `listQueries()` /
+- **Typed data:** `listActions()` / `runActions([{ action, rows }], { atomic? })` (typed appends); `listQueries()` /
   `runQuery(name, params?, opts?)` (typed reads).
 - **Connectors:** `listConnectors()` / `runSync(name)` (provider pulls).
 
@@ -104,7 +104,7 @@ persists between calls, so you can stage in one and apply in the next.
   A page uses either a flat `islands` array or tabbed `groups`, not both. A group is
   `{ id, title?, islands }` and renders as a tab (deep-linked via `?group=<id>`) — reach for groups
   to split a busy page instead of adding a second sidebar page.
-- **actions** — declare a typed `insert` into a writable dataset; run rows through `runAction`.
+- **actions** — declare a typed `insert` into a writable dataset; run rows through `runActions`.
 - **queries** — declare a typed, parameterized read; run it through `runQuery`. No raw SQL in queries —
   heavy shaping lives in a `sql` transform the query reads from.
 
@@ -198,7 +198,7 @@ await app.patchManifest({ actions: { log_txn: { dataset: "transactions", mode: "
   description: "Record a transaction",
   fields: { amount: { type: "number", min: 0 }, kind: { type: "string", enum: ["in","out"] } } } } });
 // ...applyEdit, then append rows:
-return await app.runAction("log_txn", [{ amount: 50, kind: "in" }]);
+return await app.runActions([{ action: "log_txn", rows: [{ amount: 50, kind: "in" }] }]);
 ```
 
 Every row is validated all-or-nothing and the file is snapshotted for rollback.

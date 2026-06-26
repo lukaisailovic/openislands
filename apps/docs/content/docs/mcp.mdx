@@ -289,7 +289,7 @@ discovers and runs them:
 - **`app.listActions()`** returns each declared action with its **resolved row JSON Schema**
   (derived from the live data, merged with the action's `fields` overrides). This is the
   agent's grounding for what a valid row looks like.
-- **`app.runAction(name, rows)`** validates **every** row against that schema first. A single bad
+- **`app.runActions([{ action, rows }])`** validates **every** row against that schema first. A single bad
   row rejects the whole call with an error naming the row index and field, and **nothing is
   written.** On success the target file is snapshotted (so `rollback` covers it) and the
   result reports the rows `inserted` plus a `checkpoint_id`.
@@ -346,9 +346,9 @@ Every guarantee is structural, not advisory:
 - **Sandboxed code.** `execute` runs your program in a `node:vm` with only `oi` in scope — no
   `require`, no `process`, no network, no filesystem. The only way to act is through an `oi`
   method, and every `oi` method is the same validated surface above.
-- **Validate before write.** `patchManifest`, `replaceManifest`, and `runAction` all fail closed:
+- **Validate before write.** `patchManifest`, `replaceManifest`, and `runActions` all fail closed:
   an invalid manifest or a bad row never reaches disk.
-- **Snapshot before change.** `applyEdit`, `runAction`, and `runSync` each snapshot to
+- **Snapshot before change.** `applyEdit`, `runActions`, and `runSync` each snapshot to
   `.openislands/history/` first, and `rollback` restores any of them byte-for-byte. History is
   count- and byte-capped, oldest pruned first.
 - **Path confinement.** Writes are scoped to the project's declared `source` files; there is

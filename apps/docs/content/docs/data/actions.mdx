@@ -10,7 +10,7 @@ runs it over [MCP](/mcp).
 
 ```mermaid
 flowchart LR
-  A["Agent: oi.app().runAction"] --> V{Validate rows}
+  A["Agent: oi.app().runActions"] --> V{Validate rows}
   V -- bad row --> X[Reject, nothing written]
   V -- ok --> S[Snapshot + write file]
   S --> L[Live refresh]
@@ -77,7 +77,7 @@ that exist.
 
 ## What happens on a write
 
-An agent calls `oi.app().runAction(name, rows)`. Before a single byte lands:
+An agent calls `oi.app().runActions([{ action, rows }])`. Before a single byte lands:
 
 - **Every row is validated** against the resolved schema. One bad row (wrong type, a value
   outside `min`/`max`, an unknown column) rejects the whole call with an error naming the row
@@ -98,7 +98,7 @@ Actions belong to the agent edit loop, not to a CLI command. An agent:
 
 1. Calls **`oi.app().listActions()`** to get each declared action and its resolved row JSON Schema
    (the live schema merged with `fields`). That schema is its grounding for a valid row.
-2. Calls **`oi.app().runAction(name, rows)`**, which validates and inserts as above, returning the
+2. Calls **`oi.app().runActions([{ action, rows }])`**, which validates and inserts as above, returning the
    count `inserted` and a `checkpoint_id`.
 
 <Callout type="info" title="Note">
@@ -114,7 +114,7 @@ past validation or escape `rollback`.
 An action isn't agent-only. Drop a [`form.entry`](/islands/content-and-layout#formentry) island on a
 page and point it at an action, and the runtime renders a form — one typed input per field, the
 action's types, enums, ranges, and defaults carried straight through — with a submit button that
-inserts a row. It runs the very same write path `runAction` does: validate, snapshot, insert, then
+inserts a row. It runs the very same write path `runActions` does: validate, snapshot, insert, then
 the bound dataset's islands refresh live. The form is the human-facing mirror of the agent call,
 authored by reusing the action rather than re-declaring its fields.
 
