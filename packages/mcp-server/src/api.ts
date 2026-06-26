@@ -575,7 +575,8 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
         plans.push({ action: name, index, source, errors });
       }
 
-      const invalid = plans.filter((p) => p.error !== undefined || (p.errors && p.errors.length > 0));
+      const failed = (p: { error?: string; errors?: unknown[] }): boolean => p.error !== undefined || (p.errors?.length ?? 0) > 0;
+      const invalid = plans.filter(failed);
       if (atomic && invalid.length > 0) {
         const failures = invalid.map((p) => (p.error !== undefined ? { action: p.action, index: p.index, error: p.error } : { action: p.action, index: p.index, errors: p.errors }));
         return { ok: false, atomic: true, failures };
@@ -586,7 +587,7 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
       const completed: { source: string; checkpoint_id: string }[] = [];
 
       for (const plan of plans) {
-        if (plan.error !== undefined || (plan.errors && plan.errors.length > 0)) {
+        if (failed(plan)) {
           const failure = plan.error !== undefined ? { error: plan.error } : { errors: plan.errors };
           results.push({ action: plan.action, ok: false, ...failure });
           continue;
