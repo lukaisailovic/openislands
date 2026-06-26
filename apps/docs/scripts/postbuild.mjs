@@ -2,7 +2,7 @@
 // static-asset serving expects `index.html` both for `/` and as the single-page-app
 // fallback (`not_found_handling: "single-page-application"`). Materialize the shell as
 // index.html so the home route and client-side navigation both resolve on Workers.
-import { copyFileSync, existsSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,7 +54,19 @@ function toLocation(indexHtmlPath) {
   return `${SITE_ORIGIN}/${route}`;
 }
 
-const locations = findIndexHtmlPaths(publicDir).map(toLocation).toSorted();
+const indexHtmlPaths = findIndexHtmlPaths(publicDir);
+
+// Guard against silently truncated prerenders: a complete page ends with `</html>`, and the
+// hydration-bootstrap <script> sits just before it, so this one check proves the page (and
+// its ability to hydrate) shipped whole. Fail the build rather than deploy dead HTML.
+const truncated = indexHtmlPaths.filter((p) => !readFileSync(p, "utf8").trimEnd().endsWith("</html>"));
+if (truncated.length > 0) {
+  console.error(`postbuild: ${truncated.length} prerendered page(s) are truncated (missing </html>):`);
+  for (const p of truncated) console.error(`  ✘ ${relative(publicDir, p)}`);
+  process.exit(1);
+}
+
+const locations = indexHtmlPaths.map(toLocation).toSorted();
 const urls = locations.map((loc) => `  <url><loc>${loc}</loc></url>`).join("\n");
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
