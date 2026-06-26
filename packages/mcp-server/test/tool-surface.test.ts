@@ -445,3 +445,40 @@ describe("api / doc parity", () => {
     expect(actual).toEqual(documented);
   });
 });
+
+describe("discoverability surface", () => {
+  it("listIslands() contracts include optional field names", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `return await oi.app().listIslands();`);
+    expect(body.ok).toBe(true);
+    const islands = (body.result as { ok: boolean; islands: { type: string; optional: string[] }[] }).islands;
+    const tableGrid = islands.find((i) => i.type === "table.grid")!;
+    expect(tableGrid.optional).toContain("drilldown");
+    const metricKpi = islands.find((i) => i.type === "metric.kpi")!;
+    expect(metricKpi.optional).toContain("target");
+    expect(islands.some((i) => i.optional.length > 0)).toBe(true);
+  });
+
+  it("getOverview() success result includes hints", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `return await oi.app().getOverview();`);
+    expect(body.ok).toBe(true);
+    const hints = (body.result as { hints: string[] }).hints;
+    expect(Array.isArray(hints)).toBe(true);
+    expect(hints.length).toBeGreaterThan(0);
+  });
+
+  it("getIslandSchema() notes include usage examples for chronically-guessed shapes", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      return {
+        tableGrid: await app.getIslandSchema("table.grid"),
+        gaugeGoal: await app.getIslandSchema("gauge.goal"),
+        contentEditor: await app.getIslandSchema("content.editor"),
+      };
+    `);
+    expect(body.ok).toBe(true);
+    const r = body.result as { tableGrid: { notes: string[] }; gaugeGoal: { notes: string[] }; contentEditor: { notes: string[] } };
+    expect(r.tableGrid.notes.some((n) => n.includes("drilldown") && n.includes('"island"') && n.includes('"match"'))).toBe(true);
+    expect(r.gaugeGoal.notes.some((n) => n.includes("goals") || n.includes("goal"))).toBe(true);
+    expect(r.contentEditor.notes.some((n) => n.includes("file") && n.includes("dir"))).toBe(true);
+  });
+});

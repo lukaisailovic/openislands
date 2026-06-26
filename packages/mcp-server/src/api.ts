@@ -69,6 +69,25 @@ const layoutFor = (type: IslandType): IslandLayout => ({
   maxSpan: ISLAND_MAX_SPAN[type],
 });
 
+function usageExampleNotes(type: IslandType): string[] {
+  if (type === "table.grid" || type === "timeline.feed") {
+    return [
+      `drilldown embeds an island in a clicked row's details dialog; \`match\` maps the embedded dataset's column → the clicked row's field. Example: {"island":{"type":"table.grid","dataset":"line_items","columns":["sku","qty"]},"match":{"order_id":"id"}}`,
+    ];
+  }
+  if (type === "gauge.goal") {
+    return [
+      `each goal reads the last row's \`value\`; \`goal\` needs at least one of min/max (both = a target band). Example goals entry: {"value":"protein_g","goal":{"min":120},"label":"Protein","unit":"g"}`,
+    ];
+  }
+  if (type === "content.editor") {
+    return [
+      `set exactly one of \`file\` (one doc) or \`dir\` (a tree). Single file: {"type":"content.editor","file":"docs/runbook.md"}. Directory: {"type":"content.editor","dir":"docs","groups":[{"id":"guides","match":["guides/**"]}]}`,
+    ];
+  }
+  return [];
+}
+
 function layoutNotes(type: IslandType): string[] {
   const { minSpan, recommendedSpan, maxSpan } = layoutFor(type);
   const notes = [`Spans ${minSpan}–${maxSpan} columns; ${recommendedSpan} is the recommended width.`];
@@ -78,18 +97,26 @@ function layoutNotes(type: IslandType): string[] {
   return notes;
 }
 
-function islandContract(type: IslandType): { type: IslandType; required: string[]; bindsData: boolean; description: string } & IslandLayout {
-  const schema = z.toJSONSchema(BUILTIN_ISLAND_SCHEMAS[type], { io: "input" }) as { required?: string[]; description: string };
+type ContractSchema = { required?: string[]; properties?: Record<string, unknown>; description: string };
+
+/** Required + optional property NAMES from an island's input JSON Schema, dropping the `type` discriminant. */
+function fieldNames(schema: ContractSchema): { required: string[]; optional: string[] } {
   const required = (schema.required ?? []).filter((field) => field !== "type");
-  return { type, required, bindsData: required.includes("dataset"), description: schema.description, ...layoutFor(type) };
+  const optional = Object.keys(schema.properties ?? {}).filter((field) => field !== "type" && !required.includes(field));
+  return { required, optional };
 }
 
-const LAYOUT_ROW_CONTRACT = {
-  type: "layout.row",
-  required: ["islands"],
-  bindsData: false,
-  description: (z.toJSONSchema(LayoutRow) as { description: string }).description,
-};
+function islandContract(type: IslandType): { type: IslandType; required: string[]; optional: string[]; bindsData: boolean; description: string } & IslandLayout {
+  const schema = z.toJSONSchema(BUILTIN_ISLAND_SCHEMAS[type], { io: "input" }) as ContractSchema;
+  const { required, optional } = fieldNames(schema);
+  return { type, required, optional, bindsData: required.includes("dataset"), description: schema.description, ...layoutFor(type) };
+}
+
+const LAYOUT_ROW_CONTRACT = (() => {
+  const schema = z.toJSONSchema(LayoutRow) as ContractSchema;
+  const { required, optional } = fieldNames(schema);
+  return { type: "layout.row", required, optional, bindsData: false, description: schema.description };
+})();
 
 /** Every type getIslandSchema accepts: the built-ins plus the structural row. */
 const ISLAND_TYPE_NAMES: string[] = [...BUILTIN_ISLAND_TYPES, "layout.row"];
@@ -372,6 +399,11 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
         connectors: await listConnectorStatuses(ctx.dir),
         custom_islands: v.custom.map((c) => c.type),
         checkpoints,
+        hints: [
+          "Read values back: runSql({ dataset: '<name>' }) returns rows from any dataset or sql transform — use it to verify a query/transform without hand-writing SQL.",
+          "Edit incrementally: patchManifest deep-merges by section (datasets/actions/queries/connectors upsert by key; pages by id; a null value deletes a key) — send only the keys that change, then applyEdit the returned proposal_id. No need to resend the whole manifest.",
+          "runAction('<action>', rows) appends rows and runSync('<connector>') triggers a sync on demand; both checkpoint automatically so you can rollback.",
+        ],
       };
     },
 
@@ -394,7 +426,7 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
       }
       if (!BUILTIN_ISLAND_TYPES.includes(type as IslandType)) return { ok: false, error: `Unknown built-in island '${type}'.`, known: ISLAND_TYPE_NAMES };
       const islandType = type as IslandType;
-      return { ok: true, type: islandType, schema: jsonSchemaFor(islandType), layout: layoutFor(islandType), notes: layoutNotes(islandType) };
+      return { ok: true, type: islandType, schema: jsonSchemaFor(islandType), layout: layoutFor(islandType), notes: [...layoutNotes(islandType), ...usageExampleNotes(islandType)] };
     },
 
     async getDataSchema(dataset) {
