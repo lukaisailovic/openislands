@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LocalContentStore } from "@openislands/storage";
-import { resolveWriter } from "../src/writers.js";
+import { createInMemoryDuckDB, resolveWriter } from "../src/writers.js";
 
 function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "oi-writers-"));
@@ -42,5 +42,25 @@ describe("appendLines EOL preservation", () => {
     expect(content).toContain("Eggs");
     // No \r must be introduced
     expect(content).not.toContain("\r");
+  });
+});
+
+describe("createInMemoryDuckDB resource bounds", () => {
+  // Guards the container OOM fix: an unbounded thread count over a cgroup-capped memory_limit
+  // fails to pin buffers at boot, and a default temp_directory spills to a non-writable cwd.
+  it("caps threads and sets a writable temp_directory", async () => {
+    const instance = await createInMemoryDuckDB();
+    const conn = await instance.connect();
+    try {
+      const reader = await conn.runAndReadAll(
+        "SELECT current_setting('threads') AS threads, current_setting('temp_directory') AS temp_directory",
+      );
+      const [row] = reader.getRowObjects();
+      expect(Number(row.threads)).toBe(4);
+      expect(String(row.temp_directory)).toContain("openislands-duckdb");
+    } finally {
+      conn.closeSync();
+      instance.closeSync();
+    }
   });
 });
