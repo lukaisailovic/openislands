@@ -240,11 +240,18 @@ export interface ConnectorStatus {
   datasets: Record<string, string>;
   auth: "none" | "oauth2" | "bearer";
   connected: boolean;
+  /** A keyless connector (auth "none") needs no human authorization — an agent can sync it directly. oauth2/bearer require a human to connect first. */
+  canSyncDirectly: boolean;
+  /** Human-readable affordance pairing with `canSyncDirectly`: how (and whether) this connector can be synced. */
+  note: string;
   missingSecrets: string[];
   lastSync?: string;
   lastError?: string;
   loadError?: string;
 }
+
+const SYNC_DIRECTLY_NOTE = "keyless — sync directly with runSync, no authorization needed";
+const NEEDS_CONNECT_NOTE = "a human must connect it via the dashboard first, then it can sync";
 
 export async function listConnectorStatuses(projectDir: string): Promise<ConnectorStatus[]> {
   loadEnv(projectDir);
@@ -263,6 +270,7 @@ export async function listConnectorStatuses(projectDir: string): Promise<Connect
     const { missing } = readSecrets(def);
     const auth = authKind(def);
     const connected = auth === "none" ? missing.length === 0 : isAuthConnected(def!.auth!, persisted);
+    const canSyncDirectly = auth === "none";
     statuses.push({
       name,
       module: spec.module,
@@ -271,6 +279,8 @@ export async function listConnectorStatuses(projectDir: string): Promise<Connect
       datasets: spec.datasets,
       auth,
       connected,
+      canSyncDirectly,
+      note: canSyncDirectly ? SYNC_DIRECTLY_NOTE : NEEDS_CONNECT_NOTE,
       missingSecrets: missing,
       lastSync: persisted.lastSync,
       lastError: persisted.lastError,

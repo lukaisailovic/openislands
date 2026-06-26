@@ -7,6 +7,9 @@ import {
   actionFields,
   actionRowSchema,
   insertRows,
+  replaceRows,
+  deleteRows,
+  updateRows,
   ActionValidationError,
   query,
   resetEngine,
@@ -232,7 +235,11 @@ describe("insertRows (JSONL)", () => {
 });
 
 function historyFiles(dir: string): string[] {
-  return readdirSync(join(dir, ".openislands", "history"));
+  try {
+    return readdirSync(join(dir, ".openislands", "history"));
+  } catch {
+    return [];
+  }
 }
 
 describe("insertRows (snapshots + retention)", () => {
@@ -347,5 +354,186 @@ describe("insertRows (SQLite)", () => {
     const restored = await query(dir, "meals");
     expect(restored.rows).toHaveLength(1);
     expect(restored.rows.map((r) => r.name)).toEqual(["Oatmeal"]);
+  });
+});
+
+// --- delete / update / replace --------------------------------------------------
+
+const ROSTER_CSV = "id,name,team\na,Ann,red\nb,Bob,blue\nc,Cara,red\n";
+
+function rosterManifest(mode: string) {
+  return {
+    version: 1,
+    title: "T",
+    datasets: { roster: { source: "data/roster.csv" } },
+    pages: [{ id: "p", islands: [{ type: "table.grid", title: "Roster", dataset: "roster" }] }],
+    actions: { mutate: { dataset: "roster", mode } },
+  };
+}
+
+function rosterProject(mode = "delete"): string {
+  return project(rosterManifest(mode), { "data/roster.csv": ROSTER_CSV });
+}
+
+describe("deleteRows", () => {
+  it("removes only the matching row and leaves the rest", async () => {
+    const dir = rosterProject();
+    const { deleted, checkpoint_id } = await deleteRows(dir, "mutate", { id: "b" });
+    expect(deleted).toBe(1);
+    expect(checkpoint_id).toContain("!");
+
+    resetEngine(dir);
+    const out = await query(dir, "roster");
+    expect(out.rows.map((r) => r.id)).toEqual(["a", "c"]);
+  });
+
+  it("matches multiple columns with AND", async () => {
+    const dir = rosterProject();
+    const { deleted } = await deleteRows(dir, "mutate", { team: "red", name: "Ann" });
+    expect(deleted).toBe(1);
+
+    resetEngine(dir);
+    const out = await query(dir, "roster");
+    expect(out.rows.map((r) => r.id)).toEqual(["b", "c"]);
+  });
+
+  it("deletes every row matching a broad predicate", async () => {
+    const dir = rosterProject();
+    const { deleted } = await deleteRows(dir, "mutate", { team: "red" });
+    expect(deleted).toBe(2);
+
+    resetEngine(dir);
+    const out = await query(dir, "roster");
+    expect(out.rows.map((r) => r.id)).toEqual(["b"]);
+  });
+
+  it("rejects an empty match predicate and writes NOTHING", async () => {
+    const dir = rosterProject();
+    const before = readFileSync(join(dir, "data/roster.csv"));
+    await expect(deleteRows(dir, "mutate", {})).rejects.toThrow(/non-empty match/);
+    expect(readFileSync(join(dir, "data/roster.csv"))).toEqual(before);
+    expect(historyFiles(dir).length).toBe(0);
+  });
+
+  it("rejects a match column not in the dataset, writing nothing", async () => {
+    const dir = rosterProject();
+    const before = readFileSync(join(dir, "data/roster.csv"));
+    await expect(deleteRows(dir, "mutate", { ghost: "x" })).rejects.toThrow(/ghost/);
+    expect(readFileSync(join(dir, "data/roster.csv"))).toEqual(before);
+  });
+
+  it("reads the dataset uncapped: a dataset larger than DEFAULT_ROW_CAP survives a single-row delete", async () => {
+    const rows = Array.from({ length: 10_500 }, (_, i) => `r${i},N${i},${i % 2 === 0 ? "red" : "blue"}`);
+    const big = "id,name,team\n" + rows.join("\n") + "\n";
+    const dir = project(rosterManifest("delete"), { "data/roster.csv": big });
+
+    const { deleted } = await deleteRows(dir, "mutate", { id: "r0" });
+    expect(deleted).toBe(1);
+
+    resetEngine(dir);
+    const out = await query(dir, "roster", { limit: Number.MAX_SAFE_INTEGER });
+    expect(out.rows).toHaveLength(10_499);
+    expect(out.rows.find((r) => r.id === "r0")).toBeUndefined();
+    expect(out.rows.find((r) => r.id === "r10499")).toBeDefined();
+  });
+});
+
+describe("updateRows", () => {
+  it("patches matching rows and leaves the rest unchanged", async () => {
+    const dir = rosterProject("update");
+    const { updated, checkpoint_id } = await updateRows(dir, "mutate", { id: "b" }, { team: "green" });
+    expect(updated).toBe(1);
+    expect(checkpoint_id).toContain("!");
+
+    resetEngine(dir);
+    const out = await query(dir, "roster");
+    expect(out.rows).toContainEqual({ id: "b", name: "Bob", team: "green" });
+    expect(out.rows).toContainEqual({ id: "a", name: "Ann", team: "red" });
+  });
+
+  it("patches every matching row of a multi-row predicate", async () => {
+    const dir = rosterProject("update");
+    const { updated } = await updateRows(dir, "mutate", { team: "red" }, { team: "crimson" });
+    expect(updated).toBe(2);
+
+    resetEngine(dir);
+    const out = await query(dir, "roster");
+    expect(out.rows.filter((r) => r.team === "crimson").map((r) => r.id)).toEqual(["a", "c"]);
+    expect(out.rows.find((r) => r.id === "b")!.team).toBe("blue");
+  });
+
+  it("rejects an empty match predicate and writes NOTHING", async () => {
+    const dir = rosterProject("update");
+    const before = readFileSync(join(dir, "data/roster.csv"));
+    await expect(updateRows(dir, "mutate", {}, { team: "x" })).rejects.toThrow(/non-empty match/);
+    expect(readFileSync(join(dir, "data/roster.csv"))).toEqual(before);
+    expect(historyFiles(dir).length).toBe(0);
+  });
+
+  it("rejects a set column not in the dataset, writing nothing", async () => {
+    const dir = rosterProject("update");
+    const before = readFileSync(join(dir, "data/roster.csv"));
+    await expect(updateRows(dir, "mutate", { id: "a" }, { ghost: "x" })).rejects.toThrow(/ghost/);
+    expect(readFileSync(join(dir, "data/roster.csv"))).toEqual(before);
+  });
+
+  it("fails loudly when a patch violates the row schema", async () => {
+    const dir = project(
+      manifestWith({ mutate: { dataset: "meals", mode: "update" } }, "data/meals.csv"),
+      { "data/meals.csv": MEALS_CSV },
+    );
+    const err = await updateRows(dir, "mutate", { name: "Oatmeal" }, { kcal: "lots" }).catch((e) => e);
+    expect(err).toBeInstanceOf(ActionValidationError);
+    expect((err as ActionValidationError).errors).toContainEqual(expect.objectContaining({ field: "kcal" }));
+  });
+});
+
+describe("replaceRows", () => {
+  it("overwrites every row with the supplied set and snapshots first", async () => {
+    const dir = rosterProject("replace");
+    const before = readFileSync(join(dir, "data/roster.csv"));
+    const { replaced, checkpoint_id } = await replaceRows(dir, "mutate", [
+      { id: "z", name: "Zoe", team: "gold" },
+    ]);
+    expect(replaced).toBe(1);
+    expect(checkpoint_id).toContain("!");
+    expect(readFileSync(join(dir, ".openislands", "history", checkpoint_id!))).toEqual(before);
+
+    resetEngine(dir);
+    const out = await query(dir, "roster");
+    expect(out.rows).toEqual([{ id: "z", name: "Zoe", team: "gold" }]);
+  });
+
+  it("is all-or-nothing: a bad row throws and leaves the file untouched", async () => {
+    const dir = project(
+      manifestWith({ mutate: { dataset: "meals", mode: "replace" } }, "data/meals.csv"),
+      { "data/meals.csv": MEALS_CSV },
+    );
+    const before = readFileSync(join(dir, "data/meals.csv"));
+    const err = await replaceRows(dir, "mutate", [{ name: "Eggs", kcal: "lots", logged: "2026-02-02" }]).catch((e) => e);
+    expect(err).toBeInstanceOf(ActionValidationError);
+    expect(readFileSync(join(dir, "data/meals.csv"))).toEqual(before);
+  });
+});
+
+describe("null-vs-empty prescriptive error copy", () => {
+  it("guides toward \"\" / omit when a non-nullable field arrives as null", async () => {
+    const dir = project(manifestWith({ log_meal: { dataset: "meals", mode: "insert" } }), {
+      "data/meals.csv": MEALS_CSV,
+    });
+    const err = await insertRows(dir, "log_meal", [{ name: null, kcal: 200, logged: "2026-02-02" }]).catch((e) => e);
+    expect(err).toBeInstanceOf(ActionValidationError);
+    const nameError = (err as ActionValidationError).errors.find((e) => e.field === "name")!;
+    expect(nameError.message).toMatch(/store no null/);
+    expect(nameError.message).toMatch(/pass ""/);
+  });
+
+  it("leaves a non-null type error message unchanged", async () => {
+    const dir = project(manifestWith({ log_meal: { dataset: "meals", mode: "insert" } }), {
+      "data/meals.csv": MEALS_CSV,
+    });
+    const err = await insertRows(dir, "log_meal", [{ name: "Eggs", kcal: "lots", logged: "2026-02-02" }]).catch((e) => e);
+    const kcalError = (err as ActionValidationError).errors.find((e) => e.field === "kcal")!;
+    expect(kcalError.message).not.toMatch(/store no null/);
   });
 });
