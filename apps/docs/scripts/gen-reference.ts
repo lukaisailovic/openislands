@@ -111,9 +111,13 @@ function fieldRows(schema: JsonSchemaNode): FieldRow[] {
 
 // --- MDX assembly ---------------------------------------------------------------
 
-/** Escape a pipe so it can't break a Markdown table cell. */
+/**
+ * Escape a pipe (breaks the Markdown table) and MDX's JSX/expression openers
+ * `<` `{` (which would parse description prose like `currency:<CODE>` as a tag).
+ * Type cells pass through too, but `renderType` never emits these characters.
+ */
 function cell(text: string): string {
-  return text.replace(/\|/g, "\\|");
+  return text.replace(/[|<{]/g, "\\$&");
 }
 
 function fieldTable(rows: FieldRow[]): string {
