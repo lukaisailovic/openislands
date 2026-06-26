@@ -32,7 +32,14 @@ const DUCKDB_TEMP_DIRECTORY = join(tmpdir(), "openislands-duckdb");
  * /app owned by root in the Docker image: "IO Error: Failed to create directory .tmp").
  */
 export function createInMemoryDuckDB(): Promise<InstanceType<typeof DuckDBInstance>> {
-  return DuckDBInstance.create(":memory:", { temp_directory: DUCKDB_TEMP_DIRECTORY });
+  return DuckDBInstance.create(":memory:", {
+    temp_directory: DUCKDB_TEMP_DIRECTORY,
+    // ponytail: DuckDB caps memory_limit to the cgroup (~80%) but scales threads to HOST cores,
+    // ignoring the CPU cgroup — 12 threads on an 819 MiB cap OOM at boot ("failed to pin block")
+    // at ~68 MiB/thread. 4 keeps >125 MiB/thread (DuckDB's floor) and clamps to core count on
+    // smaller boxes. Raise only for a big-data deployment that also has the RAM for it.
+    threads: "4",
+  });
 }
 
 /** Where a dataset's rows physically live: its content source, plus the table name when that source is a SQLite database. */
