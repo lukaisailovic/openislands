@@ -152,6 +152,38 @@ export const WaterfallBars = z.object({
   format: ValueFormat.optional(),
 }).describe("A waterfall / bridge chart — use for a P&L walk or variance: an opening anchor, signed +/− steps that accumulate, and closing anchors. Mark anchor rows via a kind field whose value is \"total\".");
 
+export const DivergenceBars = z.object({
+  type: z.literal("divergence.bars"),
+  ...baseFields,
+  dataset: z.string(),
+  x: z.string().describe("category or date field (x axis) — one bar per row"),
+  value: z
+    .string()
+    .describe(
+      "signed numeric field: the bar rises above the zero baseline for positive values and drops below it for negative. Rows with a null or non-numeric value are skipped. Pre-compute the difference in SQL to diverge from a non-zero target.",
+    ),
+  buckets: z
+    .array(
+      z.object({
+        gte: z.number().optional().describe("inclusive lower bound of the band; omit for an open lower end"),
+        lt: z.number().optional().describe("exclusive upper bound of the band; omit for an open upper end"),
+        color: z.string().describe("CSS color for bars whose value falls in this band"),
+        label: z
+          .string()
+          .optional()
+          .describe("legend label for this band; give every bucket a label to show a legend, omit on all to hide it"),
+      }),
+    )
+    .optional()
+    .describe(
+      "color each bar by the value band it falls in — e.g. surplus tiers green, deficit tiers red. Bands are matched top-to-bottom with half-open bounds [gte, lt); a value matching none renders neutral grey. Omit entirely for a default green-positive / red-negative two-tone.",
+    ),
+  format: ValueFormat.optional(),
+}).describe(
+  "A diverging bar chart: one signed bar per category extending above or below a zero baseline, optionally colored by which value band it falls into. Use for deviation from a reference — daily calorie surplus/deficit, budget variance, net cash flow, sentiment, temperature anomaly. Pick this over category.bar when values are signed and the up/down direction is the message, and over waterfall.bars when each bar stands on its own rather than accumulating into a running total.",
+);
+export type DivergenceBars = z.infer<typeof DivergenceBars>;
+
 export const BreakdownTreemap = z.object({
   type: z.literal("breakdown.treemap"),
   ...baseFields,
@@ -529,6 +561,7 @@ const DrilldownIsland = z.discriminatedUnion("type", [
   CategoryBar,
   CategoryCombo,
   WaterfallBars,
+  DivergenceBars,
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,
@@ -571,6 +604,7 @@ export const BUILTIN_ISLAND_SCHEMAS = {
   "category.bar": CategoryBar,
   "category.combo": CategoryCombo,
   "waterfall.bars": WaterfallBars,
+  "divergence.bars": DivergenceBars,
   "breakdown.treemap": BreakdownTreemap,
   "distribution.heatmap": DistributionHeatmap,
   "activity.calendar": ActivityCalendar,
@@ -617,6 +651,7 @@ export const ISLAND_MIN_SPAN: Record<IslandType, number> = {
   "category.bar": 4,
   "category.combo": 4,
   "waterfall.bars": 4,
+  "divergence.bars": 4,
   "timeline.feed": 4,
   "breakdown.treemap": 4,
   "distribution.heatmap": 4,
@@ -654,6 +689,7 @@ export const ISLAND_MAX_SPAN: Record<IslandType, number> = {
   "category.bar": 12,
   "category.combo": 12,
   "waterfall.bars": 12,
+  "divergence.bars": 12,
   "timeline.feed": 12,
   "breakdown.treemap": 12,
   "distribution.heatmap": 12,
@@ -690,6 +726,7 @@ export const ISLAND_DEFAULT_SPAN: Record<IslandType, number> = {
   "category.bar": 6,
   "category.combo": 8,
   "waterfall.bars": 8,
+  "divergence.bars": 6,
   "timeline.feed": 7,
   "breakdown.treemap": 6,
   "distribution.heatmap": 8,
@@ -710,6 +747,7 @@ export const BuiltinIsland = z.discriminatedUnion("type", [
   CategoryBar,
   CategoryCombo,
   WaterfallBars,
+  DivergenceBars,
   BreakdownTreemap,
   CategoryPie,
   CorrelationScatter,

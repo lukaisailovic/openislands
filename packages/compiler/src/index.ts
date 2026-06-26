@@ -909,6 +909,10 @@ export function islandRequirements(island: Record<string, unknown>): { dataset: 
       add(island.value);
       add(island.kind);
       break;
+    case "divergence.bars":
+      add(island.x);
+      add(island.value);
+      break;
     case "rank.list":
       add(island.label);
       add(island.value);

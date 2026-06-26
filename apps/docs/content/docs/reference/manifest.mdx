@@ -252,7 +252,7 @@ A `layout.row` is a structural wrapper: it holds other islands and forces them o
 their own full-width grid row. It carries no `span`, `title`, or data binding, and it
 cannot nest another `layout.row`.
 
-**Built-in islands:** [`metric.kpi`](#metrickpi) · [`metric.scorecard`](#metricscorecard) · [`timeseries.line`](#timeseriesline) · [`category.bar`](#categorybar) · [`category.combo`](#categorycombo) · [`waterfall.bars`](#waterfallbars) · [`breakdown.treemap`](#breakdowntreemap) · [`distribution.heatmap`](#distributionheatmap) · [`activity.calendar`](#activitycalendar) · [`funnel.steps`](#funnelsteps) · [`rank.list`](#ranklist) · [`compare.radar`](#compareradar) · [`map.choropleth`](#mapchoropleth) · [`correlation.scatter`](#correlationscatter) · [`category.pie`](#categorypie) · [`table.grid`](#tablegrid) · [`timeline.feed`](#timelinefeed) · [`gauge.rings`](#gaugerings) · [`gauge.goal`](#gaugegoal) · [`gauge.meter`](#gaugemeter) · [`status.grid`](#statusgrid) · [`search.box`](#searchbox) · [`note.card`](#notecard) · [`source.doc`](#sourcedoc) · [`content.editor`](#contenteditor) · [`form.entry`](#formentry)
+**Built-in islands:** [`metric.kpi`](#metrickpi) · [`metric.scorecard`](#metricscorecard) · [`timeseries.line`](#timeseriesline) · [`category.bar`](#categorybar) · [`category.combo`](#categorycombo) · [`waterfall.bars`](#waterfallbars) · [`divergence.bars`](#divergencebars) · [`breakdown.treemap`](#breakdowntreemap) · [`distribution.heatmap`](#distributionheatmap) · [`activity.calendar`](#activitycalendar) · [`funnel.steps`](#funnelsteps) · [`rank.list`](#ranklist) · [`compare.radar`](#compareradar) · [`map.choropleth`](#mapchoropleth) · [`correlation.scatter`](#correlationscatter) · [`category.pie`](#categorypie) · [`table.grid`](#tablegrid) · [`timeline.feed`](#timelinefeed) · [`gauge.rings`](#gaugerings) · [`gauge.goal`](#gaugegoal) · [`gauge.meter`](#gaugemeter) · [`status.grid`](#statusgrid) · [`search.box`](#searchbox) · [`note.card`](#notecard) · [`source.doc`](#sourcedoc) · [`content.editor`](#contenteditor) · [`form.entry`](#formentry)
 
 ### `metric.kpi`
 
@@ -360,6 +360,23 @@ A waterfall / bridge chart — use for a P&L walk or variance: an opening anchor
 | `value` | `string` | yes | signed delta per step; for a total/anchor row, its absolute level |
 | `kind` | `string` | no | field marking anchor rows: a row whose value here is "total" draws as an absolute bar from zero (opening/closing/subtotal). Omit to make every row a delta. |
 | `colors` | `object` | no | CSS colors per tone, overriding the defaults (increase green, decrease red, total neutral) |
+| `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. For any other ISO 4217 currency use 'currency:\<CODE>' (e.g. currency:RSD). See the Value formats reference (/reference/value-formats). |
+
+### `divergence.bars`
+
+A diverging bar chart: one signed bar per category extending above or below a zero baseline, optionally colored by which value band it falls into. Use for deviation from a reference — daily calorie surplus/deficit, budget variance, net cash flow, sentiment, temperature anomaly. Pick this over category.bar when values are signed and the up/down direction is the message, and over waterfall.bars when each bar stands on its own rather than accumulating into a running total.
+
+**Span:** min 4, recommended 6, max 12 (of 12). Omit `span` to render at the recommended width; below min or above max is a named error.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | no |  |
+| `title` | `string` | no |  |
+| `span` | `number` | no |  |
+| `dataset` | `string` | yes |  |
+| `x` | `string` | yes | category or date field (x axis) — one bar per row |
+| `value` | `string` | yes | signed numeric field: the bar rises above the zero baseline for positive values and drops below it for negative. Rows with a null or non-numeric value are skipped. Pre-compute the difference in SQL to diverge from a non-zero target. |
+| `buckets` | `array of object` | no | color each bar by the value band it falls in — e.g. surplus tiers green, deficit tiers red. Bands are matched top-to-bottom with half-open bounds [gte, lt); a value matching none renders neutral grey. Omit entirely for a default green-positive / red-negative two-tone. |
 | `format` | [`value format`](/reference/value-formats) | no | Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. For any other ISO 4217 currency use 'currency:\<CODE>' (e.g. currency:RSD). See the Value formats reference (/reference/value-formats). |
 
 ### `breakdown.treemap`

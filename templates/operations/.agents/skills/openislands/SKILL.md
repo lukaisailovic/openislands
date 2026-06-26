@@ -128,7 +128,7 @@ Tabbed `groups` are **page** structure, not an island, so they **won't** appear 
 — their shape (`{ id, title?, islands }`) is in the manifest anatomy above.
 
 Built-ins span metrics (`metric.kpi`, `metric.scorecard`), charts (`timeseries.line`, `category.bar`,
-`category.combo`, `category.pie`, `waterfall.bars`, `breakdown.treemap`, `correlation.scatter`,
+`category.combo`, `category.pie`, `waterfall.bars`, `divergence.bars`, `breakdown.treemap`, `correlation.scatter`,
 `distribution.heatmap`, `compare.radar`, `map.choropleth`, `funnel.steps`), gauges (`gauge.goal`,
 `gauge.rings`, `gauge.meter`), tables/feeds (`table.grid`, `timeline.feed`, `rank.list`,
 `status.grid`, `activity.calendar`), content (`note.card`, `source.doc`, `content.editor`), and input

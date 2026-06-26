@@ -826,6 +826,7 @@ const validIslands: Record<IslandType, Record<string, unknown>> = {
   "category.bar": { type: "category.bar", dataset: "d", x: "cat", y: "amount", group: "region", stacked: true },
   "category.combo": { type: "category.combo", dataset: "d", x: "month", bars: ["revenue", "cost"], lines: "margin_pct", stacked: true, format: "eur", lineFormat: "pct" },
   "waterfall.bars": { type: "waterfall.bars", dataset: "d", label: "step", value: "delta", kind: "kind", colors: { increase: "#0a0", decrease: "#a00" }, format: "eur" },
+  "divergence.bars": { type: "divergence.bars", dataset: "d", x: "day", value: "delta", buckets: [{ gte: 0, color: "#0a0", label: "Surplus" }, { lt: 0, color: "#a00", label: "Deficit" }], format: "int" },
   "rank.list": { type: "rank.list", dataset: "d", label: "name", value: "revenue", limit: 5, sort: "descending", secondary: "region", format: "eur" },
   "breakdown.treemap": { type: "breakdown.treemap", dataset: "d", label: "name", value: "size", parent: "group" },
   "category.pie": { type: "category.pie", dataset: "d", label: "cat", value: "amount", donut: true, format: "eur" },
@@ -871,6 +872,7 @@ const invalidIslands: Record<IslandType, Record<string, unknown>> = {
   "category.bar": { type: "category.bar", dataset: "d", x: "cat" },
   "category.combo": { type: "category.combo", dataset: "d", x: "month" },
   "waterfall.bars": { type: "waterfall.bars", dataset: "d", label: "step" },
+  "divergence.bars": { type: "divergence.bars", dataset: "d", x: "day" },
   "rank.list": { type: "rank.list", dataset: "d", label: "name" },
   "breakdown.treemap": { type: "breakdown.treemap", dataset: "d", label: "name" },
   "category.pie": { type: "category.pie", dataset: "d", label: "cat" },
@@ -905,6 +907,32 @@ describe("per-island schemas", () => {
       expect(r.success).toBe(false);
     });
   }
+});
+
+describe("divergence.bars", () => {
+  it("parses a minimal bar with no buckets", () => {
+    const r = BUILTIN_ISLAND_SCHEMAS["divergence.bars"].safeParse({
+      type: "divergence.bars",
+      dataset: "d",
+      x: "day",
+      value: "delta",
+    });
+    expect(r.success, JSON.stringify((r as { error?: unknown }).error)).toBe(true);
+  });
+
+  it("parses a buckets array of value bands", () => {
+    const r = BUILTIN_ISLAND_SCHEMAS["divergence.bars"].safeParse({
+      type: "divergence.bars",
+      dataset: "d",
+      x: "day",
+      value: "delta",
+      buckets: [
+        { gte: 0, color: "#0a0", label: "Surplus" },
+        { lt: 0, color: "#a00", label: "Deficit" },
+      ],
+    });
+    expect(r.success, JSON.stringify((r as { error?: unknown }).error)).toBe(true);
+  });
 });
 
 describe("gauge.rings ring direction", () => {

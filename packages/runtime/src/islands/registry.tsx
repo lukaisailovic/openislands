@@ -33,6 +33,7 @@ const REGISTRY: Record<IslandType, IslandRenderer | null> = {
   "category.bar": lazyIsland(() => import("./CategoryBar.js"), "CategoryBar"),
   "category.combo": lazyIsland(() => import("./CategoryCombo.js"), "CategoryCombo"),
   "waterfall.bars": lazyIsland(() => import("./WaterfallBars.js"), "WaterfallBars"),
+  "divergence.bars": lazyIsland(() => import("./DivergenceBars.js"), "DivergenceBars"),
   "category.pie": lazyIsland(() => import("./CategoryPie.js"), "CategoryPie"),
   "correlation.scatter": lazyIsland(() => import("./CorrelationScatter.js"), "CorrelationScatter"),
   "breakdown.treemap": lazyIsland(() => import("./BreakdownTreemap.js"), "BreakdownTreemap"),
