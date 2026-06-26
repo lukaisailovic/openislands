@@ -1,6 +1,6 @@
 {
   "name": "openislands",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "Agent-built dashboards over data you own, that don't rot. The OpenIslands CLI.",
   "keywords": [
     "openislands",
