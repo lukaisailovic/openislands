@@ -17,7 +17,7 @@
  * call / per script, so each starts dirty and picks up any change made on disk out-of-band.
  */
 import { z } from "zod";
-import { ActionValidationError, actionRowSchema, checkManifestContracts, checkQueries, inferSchema, insertRows as insertRowsCompiler, inspectManifestDatasets, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery as runQueryCompiler, validateSql as validateSqlCompiler } from "@openislands/compiler";
+import { ActionValidationError, actionRowSchema, checkManifestContracts, checkQueries, inferSchema, insertRows as insertRowsCompiler, inspectManifestDatasets, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery as runQueryCompiler, validateRows, validateSql as validateSqlCompiler } from "@openislands/compiler";
 import { BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, ISLAND_DEFAULT_SPAN, ISLAND_MAX_SPAN, ISLAND_MIN_SPAN, LayoutRow, jsonSchemaFor, lintManifest, validateManifest, type IslandError, type IslandType, type LayoutWarning, type Manifest } from "@openislands/schema";
 import { type AppStateStore, type ContentStore } from "@openislands/storage";
 import { createTwoFilesPatch } from "diff";
@@ -25,7 +25,7 @@ import { type CheckpointStore } from "./checkpoints.js";
 import { confineDatasetSource } from "./paths.js";
 import { hashManifest, type ProposalStore, type StoredProposal } from "./proposals.js";
 
-/** Max rows a single runAction call may append. */
+/** Max rows a single action insert may append. */
 const MAX_ROWS_PER_ACTION = 100;
 
 /** Cap on retained rollback checkpoints — applyEdit auto-prunes to this so history can't grow unbounded. */
@@ -325,7 +325,7 @@ export interface AppApi {
   applyEdit(proposalId: string): Promise<Record<string, unknown>>;
   rollback(checkpointId?: string): Promise<Record<string, unknown>>;
   listActions(): Promise<Record<string, unknown>>;
-  runAction(name: string, rows: Record<string, unknown>[]): Promise<Record<string, unknown>>;
+  runActions(calls: { action: string; rows: Record<string, unknown>[] }[], opts?: { atomic?: boolean }): Promise<Record<string, unknown>>;
   listQueries(): Promise<Record<string, unknown>>;
   runQuery(name: string, params?: Record<string, unknown>, opts?: { limit?: number; verbosity?: Verbosity }): Promise<Record<string, unknown>>;
   listConnectors(): Promise<Record<string, unknown>>;
@@ -402,7 +402,7 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
         hints: [
           "Read values back: runSql({ dataset: '<name>' }) returns rows from any dataset or sql transform — use it to verify a query/transform without hand-writing SQL.",
           "Edit incrementally: patchManifest deep-merges by section (datasets/actions/queries/connectors upsert by key; pages by id; a null value deletes a key) — send only the keys that change, then applyEdit the returned proposal_id. No need to resend the whole manifest.",
-          "runAction('<action>', rows) appends rows and runSync('<connector>') triggers a sync on demand; both checkpoint automatically so you can rollback.",
+          "runActions([{ action, rows }]) appends rows (atomic by default — pass multiple calls to insert across datasets in one rollback-safe batch) and runSync('<connector>') triggers a sync on demand; both checkpoint automatically so you can rollback.",
         ],
       };
     },
@@ -535,35 +535,93 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
       return { ok: true, actions: await describeActions(ctx.dir, manifest, true) };
     },
 
-    async runAction(name, rows) {
+    async runActions(calls, opts) {
       checkAbort();
+      const atomic = opts?.atomic ?? true;
+      if (calls.length === 0) return { ok: false, error: "no actions to run" };
+
       const manifest = await readProjectManifest(ctx.dir);
-      const action = manifest.actions?.[name];
-      if (!action) {
-        const declared = Object.keys(manifest.actions ?? {});
-        return { ok: false, error: `unknown action '${name}'. Declared: ${declared.length ? declared.join(", ") : "(none)"}` };
-      }
-      if (rows.length === 0) return { ok: false, error: "no rows to insert" };
-      if (rows.length > MAX_ROWS_PER_ACTION) return { ok: false, error: `too many rows: ${rows.length} > ${MAX_ROWS_PER_ACTION} per call` };
-
-      const dataset = manifest.datasets[action.dataset];
-      if (!dataset?.source) return { ok: false, error: `action '${name}' targets a non-writable dataset '${action.dataset}'` };
-      try {
-        confineDatasetSource(ctx.dir, dataset.source);
-      } catch (e) {
-        return { ok: false, error: (e as Error).message };
-      }
-
       ensureFresh();
-      try {
-        const result = await insertRowsCompiler(ctx.dir, name, rows);
-        markDirty();
-        return recordCheckpoint({ ok: true, inserted: result.inserted, checkpoint_id: result.checkpoint_id });
-      } catch (e) {
-        if (e instanceof ActionValidationError) return { ok: false, errors: e.errors };
-        return { ok: false, error: (e as Error).message };
+
+      const plans = [];
+      for (let index = 0; index < calls.length; index += 1) {
+        const { action: name, rows } = calls[index]!;
+        const action = manifest.actions?.[name];
+        if (!action) {
+          const declared = Object.keys(manifest.actions ?? {});
+          plans.push({ action: name, index, source: undefined, error: `unknown action '${name}'. Declared: ${declared.length ? declared.join(", ") : "(none)"}` });
+          continue;
+        }
+        if (rows.length === 0) {
+          plans.push({ action: name, index, source: undefined, error: "no rows to insert" });
+          continue;
+        }
+        if (rows.length > MAX_ROWS_PER_ACTION) {
+          plans.push({ action: name, index, source: undefined, error: `too many rows: ${rows.length} > ${MAX_ROWS_PER_ACTION} per call` });
+          continue;
+        }
+        const source = manifest.datasets[action.dataset]?.source;
+        if (!source) {
+          plans.push({ action: name, index, source: undefined, error: `action '${name}' targets a non-writable dataset '${action.dataset}'` });
+          continue;
+        }
+        try {
+          confineDatasetSource(ctx.dir, source);
+        } catch (e) {
+          plans.push({ action: name, index, source: undefined, error: (e as Error).message });
+          continue;
+        }
+        const { errors } = validateRows(await actionRowSchema(ctx.dir, name), rows);
+        plans.push({ action: name, index, source, errors });
       }
+
+      const invalid = plans.filter((p) => p.error !== undefined || (p.errors && p.errors.length > 0));
+      if (atomic && invalid.length > 0) {
+        const failures = invalid.map((p) => (p.error !== undefined ? { action: p.action, index: p.index, error: p.error } : { action: p.action, index: p.index, errors: p.errors }));
+        return { ok: false, atomic: true, failures };
+      }
+
+      const results: Record<string, unknown>[] = [];
+      const checkpointIds: string[] = [];
+      const completed: { source: string; checkpoint_id: string }[] = [];
+
+      for (const plan of plans) {
+        if (plan.error !== undefined || (plan.errors && plan.errors.length > 0)) {
+          const failure = plan.error !== undefined ? { error: plan.error } : { errors: plan.errors };
+          results.push({ action: plan.action, ok: false, ...failure });
+          continue;
+        }
+        const { rows } = calls[plan.index]!;
+        try {
+          const result = await insertRowsCompiler(ctx.dir, plan.action, rows);
+          completed.push({ source: plan.source!, checkpoint_id: result.checkpoint_id });
+          results.push({ action: plan.action, ok: true, inserted: result.inserted, checkpoint_id: result.checkpoint_id });
+          if (result.checkpoint_id) {
+            checkpointIds.push(result.checkpoint_id);
+            recordCheckpoint({ checkpoint_id: result.checkpoint_id });
+          }
+        } catch (e) {
+          const message = e instanceof ActionValidationError ? e.message : (e as Error).message;
+          if (!atomic) {
+            results.push({ action: plan.action, ok: false, error: message });
+            continue;
+          }
+          const rolledBack: string[] = [];
+          for (const done of completed.toReversed()) {
+            if (done.checkpoint_id) await ctx.checkpoints.restore(done.checkpoint_id);
+            else await ctx.content.remove(done.source);
+            rolledBack.push(done.checkpoint_id || done.source);
+          }
+          markDirty();
+          return { ok: false, atomic: true, error: message, rolled_back: rolledBack };
+        }
+      }
+
+      markDirty();
+      if (atomic) return { ok: true, atomic: true, results, checkpoint_ids: checkpointIds };
+      return { ok: results.every((r) => r.ok === true), atomic: false, results };
     },
+
 
     async listQueries() {
       checkAbort();

@@ -510,7 +510,7 @@ export const FormEntry = z.object({
   action: z.string().describe("name of a manifest `actions` entry this form writes to; the form's inputs are derived from that action's resolved row schema — types, enums, ranges, and defaults all come from the action"),
   fields: z.array(z.string()).optional().describe("the action's columns to render as inputs, in this order; omit to show every insertable column. Each must be a column of the action's dataset"),
   submitLabel: z.string().optional().describe("text on the submit button; defaults to \"Add\""),
-}).describe("A data-entry form card bound to a manifest `action` — renders one typed input per action field, with a submit button in the bottom-right that inserts a row; the bound dataset's islands then refresh live. The human-facing mirror of the agent's runAction: it reuses the action's typing and so binds no dataset of its own.");
+}).describe("A data-entry form card bound to a manifest `action` — renders one typed input per action field, with a submit button in the bottom-right that inserts a row; the bound dataset's islands then refresh live. The human-facing mirror of the agent's runActions insert: it reuses the action's typing and so binds no dataset of its own.");
 export type FormEntry = z.infer<typeof FormEntry>;
 
 /**

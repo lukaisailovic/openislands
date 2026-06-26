@@ -234,8 +234,8 @@ describe("canonical task walkthroughs — one execute program each", () => {
     const { body } = await runCode(await connect(freshFinance()), `
       const app = oi.app();
       const { actions } = await app.listActions();
-      const out = await app.runAction("log_allocation", [{ class: "Stocks", value_eur: 250000 }]);
-      return { hasAction: actions.some((a) => a.name === "log_allocation"), ok: out.ok, inserted: out.inserted };
+      const out = await app.runActions([{ action: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] }]);
+      return { hasAction: actions.some((a) => a.name === "log_allocation"), ok: out.ok, inserted: out.results[0].inserted };
     `);
     expect(body.ok).toBe(true);
     expect(body.result).toMatchObject({ hasAction: true, ok: true, inserted: 1 });
@@ -330,7 +330,7 @@ describe("execute composition + safety", () => {
     const { body } = await runCode(await connect(freshFinance()), `
       const app = oi.app();
       const before = (await app.runSql({ dataset: "allocation" })).rowCount;
-      await app.runAction("log_allocation", [{ class: "Stocks", value_eur: 250000 }]);
+      await app.runActions([{ action: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] }]);
       const after = (await app.runSql({ dataset: "allocation" })).rowCount;
       return { before, after };
     `);

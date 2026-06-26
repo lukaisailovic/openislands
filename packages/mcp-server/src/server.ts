@@ -80,7 +80,7 @@ interface AppApi {
   pruneCheckpoints(keep?: number): Promise<{ ok; kept; removed }>;
   // data actions (typed appends) + queries (typed reads)
   listActions(): Promise<{ ok; actions }>;
-  runAction(name: string, rows: object[]): Promise<{ ok; inserted?; checkpoint_id? }>;
+  runActions(calls: { action: string; rows: object[] }[], opts?: { atomic?: boolean }): Promise<{ ok; results?; checkpoint_ids?; failures? }>;  // typed appends; atomic by default: validates all calls first, rolls back every write if any fails. Single insert = runActions([{ action, rows }])
   listQueries(): Promise<{ ok; queries }>;
   runQuery(name: string, params?: object, opts?: { limit?: number; verbosity?: Verbosity }): Promise<{ ok; rows; columns }>;
   // connectors — provider sync (authorizing is human-only via the dashboard Connect button)
