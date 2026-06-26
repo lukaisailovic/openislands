@@ -15,6 +15,8 @@ const base: ConnectorStatus = {
   auth: "oauth2",
   connected: false,
   missingSecrets: [],
+  canSyncDirectly: false,
+  note: "a human must connect it via the dashboard first, then it can sync",
 };
 
 describe("statusBadge", () => {
