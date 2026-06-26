@@ -1,6 +1,6 @@
 {
   "name": "@openislands/connector-kit",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "OpenIslands connector authoring kit — the typed contract a vendored connector implements.",
   "keywords": [
     "openislands",

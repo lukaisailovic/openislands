@@ -1,6 +1,6 @@
 {
   "name": "@openislands/runtime",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "OpenIslands runtime — the TanStack Start SSR app and island registry.",
   "keywords": [
     "openislands",
