@@ -298,6 +298,19 @@ describe("execute composition + safety", () => {
     expect(body.result).toEqual({ net_worth_monthly: 1, allocation: 1, notes: 1 });
   });
 
+  it("previewDataset returns the same rows as runSql({ dataset })", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const viaSql = await app.runSql({ dataset: "allocation" });
+      const viaPreview = await app.previewDataset("allocation");
+      return { sqlRows: viaSql.rows, previewRows: viaPreview.rows, sameCount: viaSql.rowCount === viaPreview.rowCount };
+    `);
+    expect(body.ok).toBe(true);
+    const r = body.result as { sqlRows: unknown[]; previewRows: unknown[]; sameCount: boolean };
+    expect(r.sameCount).toBe(true);
+    expect(r.previewRows).toEqual(r.sqlRows);
+  });
+
   it("serializes a DuckDB BigInt count to a number rather than crashing", async () => {
     const { body } = await runCode(await connect(freshFinance()), `
       return await oi.app().runSql({ sql: "SELECT count(*) AS n FROM allocation" });
