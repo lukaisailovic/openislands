@@ -13,7 +13,7 @@
 import { z } from "zod";
 import type { ActionSpec, FieldSpec, Manifest } from "@openislands/schema";
 import { getAppStateStore, getContentStore } from "@openislands/storage";
-import { inferSchema, invalidateEngineDatasets, readManifest, type Column, type ColumnType } from "./index.js";
+import { inferSchema, invalidateEngineDatasets, query, readManifest, type Column, type ColumnType } from "./index.js";
 import { resolveWriter, type WriteTarget } from "./writers.js";
 
 export const MAX_SNAPSHOTS_PER_FILE = 20;
@@ -47,6 +47,16 @@ export interface InsertResult {
 export interface ReplaceResult {
   replaced: number;
   checkpoint_id?: string;
+}
+
+export interface DeleteResult {
+  deleted: number;
+  checkpoint_id: string;
+}
+
+export interface UpdateResult {
+  updated: number;
+  checkpoint_id: string;
 }
 
 function lookupAction(manifest: Manifest, actionName: string): ActionSpec {
@@ -185,6 +195,16 @@ export interface ValidatedRows {
   errors: RowError[];
 }
 
+const NULL_FIELD_HINT = 'CSV/flat-file datasets store no null — pass "" for an empty value, or omit the field to use its default';
+
+/** A rejected field that arrived as JSON `null`/`undefined` gets the prescriptive flat-file hint appended — agents bring JSON priors where null is normal, but a CSV has no null cell. */
+function describeIssue(issue: { path: PropertyKey[]; message: string }, row: unknown): string {
+  const field = issue.path[issue.path.length - 1];
+  const value = field !== undefined && row && typeof row === "object" ? (row as Record<string, unknown>)[String(field)] : undefined;
+  if (value === null || value === undefined) return `${issue.message} — ${NULL_FIELD_HINT}`;
+  return issue.message;
+}
+
 export function validateRows(schema: z.ZodObject, rows: unknown[]): ValidatedRows {
   const out: Record<string, unknown>[] = [];
   const errors: RowError[] = [];
@@ -195,7 +215,7 @@ export function validateRows(schema: z.ZodObject, rows: unknown[]): ValidatedRow
       return;
     }
     for (const issue of result.error.issues) {
-      errors.push({ row: index, field: issue.path.join(".") || "(row)", message: issue.message });
+      errors.push({ row: index, field: issue.path.join(".") || "(row)", message: describeIssue(issue, row) });
     }
   });
   return { rows: out, errors };
@@ -319,4 +339,105 @@ export async function insertRows(
   const target = actionWriteTarget(manifest, action);
   const schema = await actionRowSchema(projectDir, actionName);
   return insertValidatedRows(projectDir, target, schema, rows, opts);
+}
+
+/**
+ * Replaces every row of an action's dataset with `rows` — validates against the
+ * action's row schema, snapshots the existing target, then overwrites. The
+ * `mode: "replace"` action path; reuses `replaceValidatedRows`.
+ */
+export async function replaceRows(
+  projectDir: string,
+  actionName: string,
+  rows: unknown[],
+  opts: RetentionOpts = {},
+): Promise<ReplaceResult> {
+  const manifest = await readManifest(projectDir);
+  const action = lookupAction(manifest, actionName);
+  const target = actionWriteTarget(manifest, action);
+  const schema = await actionRowSchema(projectDir, actionName);
+  return replaceValidatedRows(projectDir, target, schema, rows, opts);
+}
+
+/** A row matches iff every (col, value) of the predicate equals the row's value under the same string-compare DuckDB's query() match uses (CAST(col AS VARCHAR) = ?). */
+function rowMatches(row: Record<string, unknown>, match: Record<string, unknown>): boolean {
+  for (const [col, value] of Object.entries(match)) {
+    if (String(row[col] ?? "") !== String(value ?? "")) return false;
+  }
+  return true;
+}
+
+/** Throws naming any predicate/patch key that isn't a real column of the dataset — the same compatible-refinement discipline as the field-override check. */
+function verifyColumns(keys: string[], columns: Column[], actionName: string, dataset: string, what: string): void {
+  const names = new Set(columns.map((c) => c.name));
+  for (const key of keys) {
+    if (!names.has(key)) throw new Error(`action '${actionName}': ${what} '${key}' is not a column of dataset '${dataset}'`);
+  }
+}
+
+/** Reads an action's dataset with no row cap. query() defaults to DEFAULT_ROW_CAP, which would silently drop rows past it on a rewrite — delete/update read the COMPLETE dataset so survivors aren't lost. */
+async function readFullDataset(projectDir: string, dataset: string): Promise<Record<string, unknown>[]> {
+  const result = await query(projectDir, dataset, { limit: Number.MAX_SAFE_INTEGER });
+  return result.rows as Record<string, unknown>[];
+}
+
+// ponytail: delete/update rewrite the whole file (read-all → filter/patch → replace via the snapshot+writer path).
+// Fine for local-first scale; a SQL DELETE/UPDATE path is the upgrade if datasets grow large.
+
+/**
+ * Deletes every row of an action's dataset matching `match` (equality, multi-column
+ * AND, string compare — the same predicate `query()` applies), rewriting the dataset
+ * with the survivors. Snapshots first, so rollback restores the pre-delete bytes.
+ * An empty `match` matches every row, so it is rejected before any read/write — a
+ * full-dataset wipe must never be implicit.
+ */
+export async function deleteRows(
+  projectDir: string,
+  actionName: string,
+  match: Record<string, unknown>,
+  opts: RetentionOpts = {},
+): Promise<DeleteResult> {
+  if (Object.keys(match).length === 0) throw new Error("delete needs a non-empty match predicate");
+  const { action, columns } = await resolveActionColumns(projectDir, actionName);
+  verifyColumns(Object.keys(match), columns, actionName, action.dataset, "match field");
+
+  const manifest = await readManifest(projectDir);
+  const target = actionWriteTarget(manifest, action);
+  const rows = await readFullDataset(projectDir, action.dataset);
+  const survivors = rows.filter((row) => !rowMatches(row, match));
+  const deleted = rows.length - survivors.length;
+
+  const result = await replaceValidatedRows(projectDir, target, await actionRowSchema(projectDir, actionName), survivors, opts);
+  return { deleted, checkpoint_id: result.checkpoint_id ?? "" };
+}
+
+/**
+ * Patches every row of an action's dataset matching `match` with `set` (`{ ...row, ...set }`),
+ * leaving non-matching rows unchanged, then rewrites the whole dataset. The patched rows are
+ * re-validated against the action's row schema, so a bad update fails loudly. An empty `match`
+ * matches every row, so it is rejected before any read/write.
+ */
+export async function updateRows(
+  projectDir: string,
+  actionName: string,
+  match: Record<string, unknown>,
+  set: Record<string, unknown>,
+  opts: RetentionOpts = {},
+): Promise<UpdateResult> {
+  if (Object.keys(match).length === 0) throw new Error("update needs a non-empty match predicate");
+  const { action, columns } = await resolveActionColumns(projectDir, actionName);
+  verifyColumns([...Object.keys(match), ...Object.keys(set)], columns, actionName, action.dataset, "match/set field");
+
+  const manifest = await readManifest(projectDir);
+  const target = actionWriteTarget(manifest, action);
+  const rows = await readFullDataset(projectDir, action.dataset);
+  let updated = 0;
+  const patched = rows.map((row) => {
+    if (!rowMatches(row, match)) return row;
+    updated += 1;
+    return { ...row, ...set };
+  });
+
+  const result = await replaceValidatedRows(projectDir, target, await actionRowSchema(projectDir, actionName), patched, opts);
+  return { updated, checkpoint_id: result.checkpoint_id ?? "" };
 }

@@ -17,15 +17,16 @@
  * call / per script, so each starts dirty and picks up any change made on disk out-of-band.
  */
 import { z } from "zod";
-import { ActionValidationError, actionRowSchema, checkManifestContracts, checkQueries, inferSchema, insertRows as insertRowsCompiler, inspectManifestDatasets, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, resetEngine, runConnectorSync, runQuery as runQueryCompiler, validateSql as validateSqlCompiler } from "@openislands/compiler";
+import { ActionValidationError, actionRowSchema, checkManifestContracts, checkQueries, deleteRows, inferSchema, insertRows as insertRowsCompiler, inspectManifestDatasets, listConnectorStatuses, query, queryColumns, queryParamSchema, queryRaw, QueryValidationError, readManifest as readProjectManifest, replaceRows, resetEngine, runConnectorSync, runQuery as runQueryCompiler, updateRows, validateRows, validateSql as validateSqlCompiler } from "@openislands/compiler";
 import { BUILTIN_ISLAND_SCHEMAS, BUILTIN_ISLAND_TYPES, ISLAND_DEFAULT_SPAN, ISLAND_MAX_SPAN, ISLAND_MIN_SPAN, LayoutRow, jsonSchemaFor, lintManifest, validateManifest, type IslandError, type IslandType, type LayoutWarning, type Manifest } from "@openislands/schema";
 import { type AppStateStore, type ContentStore } from "@openislands/storage";
 import { createTwoFilesPatch } from "diff";
 import { type CheckpointStore } from "./checkpoints.js";
 import { confineDatasetSource } from "./paths.js";
 import { hashManifest, type ProposalStore, type StoredProposal } from "./proposals.js";
+import { recordManifestResend, recordRejection } from "./telemetry.js";
 
-/** Max rows a single runAction call may append. */
+/** Max rows a single action insert may append. */
 const MAX_ROWS_PER_ACTION = 100;
 
 /** Cap on retained rollback checkpoints — applyEdit auto-prunes to this so history can't grow unbounded. */
@@ -69,6 +70,25 @@ const layoutFor = (type: IslandType): IslandLayout => ({
   maxSpan: ISLAND_MAX_SPAN[type],
 });
 
+function usageExampleNotes(type: IslandType): string[] {
+  if (type === "table.grid" || type === "timeline.feed") {
+    return [
+      `drilldown embeds an island in a clicked row's details dialog; \`match\` maps the embedded dataset's column → the clicked row's field. Example: {"island":{"type":"table.grid","dataset":"line_items","columns":["sku","qty"]},"match":{"order_id":"id"}}`,
+    ];
+  }
+  if (type === "gauge.goal") {
+    return [
+      `each goal reads the last row's \`value\`; \`goal\` needs at least one of min/max (both = a target band). Example goals entry: {"value":"protein_g","goal":{"min":120},"label":"Protein","unit":"g"}`,
+    ];
+  }
+  if (type === "content.editor") {
+    return [
+      `set exactly one of \`file\` (one doc) or \`dir\` (a tree). Single file: {"type":"content.editor","file":"docs/runbook.md"}. Directory: {"type":"content.editor","dir":"docs","groups":[{"id":"guides","match":["guides/**"]}]}`,
+    ];
+  }
+  return [];
+}
+
 function layoutNotes(type: IslandType): string[] {
   const { minSpan, recommendedSpan, maxSpan } = layoutFor(type);
   const notes = [`Spans ${minSpan}–${maxSpan} columns; ${recommendedSpan} is the recommended width.`];
@@ -78,18 +98,26 @@ function layoutNotes(type: IslandType): string[] {
   return notes;
 }
 
-function islandContract(type: IslandType): { type: IslandType; required: string[]; bindsData: boolean; description: string } & IslandLayout {
-  const schema = z.toJSONSchema(BUILTIN_ISLAND_SCHEMAS[type], { io: "input" }) as { required?: string[]; description: string };
+type ContractSchema = { required?: string[]; properties?: Record<string, unknown>; description: string };
+
+/** Required + optional property NAMES from an island's input JSON Schema, dropping the `type` discriminant. */
+function fieldNames(schema: ContractSchema): { required: string[]; optional: string[] } {
   const required = (schema.required ?? []).filter((field) => field !== "type");
-  return { type, required, bindsData: required.includes("dataset"), description: schema.description, ...layoutFor(type) };
+  const optional = Object.keys(schema.properties ?? {}).filter((field) => field !== "type" && !required.includes(field));
+  return { required, optional };
 }
 
-const LAYOUT_ROW_CONTRACT = {
-  type: "layout.row",
-  required: ["islands"],
-  bindsData: false,
-  description: (z.toJSONSchema(LayoutRow) as { description: string }).description,
-};
+function islandContract(type: IslandType): { type: IslandType; required: string[]; optional: string[]; bindsData: boolean; description: string } & IslandLayout {
+  const schema = z.toJSONSchema(BUILTIN_ISLAND_SCHEMAS[type], { io: "input" }) as ContractSchema;
+  const { required, optional } = fieldNames(schema);
+  return { type, required, optional, bindsData: required.includes("dataset"), description: schema.description, ...layoutFor(type) };
+}
+
+const LAYOUT_ROW_CONTRACT = (() => {
+  const schema = z.toJSONSchema(LayoutRow) as ContractSchema;
+  const { required, optional } = fieldNames(schema);
+  return { type: "layout.row", required, optional, bindsData: false, description: schema.description };
+})();
 
 /** Every type getIslandSchema accepts: the built-ins plus the structural row. */
 const ISLAND_TYPE_NAMES: string[] = [...BUILTIN_ISLAND_TYPES, "layout.row"];
@@ -289,6 +317,7 @@ export interface AppApi {
   getIslandSchema(type: string): Promise<Record<string, unknown>>;
   getDataSchema(dataset: string): Promise<Record<string, unknown>>;
   runSql(input: { sql?: string; dataset?: string; limit?: number; verbosity?: Verbosity }): Promise<Record<string, unknown>>;
+  previewDataset(dataset: string, opts?: { limit?: number; verbosity?: Verbosity }): Promise<Record<string, unknown>>;
   validateSql(sql: string): Promise<Record<string, unknown>>;
   validateManifest(manifest?: string | Record<string, unknown>): Promise<DryCheckResult | { ok: boolean; error: string }>;
   listCheckpoints(): Promise<Record<string, unknown>>;
@@ -298,7 +327,7 @@ export interface AppApi {
   applyEdit(proposalId: string): Promise<Record<string, unknown>>;
   rollback(checkpointId?: string): Promise<Record<string, unknown>>;
   listActions(): Promise<Record<string, unknown>>;
-  runAction(name: string, rows: Record<string, unknown>[]): Promise<Record<string, unknown>>;
+  runActions(calls: { action: string; rows?: Record<string, unknown>[]; match?: Record<string, unknown>; set?: Record<string, unknown> }[], opts?: { atomic?: boolean }): Promise<Record<string, unknown>>;
   listQueries(): Promise<Record<string, unknown>>;
   runQuery(name: string, params?: Record<string, unknown>, opts?: { limit?: number; verbosity?: Verbosity }): Promise<Record<string, unknown>>;
   listConnectors(): Promise<Record<string, unknown>>;
@@ -327,13 +356,31 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
 
   const readManifestText = async (): Promise<string> => (await ctx.content.readText("manifest.json")) ?? "{}";
 
+  /** The shared body of runSql + previewDataset. Extracted to a local closure because the methods
+   * live in a returned object literal whose `this` doesn't survive the Code Mode vm — calling it
+   * directly keeps both entry points wired to one implementation. */
+  const readRows = async ({ sql, dataset, limit = 50, verbosity = "concise" }: { sql?: string; dataset?: string; limit?: number; verbosity?: Verbosity }): Promise<Record<string, unknown>> => {
+    if (dataset && sql) return { ok: false, error: "Pass either `dataset` or `sql`, not both." };
+    if (!dataset && !sql) return { ok: false, error: "Pass a `dataset` name or a read-only `sql` SELECT." };
+    ensureFresh();
+    try {
+      const result = sql ? await queryRaw(ctx.dir, sql, { limit }) : await query(ctx.dir, dataset!, { limit });
+      return rowsResult(result.rows as Record<string, unknown>[], verbosity);
+    } catch (e) {
+      return { ok: false, error: `Query failed: ${(e as Error).message}` };
+    }
+  };
+
   /** Serialize a proposed manifest, diff it against the base, dry-check it, and either return the
    * validation errors or save a staged proposal. Shared by replaceManifest + patchManifest. */
   const stageProposal = async (base: string, manifest: unknown): Promise<Record<string, unknown>> => {
     const proposed = JSON.stringify(manifest, null, 2) + "\n";
     const diff = manifestDiff(base, proposed);
     const check = await dryCheck(ctx.dir, manifest);
-    if (!check.ok) return { ok: false, errors: check.errors, warnings: check.warnings, diff };
+    if (!check.ok) {
+      void recordRejection(ctx.appState, check.errors);
+      return { ok: false, errors: check.errors, warnings: check.warnings, diff };
+    }
     await ctx.proposals.discardStale(hashManifest(base));
     const stored: StoredProposal = { manifest: proposed, diff, baseHash: hashManifest(base) };
     return { ok: true, proposal_id: await ctx.proposals.save(stored), custom_islands: check.custom, warnings: check.warnings, diff };
@@ -372,6 +419,11 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
         connectors: await listConnectorStatuses(ctx.dir),
         custom_islands: v.custom.map((c) => c.type),
         checkpoints,
+        hints: [
+          "Read values back: previewDataset('<name>') (alias for runSql({ dataset })) returns rows from any dataset or sql transform — use it to verify a query/transform without hand-writing SQL.",
+          "Edit incrementally: patchManifest deep-merges by section (datasets/actions/queries/connectors upsert by key; pages by id; a null value deletes a key) — send only the keys that change, then applyEdit the returned proposal_id. No need to resend the whole manifest.",
+          "runActions dispatches by each action's mode: insert/replace take rows, delete takes match, update takes match+set (atomic by default — batch multiple calls in one rollback-safe write). runSync('<connector>') syncs on demand; both checkpoint automatically so you can rollback.",
+        ],
       };
     },
 
@@ -394,7 +446,7 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
       }
       if (!BUILTIN_ISLAND_TYPES.includes(type as IslandType)) return { ok: false, error: `Unknown built-in island '${type}'.`, known: ISLAND_TYPE_NAMES };
       const islandType = type as IslandType;
-      return { ok: true, type: islandType, schema: jsonSchemaFor(islandType), layout: layoutFor(islandType), notes: layoutNotes(islandType) };
+      return { ok: true, type: islandType, schema: jsonSchemaFor(islandType), layout: layoutFor(islandType), notes: [...layoutNotes(islandType), ...usageExampleNotes(islandType)] };
     },
 
     async getDataSchema(dataset) {
@@ -408,17 +460,14 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
       }
     },
 
-    async runSql({ sql, dataset, limit = 50, verbosity = "concise" }) {
+    async runSql(input) {
       checkAbort();
-      if (dataset && sql) return { ok: false, error: "Pass either `dataset` or `sql`, not both." };
-      if (!dataset && !sql) return { ok: false, error: "Pass a `dataset` name or a read-only `sql` SELECT." };
-      ensureFresh();
-      try {
-        const result = sql ? await queryRaw(ctx.dir, sql, { limit }) : await query(ctx.dir, dataset!, { limit });
-        return rowsResult(result.rows as Record<string, unknown>[], verbosity);
-      } catch (e) {
-        return { ok: false, error: `Query failed: ${(e as Error).message}` };
-      }
+      return readRows(input);
+    },
+
+    async previewDataset(dataset, opts) {
+      checkAbort();
+      return readRows({ dataset, ...opts });
     },
 
     async validateSql(sql) {
@@ -447,6 +496,7 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
 
     async replaceManifest(manifest) {
       checkAbort();
+      void recordManifestResend(ctx.appState);
       const parsed = coerceManifest(manifest);
       if ("error" in parsed) return { ok: false, errors: [`Invalid JSON: ${parsed.error}`] };
       return stageProposal(await readManifestText(), parsed.raw);
@@ -503,35 +553,121 @@ export function createAppApi(ctx: AppContext, runtime: ApiRuntime = {}): AppApi 
       return { ok: true, actions: await describeActions(ctx.dir, manifest, true) };
     },
 
-    async runAction(name, rows) {
+    async runActions(calls, opts) {
       checkAbort();
+      const atomic = opts?.atomic ?? true;
+      if (calls.length === 0) return { ok: false, error: "no actions to run" };
+
       const manifest = await readProjectManifest(ctx.dir);
-      const action = manifest.actions?.[name];
-      if (!action) {
-        const declared = Object.keys(manifest.actions ?? {});
-        return { ok: false, error: `unknown action '${name}'. Declared: ${declared.length ? declared.join(", ") : "(none)"}` };
-      }
-      if (rows.length === 0) return { ok: false, error: "no rows to insert" };
-      if (rows.length > MAX_ROWS_PER_ACTION) return { ok: false, error: `too many rows: ${rows.length} > ${MAX_ROWS_PER_ACTION} per call` };
-
-      const dataset = manifest.datasets[action.dataset];
-      if (!dataset?.source) return { ok: false, error: `action '${name}' targets a non-writable dataset '${action.dataset}'` };
-      try {
-        confineDatasetSource(ctx.dir, dataset.source);
-      } catch (e) {
-        return { ok: false, error: (e as Error).message };
-      }
-
       ensureFresh();
-      try {
-        const result = await insertRowsCompiler(ctx.dir, name, rows);
-        markDirty();
-        return recordCheckpoint({ ok: true, inserted: result.inserted, checkpoint_id: result.checkpoint_id });
-      } catch (e) {
-        if (e instanceof ActionValidationError) return { ok: false, errors: e.errors };
-        return { ok: false, error: (e as Error).message };
+
+      const plans = [];
+      for (let index = 0; index < calls.length; index += 1) {
+        const { action: name, rows, match, set } = calls[index]!;
+        const action = manifest.actions?.[name];
+        if (!action) {
+          const declared = Object.keys(manifest.actions ?? {});
+          plans.push({ action: name, index, mode: "insert", source: undefined, error: `unknown action '${name}'. Declared: ${declared.length ? declared.join(", ") : "(none)"}` });
+          continue;
+        }
+        const mode = action.mode;
+        const source = manifest.datasets[action.dataset]?.source;
+        if (!source) {
+          plans.push({ action: name, index, mode, source: undefined, error: `action '${name}' targets a non-writable dataset '${action.dataset}'` });
+          continue;
+        }
+        try {
+          confineDatasetSource(ctx.dir, source);
+        } catch (e) {
+          plans.push({ action: name, index, mode, source: undefined, error: (e as Error).message });
+          continue;
+        }
+        if (mode === "insert" || mode === "replace") {
+          if (!rows || rows.length === 0) {
+            plans.push({ action: name, index, mode, source: undefined, error: `${mode} needs a non-empty rows array` });
+            continue;
+          }
+          if (rows.length > MAX_ROWS_PER_ACTION) {
+            plans.push({ action: name, index, mode, source: undefined, error: `too many rows: ${rows.length} > ${MAX_ROWS_PER_ACTION} per call` });
+            continue;
+          }
+          const { errors } = validateRows(await actionRowSchema(ctx.dir, name), rows);
+          plans.push({ action: name, index, mode, source, errors });
+          continue;
+        }
+        if (mode === "delete") {
+          if (!match || Object.keys(match).length === 0) {
+            plans.push({ action: name, index, mode, source: undefined, error: "delete needs a non-empty match predicate" });
+            continue;
+          }
+          plans.push({ action: name, index, mode, source });
+          continue;
+        }
+        if (!match || Object.keys(match).length === 0) {
+          plans.push({ action: name, index, mode, source: undefined, error: "update needs a non-empty match predicate" });
+          continue;
+        }
+        if (!set || Object.keys(set).length === 0) {
+          plans.push({ action: name, index, mode, source: undefined, error: "update needs a non-empty set patch" });
+          continue;
+        }
+        plans.push({ action: name, index, mode, source });
       }
+
+      const failed = (p: { error?: string; errors?: unknown[] }): boolean => p.error !== undefined || (p.errors?.length ?? 0) > 0;
+      const invalid = plans.filter(failed);
+      if (atomic && invalid.length > 0) {
+        const failures = invalid.map((p) => (p.error !== undefined ? { action: p.action, index: p.index, error: p.error } : { action: p.action, index: p.index, errors: p.errors }));
+        return { ok: false, atomic: true, failures };
+      }
+
+      const results: Record<string, unknown>[] = [];
+      const checkpointIds: string[] = [];
+      const completed: { source: string; checkpoint_id: string }[] = [];
+
+      for (const plan of plans) {
+        if (failed(plan)) {
+          const failure = plan.error !== undefined ? { error: plan.error } : { errors: plan.errors };
+          results.push({ action: plan.action, ok: false, ...failure });
+          continue;
+        }
+        const { rows, match, set } = calls[plan.index]!;
+        const { mode, action: name } = plan;
+        try {
+          let result;
+          if (mode === "insert") result = await insertRowsCompiler(ctx.dir, name, rows!);
+          else if (mode === "replace") result = await replaceRows(ctx.dir, name, rows!);
+          else if (mode === "delete") result = await deleteRows(ctx.dir, name, match!);
+          else result = await updateRows(ctx.dir, name, match!, set!);
+
+          completed.push({ source: plan.source!, checkpoint_id: result.checkpoint_id ?? "" });
+          results.push({ action: name, mode, ok: true, ...result });
+          if (result.checkpoint_id) {
+            checkpointIds.push(result.checkpoint_id);
+            recordCheckpoint({ checkpoint_id: result.checkpoint_id });
+          }
+        } catch (e) {
+          const message = e instanceof ActionValidationError ? e.message : (e as Error).message;
+          if (!atomic) {
+            results.push({ action: plan.action, ok: false, error: message });
+            continue;
+          }
+          const rolledBack: string[] = [];
+          for (const done of completed.toReversed()) {
+            if (done.checkpoint_id) await ctx.checkpoints.restore(done.checkpoint_id);
+            else await ctx.content.remove(done.source);
+            rolledBack.push(done.checkpoint_id || done.source);
+          }
+          markDirty();
+          return { ok: false, atomic: true, error: message, rolled_back: rolledBack };
+        }
+      }
+
+      markDirty();
+      if (atomic) return { ok: true, atomic: true, results, checkpoint_ids: checkpointIds };
+      return { ok: results.every((r) => r.ok === true), atomic: false, results };
     },
+
 
     async listQueries() {
       checkAbort();

@@ -149,6 +149,9 @@ export function formatValue(value: Scalar | Date, format?: ValueFormat): string 
   }
   const n = toNumber(value);
   if (n === null) return String(value ?? "");
+  if (typeof format === "string" && format.startsWith("currency:")) {
+    return currency(n, "en-US", format.slice("currency:".length).toUpperCase());
+  }
   switch (format) {
     case "usd":
       return currency(n, "en-US", "USD");

@@ -41,6 +41,9 @@ export {
   actionRowSchema,
   actionFields,
   insertRows,
+  replaceRows,
+  deleteRows,
+  updateRows,
   insertValidatedRows,
   replaceValidatedRows,
   datasetRowSchema,
@@ -53,6 +56,8 @@ export {
   type RowError,
   type InsertResult,
   type ReplaceResult,
+  type DeleteResult,
+  type UpdateResult,
   type ValidatedRows,
 } from "./actions.js";
 export { resolveWriter, extensionOf, type DatasetWriter, type WriteTarget } from "./writers.js";

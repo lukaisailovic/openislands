@@ -153,8 +153,9 @@ function appendContent(existing: string, ext: string, rows: Record<string, unkno
 }
 
 function appendLines(existing: string, lines: string[]): string {
-  const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
-  return `${existing}${separator}${lines.join("\n")}\n`;
+  const eol = existing.includes("\r\n") ? "\r\n" : "\n";
+  const separator = existing.length > 0 && !existing.endsWith(eol) ? eol : "";
+  return `${existing}${separator}${lines.join(eol)}${eol}`;
 }
 
 /**

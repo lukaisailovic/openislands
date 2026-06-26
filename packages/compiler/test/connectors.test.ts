@@ -248,6 +248,27 @@ describe("status without secrets", () => {
   });
 });
 
+describe("sync-directly affordance", () => {
+  it("marks a keyless connector as directly syncable with a no-authorization note", async () => {
+    const dir = project(demoManifest(), { "connectors/demo/index.ts": DEMO_CONNECTOR });
+    const demo = (await listConnectorStatuses(dir)).find((s) => s.name === "demo")!;
+    expect(demo.auth).toBe("none");
+    expect(demo.canSyncDirectly).toBe(true);
+    expect(demo.note).toMatch(/sync directly|no authorization/i);
+  });
+
+  it("marks a bearer connector as needing a human connect first", async () => {
+    const m = demoManifest();
+    m.connectors.demo.datasets = { logs: "logs" };
+    delete (m.datasets as Record<string, unknown>).snapshot;
+    const dir = project(m, { "connectors/demo/index.ts": BEARER_CONNECTOR });
+    const demo = (await listConnectorStatuses(dir)).find((s) => s.name === "demo")!;
+    expect(demo.auth).toBe("bearer");
+    expect(demo.canSyncDirectly).toBe(false);
+    expect(demo.note).toMatch(/human must connect/i);
+  });
+});
+
 // --- Bearer auth ----------------------------------------------------------------
 // A static long-lived token from .env, delivered to sync as ctx.tokens.accessToken
 // exactly like an OAuth access token — no interactive Connect, connected = env set.

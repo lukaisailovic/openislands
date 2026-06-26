@@ -9,7 +9,7 @@
  * object the old tool did). So the test bodies below read exactly as the agent's intent — only the
  * transport underneath them changed.
  */
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { resetCustomSchemaCache } from "@openislands/compiler";
@@ -78,12 +78,24 @@ const OI_METHOD: Record<string, { method: string; args: (a: Record<string, unkno
   apply_edit: { method: "applyEdit", args: (a) => [a.proposal_id] },
   rollback: { method: "rollback", args: (a) => ("checkpoint_id" in a ? [a.checkpoint_id] : []) },
   list_actions: { method: "listActions", args: () => [] },
-  run_action: { method: "runAction", args: (a) => [a.name, a.rows] },
   list_queries: { method: "listQueries", args: () => [] },
   run_query: { method: "runQuery", args: (a) => [a.name, a.params ?? {}, { limit: a.limit, verbosity: a.verbosity }] },
   list_connectors: { method: "listConnectors", args: () => [] },
   run_sync: { method: "runSync", args: (a) => [a.name] },
 };
+
+/** Compile a `run_action` call into a single-call `runActions` program that projects the batch
+ * result back to the legacy singular envelope ({ ok, inserted?, checkpoint_id?, errors?, error? }),
+ * so the single-insert tests below read unchanged while exercising the only insert method. */
+function runActionProjection(args: Record<string, unknown>): string {
+  const call = JSON.stringify({ action: args.name, rows: args.rows });
+  return `
+    const out = await oi.app().runActions([${call}]);
+    if (out.ok) { const r = out.results[0]; return { ok: true, inserted: r.inserted, checkpoint_id: r.checkpoint_id }; }
+    const f = out.failures[0];
+    return f.errors ? { ok: false, errors: f.errors } : { ok: false, error: f.error };
+  `;
+}
 
 /**
  * Drive a former tool by compiling it to an `oi.app().<method>(...)` program, running it through
@@ -91,10 +103,15 @@ const OI_METHOD: Record<string, { method: string; args: (a: Record<string, unkno
  * unchanged. (A thrown checkpoint id still rides inside the method's own result envelope.)
  */
 async function call(client: Client, name: string, args: Record<string, unknown> = {}): Promise<unknown> {
-  const spec = OI_METHOD[name];
-  if (!spec) throw new Error(`no Code Mode mapping for former tool '${name}'`);
-  const argList = spec.args(args).map((a) => JSON.stringify(a)).join(", ");
-  const code = `return await oi.app().${spec.method}(${argList});`;
+  let code: string;
+  if (name === "run_action") {
+    code = runActionProjection(args);
+  } else {
+    const spec = OI_METHOD[name];
+    if (!spec) throw new Error(`no Code Mode mapping for former tool '${name}'`);
+    const argList = spec.args(args).map((a) => JSON.stringify(a)).join(", ");
+    code = `return await oi.app().${spec.method}(${argList});`;
+  }
   const out = (await callTool(client, "execute", { code })) as { ok: boolean; result?: unknown; error?: string };
   if (!out.ok) throw new Error(`execute failed for ${name}: ${out.error}`);
   return out.result;
@@ -493,6 +510,255 @@ describe("data actions", () => {
     const out = (await call(client, "validate_manifest", { manifest: JSON.stringify(m) })) as { ok: boolean; errors: unknown[] };
     expect(out.ok).toBe(false);
     expect(out.errors.length).toBeGreaterThan(0);
+  });
+});
+
+const notesCsv = (root: string) => readFileSync(join(root, "data", "notes.csv"), "utf8");
+
+/** Add a second writable action (`log_note` → the `notes` dataset, no field overrides) so a batch
+ * can span two distinct datasets. Returns the same app dir for chaining. */
+function withNotesAction(root: string): string {
+  const m = JSON.parse(validManifest(root));
+  m.actions.log_note = { dataset: "notes", mode: "insert" };
+  writeFileSync(join(root, "manifest.json"), JSON.stringify(m));
+  return root;
+}
+
+interface RunActionsResult {
+  ok: boolean;
+  atomic?: boolean;
+  results?: { action: string; ok?: boolean; mode?: string; inserted?: number; replaced?: number; deleted?: number; updated?: number; checkpoint_id?: string; error?: string }[];
+  checkpoint_ids?: string[];
+  failures?: { action: string; index: number; error?: string; errors?: unknown[] }[];
+  error?: string;
+  rolled_back?: string[];
+}
+
+/** Run a runActions program and return its envelope. */
+async function runActions(client: Client, calls: unknown[], opts?: { atomic?: boolean }): Promise<RunActionsResult> {
+  const optsArg = opts === undefined ? "" : `, ${JSON.stringify(opts)}`;
+  const code = `return await oi.app().runActions(${JSON.stringify(calls)}${optsArg});`;
+  return runResult(client, code);
+}
+
+/** Declare a write-mode action of `mode` against the `notes` dataset (no field overrides), plus the
+ * insert-mode `log_allocation` already in the fixture. Returns the same app dir for chaining. */
+function withNoteMode(root: string, mode: "insert" | "replace" | "delete" | "update"): string {
+  const m = JSON.parse(validManifest(root));
+  m.actions.note_action = { dataset: "notes", mode };
+  writeFileSync(join(root, "manifest.json"), JSON.stringify(m));
+  return root;
+}
+
+const allNotes = async (client: Client): Promise<{ id: number; note: string }[]> => {
+  const { rows } = (await call(client, "run_sql", { dataset: "notes" })) as { rows: { id: number; note: string }[] };
+  return rows.map((r) => ({ id: Number(r.id), note: r.note }));
+};
+
+describe("runActions (atomic multi-write)", () => {
+  it("atomic success appends every call's rows and returns the data checkpoint ids", async () => {
+    const root = withNotesAction(freshProject());
+    const client = await connect(root);
+
+    const out = await runActions(client, [
+      { action: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] },
+      { action: "log_note", rows: [{ id: 9, note: "rebalanced" }] },
+    ]);
+
+    expect(out.ok).toBe(true);
+    expect(out.atomic).toBe(true);
+    expect(out.results).toHaveLength(2);
+    expect(out.results!.every((r) => r.ok === true)).toBe(true);
+    expect(out.checkpoint_ids!.length).toBe(2);
+    expect(out.checkpoint_ids!.every((id) => /^ckpt-\d+!/.test(id))).toBe(true);
+
+    const alloc = (await call(client, "run_sql", { dataset: "allocation" })) as { rows: { class: string; value_eur: number }[] };
+    expect(alloc.rows.some((r) => r.class === "Stocks" && r.value_eur === 250000)).toBe(true);
+    const notes = (await call(client, "run_sql", { dataset: "notes" })) as { rows: { id: number; note: string }[] };
+    expect(notes.rows.some((r) => Number(r.id) === 9 && r.note === "rebalanced")).toBe(true);
+  });
+
+  it("atomic all-or-nothing: one invalid row aborts the batch and writes NOTHING", async () => {
+    const root = withNotesAction(freshProject());
+    const client = await connect(root);
+    const allocBefore = allocationCsv(root);
+    const notesBefore = notesCsv(root);
+
+    const out = await runActions(client, [
+      { action: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] },
+      { action: "log_note", rows: [{ id: 5, note: "first" }] },
+      { action: "log_allocation", rows: [{ class: "BTC", value_eur: "lots" }] },
+    ]);
+
+    expect(out.ok).toBe(false);
+    expect(out.atomic).toBe(true);
+    const failure = out.failures!.find((f) => f.index === 2);
+    expect(failure).toBeDefined();
+    expect(failure!.action).toBe("log_allocation");
+    expect((failure!.errors as { row: number; field: string }[]).some((e) => e.field === "value_eur")).toBe(true);
+
+    expect(allocationCsv(root)).toBe(allocBefore);
+    expect(notesCsv(root)).toBe(notesBefore);
+  });
+
+  it("atomic all-or-nothing names an unknown action without writing the valid call's rows", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const allocBefore = allocationCsv(root);
+
+    const out = await runActions(client, [
+      { action: "log_allocation", rows: [{ class: "Cash", value_eur: 1 }] },
+      { action: "log_meal", rows: [{ x: 1 }] },
+    ]);
+
+    expect(out.ok).toBe(false);
+    expect(out.atomic).toBe(true);
+    const failure = out.failures!.find((f) => f.index === 1)!;
+    expect(failure.action).toBe("log_meal");
+    expect(failure.error).toMatch(/unknown action/i);
+    expect(allocationCsv(root)).toBe(allocBefore);
+  });
+
+  it("empty batch is rejected", async () => {
+    const client = await connect(freshProject());
+    const out = await runActions(client, []);
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/no actions/i);
+  });
+
+  it("non-atomic applies the good calls and reports the bad one per-call", async () => {
+    const root = withNotesAction(freshProject());
+    const client = await connect(root);
+    const before = allocationCsv(root);
+
+    const out = await runActions(
+      client,
+      [
+        { action: "log_allocation", rows: [{ class: "Stocks", value_eur: 7 }] },
+        { action: "log_allocation", rows: [{ class: "Gold", value_eur: 1 }] },
+        { action: "log_note", rows: [{ id: 3, note: "kept" }] },
+      ],
+      { atomic: false },
+    );
+
+    expect(out.atomic).toBe(false);
+    expect(out.ok).toBe(false);
+    const byIndex = out.results!;
+    expect(byIndex[0]!.ok).toBe(true);
+    expect(byIndex[1]!.ok).toBe(false);
+    expect(byIndex[2]!.ok).toBe(true);
+
+    expect(allocationCsv(root).length).toBeGreaterThan(before.length);
+    const alloc = (await call(client, "run_sql", { dataset: "allocation" })) as { rows: { class: string; value_eur: number }[] };
+    expect(alloc.rows.some((r) => r.class === "Stocks" && r.value_eur === 7)).toBe(true);
+    expect(alloc.rows.some((r) => r.class === "Gold")).toBe(false);
+    const notes = (await call(client, "run_sql", { dataset: "notes" })) as { rows: { id: number; note: string }[] };
+    expect(notes.rows.some((r) => Number(r.id) === 3 && r.note === "kept")).toBe(true);
+  });
+
+  it("non-atomic all-ok reports ok:true", async () => {
+    const root = withNotesAction(freshProject());
+    const client = await connect(root);
+    const out = await runActions(
+      client,
+      [
+        { action: "log_allocation", rows: [{ class: "Stocks", value_eur: 11 }] },
+        { action: "log_note", rows: [{ id: 12, note: "ok" }] },
+      ],
+      { atomic: false },
+    );
+    expect(out.ok).toBe(true);
+    expect(out.atomic).toBe(false);
+    expect(out.results!.every((r) => r.ok === true)).toBe(true);
+  });
+});
+
+describe("runActions write modes (delete / update / replace)", () => {
+  it("delete removes the matching row, leaving the survivors", async () => {
+    const root = withNoteMode(freshProject(), "delete");
+    const client = await connect(root);
+    expect(await allNotes(client)).toHaveLength(2);
+
+    const out = await runActions(client, [{ action: "note_action", match: { id: 1 } }]);
+    expect(out.ok).toBe(true);
+    const result = out.results![0]!;
+    expect(result.mode).toBe("delete");
+    expect(result.deleted).toBe(1);
+    expect(result.checkpoint_id).toMatch(/^ckpt-\d+!/);
+
+    const remaining = await allNotes(client);
+    expect(remaining).toEqual([{ id: 2, note: "normal note" }]);
+  });
+
+  it("update patches every matching row's set fields", async () => {
+    const root = withNoteMode(freshProject(), "update");
+    const client = await connect(root);
+
+    const out = await runActions(client, [{ action: "note_action", match: { id: 2 }, set: { note: "patched" } }]);
+    expect(out.ok).toBe(true);
+    const result = out.results![0]!;
+    expect(result.mode).toBe("update");
+    expect(result.updated).toBe(1);
+
+    const after = await allNotes(client);
+    expect(after.find((r) => r.id === 2)!.note).toBe("patched");
+    expect(after.find((r) => r.id === 1)!.note).toMatch(/ignore previous/);
+  });
+
+  it("replace overwrites all rows of the dataset", async () => {
+    const root = withNoteMode(freshProject(), "replace");
+    const client = await connect(root);
+
+    const out = await runActions(client, [{ action: "note_action", rows: [{ id: 7, note: "only" }] }]);
+    expect(out.ok).toBe(true);
+    const result = out.results![0]!;
+    expect(result.mode).toBe("replace");
+    expect(result.replaced).toBe(1);
+
+    expect(await allNotes(client)).toEqual([{ id: 7, note: "only" }]);
+  });
+
+  it("delete without a match predicate is rejected and writes nothing", async () => {
+    const root = withNoteMode(freshProject(), "delete");
+    const client = await connect(root);
+    const before = notesCsv(root);
+
+    const out = await runActions(client, [{ action: "note_action", match: {} }]);
+    expect(out.ok).toBe(false);
+    expect(out.failures![0]!.error).toMatch(/non-empty match/i);
+    expect(notesCsv(root)).toBe(before);
+  });
+
+  it("update without a set patch is rejected and writes nothing", async () => {
+    const root = withNoteMode(freshProject(), "update");
+    const client = await connect(root);
+    const before = notesCsv(root);
+
+    const out = await runActions(client, [{ action: "note_action", match: { id: 2 } }]);
+    expect(out.ok).toBe(false);
+    expect(out.failures![0]!.error).toMatch(/non-empty set/i);
+    expect(notesCsv(root)).toBe(before);
+  });
+
+  it("atomic all-or-nothing across mixed modes: a valid insert + a delete missing match writes NOTHING", async () => {
+    const root = withNoteMode(freshProject(), "delete");
+    const client = await connect(root);
+    const allocBefore = allocationCsv(root);
+    const notesBefore = notesCsv(root);
+
+    const out = await runActions(client, [
+      { action: "log_allocation", rows: [{ class: "Stocks", value_eur: 5 }] },
+      { action: "note_action", match: {} },
+    ]);
+
+    expect(out.ok).toBe(false);
+    expect(out.atomic).toBe(true);
+    const failure = out.failures!.find((f) => f.index === 1)!;
+    expect(failure.action).toBe("note_action");
+    expect(failure.error).toMatch(/non-empty match/i);
+
+    expect(allocationCsv(root)).toBe(allocBefore);
+    expect(notesCsv(root)).toBe(notesBefore);
   });
 });
 
@@ -1201,5 +1467,49 @@ describe("result contract", () => {
     expect(out.concise.rowCount).toBeLessThan(500);
     expect(out.concise.note).toMatch(/cap|narrow/i);
     expect(out.detailed.rowCount).toBeGreaterThan(out.concise.rowCount);
+  });
+});
+
+describe("local-only telemetry", () => {
+  const telemetryDir = (root: string) => join(root, ".openislands", "telemetry");
+
+  it("a rejected stage appends a structured rejection record", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+
+    // Bind a page island to a column that doesn't exist — dryCheck rejects the stage.
+    const staged = (await call(client, "patch_manifest", {
+      pages: [{ id: "overview", title: "Overview", islands: [{ type: "metric.kpi", title: "Bad", dataset: "net_worth_monthly", value: "does_not_exist", format: "eur", span: 4 }] }],
+    })) as { ok: boolean };
+    expect(staged.ok).toBe(false);
+
+    const log = readFileSync(join(telemetryDir(root), "rejections.jsonl"), "utf8").trim();
+    const lines = log.split("\n");
+    expect(lines).toHaveLength(1);
+    const record = JSON.parse(lines[0]!) as { ts: string; errors: { type?: string; message: string }[] };
+    expect(typeof record.ts).toBe("string");
+    expect(record.errors.length).toBeGreaterThan(0);
+    expect(record.errors.every((e) => typeof e.message === "string")).toBe(true);
+  });
+
+  it("replaceManifest bumps the manifest-resend counter; patchManifest does not", async () => {
+    const root = freshProject();
+    const client = await connect(root);
+    const counterPath = join(telemetryDir(root), "manifest_resends");
+
+    expect(existsSync(counterPath)).toBe(false);
+
+    const next = JSON.parse(validManifest(root));
+    next.title = "Resent once";
+    await call(client, "replace_manifest", { manifest: JSON.stringify(next) });
+    expect(readFileSync(counterPath, "utf8")).toBe("1");
+
+    next.title = "Resent twice";
+    await call(client, "replace_manifest", { manifest: JSON.stringify(next) });
+    expect(readFileSync(counterPath, "utf8")).toBe("2");
+
+    // A section patch is the incremental path — it must not touch the resend counter.
+    await call(client, "patch_manifest", { title: "Patched" });
+    expect(readFileSync(counterPath, "utf8")).toBe("2");
   });
 });

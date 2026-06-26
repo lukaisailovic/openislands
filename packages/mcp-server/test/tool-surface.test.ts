@@ -234,8 +234,8 @@ describe("canonical task walkthroughs — one execute program each", () => {
     const { body } = await runCode(await connect(freshFinance()), `
       const app = oi.app();
       const { actions } = await app.listActions();
-      const out = await app.runAction("log_allocation", [{ class: "Stocks", value_eur: 250000 }]);
-      return { hasAction: actions.some((a) => a.name === "log_allocation"), ok: out.ok, inserted: out.inserted };
+      const out = await app.runActions([{ action: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] }]);
+      return { hasAction: actions.some((a) => a.name === "log_allocation"), ok: out.ok, inserted: out.results[0].inserted };
     `);
     expect(body.ok).toBe(true);
     expect(body.result).toMatchObject({ hasAction: true, ok: true, inserted: 1 });
@@ -298,6 +298,19 @@ describe("execute composition + safety", () => {
     expect(body.result).toEqual({ net_worth_monthly: 1, allocation: 1, notes: 1 });
   });
 
+  it("previewDataset returns the same rows as runSql({ dataset })", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      const viaSql = await app.runSql({ dataset: "allocation" });
+      const viaPreview = await app.previewDataset("allocation");
+      return { sqlRows: viaSql.rows, previewRows: viaPreview.rows, sameCount: viaSql.rowCount === viaPreview.rowCount };
+    `);
+    expect(body.ok).toBe(true);
+    const r = body.result as { sqlRows: unknown[]; previewRows: unknown[]; sameCount: boolean };
+    expect(r.sameCount).toBe(true);
+    expect(r.previewRows).toEqual(r.sqlRows);
+  });
+
   it("serializes a DuckDB BigInt count to a number rather than crashing", async () => {
     const { body } = await runCode(await connect(freshFinance()), `
       return await oi.app().runSql({ sql: "SELECT count(*) AS n FROM allocation" });
@@ -330,7 +343,7 @@ describe("execute composition + safety", () => {
     const { body } = await runCode(await connect(freshFinance()), `
       const app = oi.app();
       const before = (await app.runSql({ dataset: "allocation" })).rowCount;
-      await app.runAction("log_allocation", [{ class: "Stocks", value_eur: 250000 }]);
+      await app.runActions([{ action: "log_allocation", rows: [{ class: "Stocks", value_eur: 250000 }] }]);
       const after = (await app.runSql({ dataset: "allocation" })).rowCount;
       return { before, after };
     `);
@@ -443,5 +456,42 @@ describe("api / doc parity", () => {
     expect(actual, "methods documented but missing from oi.app()").toEqual(expect.arrayContaining(documented));
     expect(documented, "methods on oi.app() but undocumented in OI_API_DECL").toEqual(expect.arrayContaining(actual));
     expect(actual).toEqual(documented);
+  });
+});
+
+describe("discoverability surface", () => {
+  it("listIslands() contracts include optional field names", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `return await oi.app().listIslands();`);
+    expect(body.ok).toBe(true);
+    const islands = (body.result as { ok: boolean; islands: { type: string; optional: string[] }[] }).islands;
+    const tableGrid = islands.find((i) => i.type === "table.grid")!;
+    expect(tableGrid.optional).toContain("drilldown");
+    const metricKpi = islands.find((i) => i.type === "metric.kpi")!;
+    expect(metricKpi.optional).toContain("target");
+    expect(islands.some((i) => i.optional.length > 0)).toBe(true);
+  });
+
+  it("getOverview() success result includes hints", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `return await oi.app().getOverview();`);
+    expect(body.ok).toBe(true);
+    const hints = (body.result as { hints: string[] }).hints;
+    expect(Array.isArray(hints)).toBe(true);
+    expect(hints.length).toBeGreaterThan(0);
+  });
+
+  it("getIslandSchema() notes include usage examples for chronically-guessed shapes", async () => {
+    const { body } = await runCode(await connect(freshFinance()), `
+      const app = oi.app();
+      return {
+        tableGrid: await app.getIslandSchema("table.grid"),
+        gaugeGoal: await app.getIslandSchema("gauge.goal"),
+        contentEditor: await app.getIslandSchema("content.editor"),
+      };
+    `);
+    expect(body.ok).toBe(true);
+    const r = body.result as { tableGrid: { notes: string[] }; gaugeGoal: { notes: string[] }; contentEditor: { notes: string[] } };
+    expect(r.tableGrid.notes.some((n) => n.includes("drilldown") && n.includes('"island"') && n.includes('"match"'))).toBe(true);
+    expect(r.gaugeGoal.notes.some((n) => n.includes("goals") || n.includes("goal"))).toBe(true);
+    expect(r.contentEditor.notes.some((n) => n.includes("file") && n.includes("dir"))).toBe(true);
   });
 });

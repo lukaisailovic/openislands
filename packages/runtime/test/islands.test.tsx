@@ -61,6 +61,20 @@ describe("value formatting", () => {
     expect(formatValue(1500.6, "int")).toBe("1,501");
   });
 
+  it("renders an arbitrary ISO currency via currency:XXX", () => {
+    const result = formatValue(1234, "currency:RSD");
+    expect(result).toContain("RSD");
+    expect(result).toContain("1,234");
+  });
+
+  it("leaves fixed currency shorthands unaffected by the currency: prefix branch", () => {
+    expect(formatValue(1234, "eur")).toContain("€");
+  });
+
+  it("leaves non-currency formats unaffected", () => {
+    expect(formatValue(1234, "int")).toBe("1,234");
+  });
+
   it("falls back to a plain string for non-numeric values", () => {
     expect(formatValue("n/a", "eur")).toBe("n/a");
   });

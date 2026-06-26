@@ -18,25 +18,28 @@ const Span = z.number().int().min(1).max(12).optional();
 
 /** The display formats a numeric value can be rendered in. */
 export const ValueFormat = z
-  .enum([
-    "usd",
-    "eur",
-    "gbp",
-    "jpy",
-    "int",
-    "decimal",
-    "pct",
-    "compact",
-    "kg",
-    "bytes",
-    "duration",
-    "date",
-    "datetime",
-    "time",
-    "month",
+  .union([
+    z.enum([
+      "usd",
+      "eur",
+      "gbp",
+      "jpy",
+      "int",
+      "decimal",
+      "pct",
+      "compact",
+      "kg",
+      "bytes",
+      "duration",
+      "date",
+      "datetime",
+      "time",
+      "month",
+    ]),
+    z.string().regex(/^currency:[A-Za-z]{3}$/, "currency code must be 'currency:' + a 3-letter ISO code, e.g. currency:RSD"),
   ])
   .describe(
-    "Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. See the Value formats reference (/reference/value-formats).",
+    "Display format for a value. Currency: usd, eur, gbp, jpy. Number: int, decimal, pct (a 0–1 fraction shown as a %), compact (1.2K). Unit: kg, bytes (1024-scale), duration (a number of seconds → 1h 5m). Date/time: date, datetime, time, month. Omit for a plain number with up to 2 decimals. For any other ISO 4217 currency use 'currency:<CODE>' (e.g. currency:RSD). See the Value formats reference (/reference/value-formats).",
   );
 export type ValueFormat = z.infer<typeof ValueFormat>;
 
@@ -510,7 +513,7 @@ export const FormEntry = z.object({
   action: z.string().describe("name of a manifest `actions` entry this form writes to; the form's inputs are derived from that action's resolved row schema — types, enums, ranges, and defaults all come from the action"),
   fields: z.array(z.string()).optional().describe("the action's columns to render as inputs, in this order; omit to show every insertable column. Each must be a column of the action's dataset"),
   submitLabel: z.string().optional().describe("text on the submit button; defaults to \"Add\""),
-}).describe("A data-entry form card bound to a manifest `action` — renders one typed input per action field, with a submit button in the bottom-right that inserts a row; the bound dataset's islands then refresh live. The human-facing mirror of the agent's runAction: it reuses the action's typing and so binds no dataset of its own.");
+}).describe("A data-entry form card bound to a manifest `action` — renders one typed input per action field, with a submit button in the bottom-right that inserts a row; the bound dataset's islands then refresh live. The human-facing mirror of the agent's runActions insert: it reuses the action's typing and so binds no dataset of its own.");
 export type FormEntry = z.infer<typeof FormEntry>;
 
 /**
@@ -887,14 +890,18 @@ export type FieldSpec = z.infer<typeof FieldSpec>;
 
 /**
  * A manifest-declared write into a `source` dataset (never `sql` — derived
- * datasets aren't writable). `mode: "insert"` adds rows — an append for a
- * flat-file source (CSV / JSON(L)), an INSERT for a SQLite table — so the
- * storage backing the dataset never changes the contract. The row schema is
+ * datasets aren't writable). Four modes:
+ *   - insert  — append rows (CSV/JSON(L)) or INSERT for SQLite
+ *   - replace — overwrite all rows in the dataset
+ *   - delete  — drop rows matching an equality predicate supplied at call time
+ *   - update  — patch rows matching an equality predicate supplied at call time
+ * The match predicate and new values for delete/update are supplied at call
+ * time via the MCP `runActions` API, not declared here. The row schema is
  * derived from the live data; `fields` only narrows it.
  */
 export const ActionSpec = z.object({
   dataset: z.string(),
-  mode: z.literal("insert"),
+  mode: z.enum(["insert", "replace", "delete", "update"]).default("insert"),
   description: z.string().optional(),
   fields: z.record(z.string(), FieldSpec).optional(),
 });
@@ -1068,6 +1075,29 @@ export interface ValidationResult {
   custom: { page: string; index: number; type: string }[];
 }
 
+/** Copyable correct-shape examples for the nested structures agents most often guess wrong.
+ *  Appended to a validation error so the fix is one step, not guess→fail→retry. Failure-path only. */
+function shapeExample(kind: "drilldown" | "goals" | "content.editor" | "select-filter"): string {
+  switch (kind) {
+    case "drilldown":
+      return ` — drilldown shape: { "island": <a full island config>, "match": { "<embedded-dataset-col>": "<clicked-row-field>" } }. Example: {"island":{"type":"table.grid","dataset":"line_items","columns":["sku","qty"]},"match":{"order_id":"id"}}`;
+    case "goals":
+      return ` — each goal: { "value": "<field>", "goal": { "min"?: <num|col>, "max"?: <num|col> }, "label"?, "unit"? } (at least one of min/max). Example: {"value":"protein_g","goal":{"min":120},"label":"Protein","unit":"g"}`;
+    case "content.editor":
+      return ` — set exactly one of file or dir. Single file: {"type":"content.editor","file":"docs/runbook.md"}. Directory: {"type":"content.editor","dir":"docs","groups":[{"id":"guides","match":["guides/**"]}]}`;
+    case "select-filter":
+      return ` — select filter shape: { "id": "...", "type": "select", "bind": { "<dataset>": "<categorical-column>" }, "multiple"?: false }. Example: {"id":"region","type":"select","bind":{"sales":"region"},"multiple":false}`;
+  }
+}
+
+/** Maps a failing island type + Zod issue path to its copyable shape example, "" when none applies. */
+function exampleForIssue(type: string, path: string): string {
+  if ((type === "table.grid" || type === "timeline.feed") && path.startsWith("drilldown")) return shapeExample("drilldown");
+  if (type === "gauge.goal" && path.startsWith("goals")) return shapeExample("goals");
+  if (type === "content.editor" && /^(file|dir|groups|include|csv)/.test(path)) return shapeExample("content.editor");
+  return "";
+}
+
 /**
  * Validate a manifest. Built-in islands are validated strictly against their
  * schema; unknown types are accepted as *custom* islands (the typed extension
@@ -1114,6 +1144,7 @@ export function validateManifest(input: unknown): ValidationResult {
   // actions
   const rootError = (message: string) => errors.push({ page: "-", index: -1, type: "-", message });
   const actions = root.actions === undefined ? undefined : (root.actions as Record<string, unknown>);
+  const normalizedActions: Record<string, ActionSpec> = {};
   for (const [name, spec] of Object.entries(actions ?? {})) {
     const r = ActionSpec.safeParse(spec);
     if (!r.success) {
@@ -1131,8 +1162,10 @@ export function validateManifest(input: unknown): ValidationResult {
     }
     const source = target.source ?? "";
     if (!isWritableSource(source)) {
-      rootError(`actions.${name}: source '${source}' is not writable — insert supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
+      rootError(`actions.${name}: source '${source}' is not writable — write supports ${WRITABLE_SOURCE_EXTENSIONS.join(", ")}`);
+      continue;
     }
+    normalizedActions[name] = r.data;
   }
 
   // connectors
@@ -1241,11 +1274,12 @@ export function validateManifest(input: unknown): ValidationResult {
       if (!result.success) {
         for (const issue of result.error.issues) {
           const path = issue.path.join(".");
+          const base = path ? `${path}: ${issue.message}` : issue.message;
           errors.push({
             page: pageId,
             index,
             type,
-            message: path ? `${path}: ${issue.message}` : issue.message,
+            message: base + exampleForIssue(type, path),
             field: path || undefined,
           });
         }
@@ -1284,7 +1318,7 @@ export function validateManifest(input: unknown): ValidationResult {
               page: pageId,
               index,
               type,
-              message: `goals[${goalIndex}] needs at least one of min or max`,
+              message: `goals[${goalIndex}] needs at least one of min or max` + shapeExample("goals"),
               field: `goals.${goalIndex}.goal`,
             });
           }
@@ -1299,7 +1333,9 @@ export function validateManifest(input: unknown): ValidationResult {
             page: pageId,
             index,
             type,
-            message: hasFile ? "content.editor takes either 'file' or 'dir', not both" : "content.editor needs a 'file' or a 'dir'",
+            message:
+              (hasFile ? "content.editor takes either 'file' or 'dir', not both" : "content.editor needs a 'file' or a 'dir'") +
+              shapeExample("content.editor"),
             field: hasFile ? undefined : "dir",
           });
         } else if (hasFile && (Array.isArray(cfg.groups) || Array.isArray(cfg.include) || cfg.csv === true)) {
@@ -1307,7 +1343,7 @@ export function validateManifest(input: unknown): ValidationResult {
             page: pageId,
             index,
             type,
-            message: "content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set",
+            message: "content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set" + shapeExample("content.editor"),
             field: "groups",
           });
         }
@@ -1318,7 +1354,7 @@ export function validateManifest(input: unknown): ValidationResult {
           page: pageId,
           index,
           type,
-          message: "drilldown needs at least one match column",
+          message: "drilldown needs at least one match column" + shapeExample("drilldown"),
           field: "drilldown.match",
         });
       }
@@ -1351,7 +1387,8 @@ export function validateManifest(input: unknown): ValidationResult {
       for (const rawFilter of page.filters as Record<string, unknown>[]) {
         const r = PageFilter.safeParse(rawFilter);
         if (!r.success) {
-          pageError(`filters: ${r.error.issues[0]?.message ?? "invalid"}`);
+          const suffix = rawFilter.type === "select" ? shapeExample("select-filter") : "";
+          pageError(`filters: ${r.error.issues[0]?.message ?? "invalid"}${suffix}`);
           continue;
         }
         if (seenFilterIds.has(r.data.id)) pageError(`duplicate filter id '${r.data.id}'`);
@@ -1416,7 +1453,7 @@ export function validateManifest(input: unknown): ValidationResult {
     icon: appIcon,
     datasets: datasets as Record<string, DatasetSpec>,
     pages: normalizedPages,
-    actions: actions as Record<string, ActionSpec> | undefined,
+    actions: actions === undefined ? undefined : normalizedActions,
     connectors: connectors as Record<string, ConnectorSpec> | undefined,
     queries: queries === undefined ? undefined : normalizedQueries,
   };

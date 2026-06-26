@@ -45,7 +45,7 @@ Code Mode: this server exposes ONE tool — execute — that executes a small as
 
 Read freely, but write one way: every manifest change funnels through a staged proposal (oi.app().patchManifest/replaceManifest → applyEdit) — there is no raw file write, and applyEdit snapshots the prior state so rollback can undo it. If a stage returns ok:false, each error names the page/island/field — fix it and retry; never work around it.
 
-Multiple apps: oi.app(id) selects one (omit id when there's exactly one); oi.listApps() lists them. Connectors authorize human-only (the Connect button in the dashboard) — if one isn't connected, tell the user; don't try to sync.`;
+Multiple apps: oi.app(id) selects one (omit id when there's exactly one); oi.listApps() lists them. Connectors: keyless ones (auth:"none", canSyncDirectly:true) need no authorization — sync them directly with runSync. oauth2/bearer connectors authorize human-only (the Connect button in the dashboard) — if one isn't connected, tell the user; don't try to sync.`;
 
 /** The `oi` TypeScript API, embedded so the model programs against types instead of tool schemas.
  * Keep in sync with {@link AppApi} in api.ts (the tool-surface test asserts method-name parity). */
@@ -69,6 +69,7 @@ interface AppApi {
   getDataSchema(dataset: string): Promise<{ ok; dataset; columns }>;       // columns + inferred types from the live data
   // read data (read-only, row-capped; pass verbosity:"detailed" for a bigger pull)
   runSql(input: { sql?: string; dataset?: string; limit?: number; verbosity?: Verbosity }): Promise<{ ok; rows; rowCount; truncated? }>;  // one read-only SELECT over the dataset views, or a whole dataset
+  previewDataset(dataset: string, opts?: { limit?: number; verbosity?: Verbosity }): Promise<{ ok; rows; rowCount; truncated? }>;  // read a dataset/transform's rows back — alias for runSql({ dataset }); the findable way to verify computed values
   validateSql(sql: string): Promise<{ ok; columns?; error? }>;            // dry-run a SELECT (catalog/parse/type errors) without running it
   validateManifest(manifest?: Manifest): Promise<{ ok; errors; warnings }>; // validate + check bindings vs data (current manifest if omitted)
   // edit the manifest — read-many / write-one. Nothing is written until applyEdit.
@@ -80,10 +81,11 @@ interface AppApi {
   pruneCheckpoints(keep?: number): Promise<{ ok; kept; removed }>;
   // data actions (typed appends) + queries (typed reads)
   listActions(): Promise<{ ok; actions }>;
-  runAction(name: string, rows: object[]): Promise<{ ok; inserted?; checkpoint_id? }>;
+  // typed writes, dispatched by each action's declared mode (listActions/getOverview show it): insert/replace take rows, delete takes match, update takes match+set. Atomic by default: validates all calls first, rolls back every write if any fails.
+  runActions(calls: { action: string; rows?: object[]; match?: object; set?: object }[], opts?: { atomic?: boolean }): Promise<{ ok; results?; checkpoint_ids?; failures? }>;
   listQueries(): Promise<{ ok; queries }>;
   runQuery(name: string, params?: object, opts?: { limit?: number; verbosity?: Verbosity }): Promise<{ ok; rows; columns }>;
-  // connectors — provider sync (authorizing is human-only via the dashboard Connect button)
+  // connectors — provider sync. Keyless connectors (auth:"none", canSyncDirectly:true) need NO authorization: sync them directly with runSync. oauth2/bearer connectors need a human to connect via the dashboard Connect button first.
   listConnectors(): Promise<{ ok; connectors }>;
   runSync(name: string): Promise<{ ok; error? }>;
 }
