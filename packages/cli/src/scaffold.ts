@@ -19,6 +19,7 @@ export function islandSkeleton(type: string): Record<string, unknown> {
     "category.bar": { type, title: "New bars", dataset: "TODO", x: "TODO", y: "TODO" },
     "category.combo": { type, title: "New combo", dataset: "TODO", x: "TODO", bars: "TODO", lines: "TODO" },
     "waterfall.bars": { type, title: "New waterfall", dataset: "TODO", label: "TODO", value: "TODO" },
+    "divergence.bars": { type, title: "New divergence", dataset: "TODO", x: "TODO", value: "TODO" },
     "breakdown.treemap": {
       type,
       title: "New breakdown",

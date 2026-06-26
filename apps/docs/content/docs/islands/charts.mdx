@@ -225,6 +225,74 @@ renderer, so the dataset stays a flat list of `(step, delta, kind)` rows.
 - [`format`](/reference/value-formats) styles the y axis and the per-step tooltip, which shows each
   step's signed value.
 
+## divergence.bars
+
+A diverging bar chart: one signed bar per category or day, extending above or below a zero baseline
+and colored by which value band it falls into. Reach for it to show deviation from a reference — a
+daily calorie surplus/deficit, budget variance, net cash flow, or a temperature anomaly. Pick it
+over `category.bar` when the values are signed and the up/down direction is the message, and over
+`waterfall.bars` when each bar stands on its own rather than accumulating into a running total. The
+island reads a pre-computed signed `value`; to diverge from a non-zero target, compute the delta in
+SQL.
+
+<LiveIsland
+  type="divergence.bars"
+  config={{
+    title: "Daily calorie delta",
+    x: "day",
+    value: "delta",
+    buckets: [
+      { gte: 300, color: "#16a34a", label: "High surplus" },
+      { gte: 0, lt: 300, color: "#4ade80", label: "Surplus" },
+      { gte: -500, lt: 0, color: "#fb923c", label: "Deficit" },
+      { lt: -500, color: "#ef4444", label: "Large deficit" },
+    ],
+  }}
+  data={sampleData(
+    [
+      { name: "day", type: "date" },
+      { name: "delta", type: "double" },
+    ],
+    [
+      { day: "2025-06-16", delta: 420 },
+      { day: "2025-06-17", delta: -180 },
+      { day: "2025-06-18", delta: 90 },
+      { day: "2025-06-19", delta: -640 },
+      { day: "2025-06-20", delta: 260 },
+      { day: "2025-06-21", delta: -120 },
+      { day: "2025-06-22", delta: 880 },
+      { day: "2025-06-23", delta: -540 },
+      { day: "2025-06-24", delta: 60 },
+    ],
+    "calorie_delta",
+  )}
+/>
+
+```jsonc title="manifest.json"
+{
+  "type": "divergence.bars",
+  "title": "Daily calorie delta",
+  "dataset": "calorie_delta",
+  "x": "day",
+  "value": "delta",
+  "buckets": [
+    { "gte": 300, "color": "#16a34a", "label": "High surplus" },
+    { "gte": 0, "lt": 300, "color": "#4ade80", "label": "Surplus" },
+    { "gte": -500, "lt": 0, "color": "#fb923c", "label": "Deficit" },
+    { "lt": -500, "color": "#ef4444", "label": "Large deficit" }
+  ]
+}
+```
+
+- `x`: the category or date field — one bar per row (required); `value`: the signed numeric field,
+  rising above the zero baseline when positive and dropping below it when negative (required). Rows
+  with a null or non-numeric `value` are skipped.
+- `buckets`: color each bar by the band its value falls in, matched top-to-bottom with half-open
+  bounds `[gte, lt)` (omit either bound for an open end). Give every bucket a `label` to show a
+  legend; a value matching no band renders neutral grey. Omit `buckets` entirely for a default
+  green-positive / red-negative two-tone.
+- [`format`](/reference/value-formats) styles the y axis and the per-bar tooltip.
+
 ## rank.list
 
 A ranked Top-N list with proportional horizontal bars, the island for a leaderboard: top products,

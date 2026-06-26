@@ -115,6 +115,7 @@ or read `packages/schema/src/index.ts`.
 | `metric.scorecard` | `dataset`, `stats` | several KPIs off the last row; each stat `{value, label?, format?, unit?, compareTo?}`, `compareTo: "prev"` adds a delta; `columns` fixes the grid (1-6) |
 | `timeseries.line` | `dataset`, `x`, `y` | `y` may be a string or array; `options.goalField` for a goal line; with `series`, many distinct values auto-show a searchable picker (`options.seriesPicker` forces/disables it) |
 | `category.bar` | `dataset`, `x`, `y` | `group`, `stacked` optional |
+| `divergence.bars` | `dataset`, `x`, `value` | signed bars diverging up/down from a zero baseline, colored by value band; `buckets` = `[{gte?, lt?, color, label?}]` matched half-open `[gte, lt)`, omit for a green/red two-tone; pre-compute the signed delta in SQL |
 | `breakdown.treemap` | `dataset`, `label`, `value` | a treemap of (optionally hierarchical) parts of a whole |
 | `category.pie` | `dataset`, `label`, `value` | a pie or donut of one series' share; `donut: true` for a hole, slices sum by `label`, only positive values render |
 | `correlation.scatter` | `dataset`, `x`, `y` | `series` colors point groups, `size` scales bubbles, `label` names points; `xFormat`/`format` style the x/y axes + tooltip |

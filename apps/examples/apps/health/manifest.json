@@ -18,7 +18,8 @@
     "protocol": { "source": "data/protocol.csv", "description": "supplements, targets, training and habit protocol items" },
     "whoop_recovery": { "source": "data/whoop_recovery.csv", "description": "daily Whoop recovery: score, resting heart rate, HRV (synced by the whoop connector)" },
     "whoop_sleep": { "source": "data/whoop_sleep.csv", "description": "per-sleep Whoop performance + stage durations (synced by the whoop connector)" },
-    "whoop_workouts": { "source": "data/whoop_workouts.csv", "description": "per-workout Whoop strain + heart rate (synced by the whoop connector)" }
+    "whoop_workouts": { "source": "data/whoop_workouts.csv", "description": "per-workout Whoop strain + heart rate (synced by the whoop connector)" },
+    "calorie_delta": { "sql": "models/transforms/calorie_delta.sql", "description": "daily calorie surplus/deficit vs the goal-band midpoint (signed delta per day)" }
   },
   "actions": {
     "log_meal": {
@@ -185,7 +186,7 @@
       "icon": "list-bullets",
       "filters": [
         { "id": "period", "type": "daterange", "label": "Period",
-          "bind": { "macros_daily": "date", "meals": "ts", "meal_components": "meal_ts" } }
+          "bind": { "macros_daily": "date", "meals": "ts", "meal_components": "meal_ts", "calorie_delta": "date" } }
       ],
       "groups": [
         { "id": "log", "title": "Log", "islands": [
@@ -209,6 +210,14 @@
             { "type": "timeseries.line", "title": "Calories vs goal", "dataset": "macros_daily", "x": "date", "y": "kcal", "options": { "goalField": "kcal_goal_high" }, "span": 6 },
             { "type": "timeseries.line", "title": "Protein vs goal", "dataset": "macros_daily", "x": "date", "y": "protein_g", "options": { "goalField": "protein_goal_g" }, "span": 6 }
           ] },
+          { "type": "divergence.bars", "title": "Daily calorie delta", "dataset": "calorie_delta", "x": "date", "value": "delta", "format": "int", "span": 12,
+            "buckets": [
+              { "gte": 100, "color": "#16a34a", "label": "Surplus" },
+              { "gte": 0, "lt": 100, "color": "#4ade80", "label": "Slight surplus" },
+              { "gte": -300, "lt": 0, "color": "#fbbf24", "label": "Light deficit" },
+              { "gte": -600, "lt": -300, "color": "#fb923c", "label": "Moderate deficit" },
+              { "lt": -600, "color": "#ef4444", "label": "Large deficit" }
+            ] },
           { "type": "layout.row", "id": "composition-trends", "islands": [
             { "type": "timeseries.line", "title": "Carbs & fat", "dataset": "macros_daily", "x": "date", "y": ["carb_g", "fat_g"], "span": 6 },
             { "type": "timeseries.line", "title": "Fiber & sugar", "dataset": "macros_daily", "x": "date", "y": ["fiber_g", "sugar_g"], "span": 6 }

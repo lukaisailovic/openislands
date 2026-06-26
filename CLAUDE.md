@@ -46,6 +46,7 @@ apps/docs/           # the docs site (Fumadocs on TanStack Start, static → Clo
 - **Prefer built-in islands.** Unknown types render a placeholder until a renderer exists under
   `components/custom/`.
 - **Tests live in `test/`**, not `src/` (so the bundler doesn't ship them).
+- **Templates stay minimal** — demo new islands/features in `apps/examples/`, not `templates/`.
 - **The agent skill has one source: `skills/openislands/SKILL.md`.** Edit it there, then `pnpm sync:skill`
   to regenerate the copies in `templates/*/.agents/skills/` and the shared `.mcp.json` + `AGENTS.md`
   (from `scripts/template-files/`); never hand-edit the synced copies. `validate:templates` re-syncs first.
