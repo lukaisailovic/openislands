@@ -110,7 +110,7 @@ An agent grounds itself before it ever proposes a change. These methods are all 
 | `app.getIslandSchema(type)` | The exact config schema for one island type, plus its `layout` (`{ minSpan, recommendedSpan, maxSpan }`) and `notes` — so the sizing rules reach you at discovery time. |
 | `app.getManifest()` | The current manifest (the raw object). |
 | `app.getDataSchema(dataset)` | A dataset's live, DuckDB-inferred columns and types. |
-| `app.runSql({ dataset } \| { sql }, limit)` | Rows from a dataset, or a read-only `SELECT` over the registered dataset views. |
+| `app.runSql({ dataset } \| { sql }, limit)` | Rows from a dataset, or a read-only `SELECT` over the registered dataset views. Alias: `app.previewDataset(dataset)`. |
 | `app.validateSql(sql)` | Dry-runs a read-only `SELECT` against the dataset views; returns its result columns or the exact DuckDB error. |
 | `app.validateManifest(manifest?)` | Validates a manifest (the one on disk, or one you pass) and checks every binding against the data; also returns advisory layout `warnings`. |
 | `app.listCheckpoints()` | The rollback points, newest last. |
@@ -283,19 +283,30 @@ return await app.patchManifest({ queries: { by_class: null }, actions: { log_txn
 
 ## The data write path: actions
 
-Actions are typed inserts into a `source` dataset, declared in the manifest. The agent
-discovers and runs them:
+Actions are typed writes into a `source` dataset, declared in the manifest. Four modes are
+available: `insert` (append), `replace` (overwrite all rows), `delete` (drop rows matching a
+predicate), and `update` (patch matching rows). The agent discovers and runs them:
 
 - **`app.listActions()`** returns each declared action with its **resolved row JSON Schema**
   (derived from the live data, merged with the action's `fields` overrides). This is the
   agent's grounding for what a valid row looks like.
-- **`app.runActions([{ action, rows }])`** validates **every** row against that schema first. A single bad
-  row rejects the whole call with an error naming the row index and field, and **nothing is
-  written.** On success the target file is snapshotted (so `rollback` covers it) and the
-  result reports the rows `inserted` plus a `checkpoint_id`.
+- **`app.runActions([...])`** accepts a call per action. The call shape depends on the mode:
+  - `insert` / `replace`: `{ action, rows: [{ col: val }, ...] }`
+  - `delete`: `{ action, match: { col: val, ... } }` — equality match, multi-column AND; empty `match` is rejected.
+  - `update`: `{ action, match: { col: val }, set: { col: newVal } }`
 
-Inserts are all-or-nothing and path-confined to the project: an action can only write the
+  Every row is validated against the resolved schema before a single byte lands. A bad row
+  (or an empty `match`) rejects the whole call, and **nothing is written.** On success the
+  target file is snapshotted (so `rollback` covers it) and the result reports rows affected
+  plus a `checkpoint_id`. Multiple calls in one `runActions` are atomic by default.
+
+Writes are all-or-nothing and path-confined to the project: an action can only write the
 `source` file its declared dataset names.
+
+<Callout type="warn" title="No null in flat files">
+CSV and other flat-file datasets store no null. Pass `""` for an empty string, or omit the
+field to apply its `default`. Sending `null` is a validation error.
+</Callout>
 
 ## The read query path: queries
 
@@ -325,17 +336,25 @@ same checkpointed write path. The agent's two methods:
 
 - **`app.listConnectors()`** returns each connector's live status: `connected`, `missingSecrets`,
   `lastSync`, `lastError`, effective `schedule`, and any `loadError`. This is how an agent
-  discovers that auth is missing.
+  discovers whether a connector needs human action before it can run.
 - **`app.runSync(name)`** pulls from the provider and writes rows, returning rows-per-dataset,
   the write mode (`insert` / `replace`), and a `checkpoint_id`, so a sync is reversible with
   `rollback`.
 
-<Callout type="warn" title="Authorization is human-only">
+Whether a connector needs human involvement depends on its `auth` type:
 
-OAuth runs in the dashboard browser, not from the agent. If `listConnectors()` shows a connector
-isn't `connected` (OAuth not completed, or secrets missing), the agent must tell you to open the
-dashboard (`openislands serve`) and click **Connect**. It must never attempt to authorize on its
-own.
+- **Keyless connectors** (`auth: none` — no OAuth, no bearer token) need no human
+  authorization. An agent can call `runSync(name)` directly as long as the connector's
+  `connected` status shows no `missingSecrets`.
+- **OAuth2 / bearer connectors** require a human to authorize first. If `listConnectors()`
+  shows the connector isn't `connected` (OAuth not completed, or secrets missing), the agent
+  must tell you to open the dashboard (`openislands serve`) and click **Connect**. It must
+  never attempt to authorize on its own.
+
+<Callout type="warn" title="OAuth authorization is human-only">
+
+For `oauth2` and `bearer` connectors, authorization runs in the dashboard browser, not from
+the agent. Check `listConnectors()` first — only call `runSync` when `connected` is `true`.
 
 </Callout>
 

@@ -182,7 +182,19 @@ await app.patchManifest({ actions: { log_txn: { dataset: "transactions", mode: "
 return await app.runActions([{ action: "log_txn", rows: [{ amount: 50, kind: "in" }] }]);
 ```
 
-Every row is validated all-or-nothing and the file is snapshotted for rollback.
+Every row is validated all-or-nothing and the file is snapshotted for rollback. Flat-file
+datasets (CSV) store no null — pass `""` for an empty value, or omit the field to use its
+`default`.
+
+**Correct a value or delete a row.** Actions support four modes: `insert`, `replace`, `delete`,
+and `update`. The match predicate and new values are passed at call time, not in the manifest.
+An empty `match` is rejected (no accidental full-table wipe):
+
+```js
+// correct a value, then delete a row — declare actions with mode "update" / "delete"
+await app.runActions([{ action: "fix_meal", match: { id: "m-42" }, set: { protein_g: 30 } }]);
+return await app.runActions([{ action: "delete_meal", match: { id: "m-42" } }]);
+```
 
 **Atomic multi-write (parent + children).** `app.runActions(calls, { atomic })` runs several
 action inserts as one rollback-safe unit. `atomic` defaults to `true` — if any row fails
@@ -230,9 +242,10 @@ return await app.runQuery("by_class", { class: "BTC" });
 `app.patchManifest({ queries: { by_class: null }, actions: { log_txn: null } })`. For pages, use
 `remove_pages: ["overview"]`.
 
-**Connectors.** `app.listConnectors()` shows each connector's status. If it isn't `connected` it needs
-a secret or OAuth — **authorizing is human-only** (the Connect button in the running dashboard). Tell
-the user; don't try to sync. When connected, `app.runSync(name)` pulls into its datasets
+**Connectors.** `app.listConnectors()` shows each connector's status. **Keyless** connectors
+(`auth: none`) need no human action — call `runSync(name)` directly. For OAuth2/bearer connectors,
+authorization is human-only (the Connect button in the running dashboard) — tell the user if
+`connected` is false; don't try to sync. When connected, `app.runSync(name)` pulls into its datasets
 (checkpointed).
 
 ## The `oi` API
@@ -243,7 +256,8 @@ the user; don't try to sync. When connected, `app.runSync(name)` pulls into its 
 - **apps** — `oi.listApps()`, `oi.createApp({ id, title? })`, `oi.deleteApp({ id })` (soft-archive)
 - **read** — `app.getOverview({ verbosity? })` (start here), `app.listIslands()`,
   `app.getIslandSchema(type)`, `app.getManifest()`, `app.getDataSchema(dataset)`,
-  `app.runSql({ dataset | sql, limit })`, `app.validateManifest(manifest?)`, `app.validateSql(sql)`,
+  `app.runSql({ dataset | sql, limit })`, `app.previewDataset(dataset)` (alias for `runSql({ dataset })`),
+  `app.validateManifest(manifest?)`, `app.validateSql(sql)`,
   `app.listCheckpoints()`
 - **write** — `app.patchManifest({ ... })`, `app.replaceManifest(manifest)`,
   `app.applyEdit(proposal_id)`, `app.rollback(checkpoint_id?)`, `app.pruneCheckpoints(keep?)`

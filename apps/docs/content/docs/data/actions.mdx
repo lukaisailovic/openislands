@@ -10,8 +10,8 @@ runs it over [MCP](/mcp).
 
 ```mermaid
 flowchart LR
-  A["Agent: oi.app().runActions"] --> V{Validate rows}
-  V -- bad row --> X[Reject, nothing written]
+  A["Agent: oi.app().runActions"] --> V{Validate + match}
+  V -- bad row / empty match --> X[Reject, nothing written]
   V -- ok --> S[Snapshot + write file]
   S --> L[Live refresh]
 ```
@@ -24,17 +24,34 @@ not a file. Pointing an action at a `sql` dataset is a named validation error.
 
 ## Declaring one
 
-An action names its target dataset and a `mode`. The only mode today is `insert`, which appends
-rows:
+An action names its target dataset and a `mode`. Four modes are available:
+
+| Mode | What it does |
+| --- | --- |
+| `insert` | Appends rows (default). |
+| `replace` | Overwrites **all** rows in the dataset with the new rows. |
+| `delete` | Drops rows where every column in the `match` predicate equals the given value (equality, multi-column AND). An empty `match` is rejected. |
+| `update` | Patches matching rows: `match` selects the rows, `set` applies the new values. An empty `match` is rejected. |
 
 ```jsonc title="manifest.json"
 "actions": {
   "log_meal": {
     "dataset": "meals",
     "mode": "insert"
+  },
+  "delete_meal": {
+    "dataset": "meals",
+    "mode": "delete"
+  },
+  "fix_meal": {
+    "dataset": "meals",
+    "mode": "update"
   }
 }
 ```
+
+The match predicate and new values for `delete` and `update` are passed **at call time** via
+`runActions`, not in the manifest. `match` is equality-only in v1 — no ranges or operators.
 
 That alone inserts rows whose columns match the `meals` data. Most actions add a `fields` block
 to constrain or annotate specific columns.
@@ -77,20 +94,27 @@ that exist.
 
 ## What happens on a write
 
-An agent calls `oi.app().runActions([{ action, rows }])`. Before a single byte lands:
+An agent calls `oi.app().runActions([{ action, rows? }])`. Before a single byte lands:
 
-- **Every row is validated** against the resolved schema. One bad row (wrong type, a value
-  outside `min`/`max`, an unknown column) rejects the whole call with an error naming the row
-  index and the field, and nothing is written.
-- **The target file is snapshotted** to `.openislands/history/`, so the insert is reversible
+- **Every row (for `insert` / `replace`) is validated** against the resolved schema. One bad
+  row (wrong type, a value outside `min`/`max`, an unknown column) rejects the whole call with
+  an error naming the row index and the field, and nothing is written.
+- **For `delete` / `update`, the `match` predicate is checked** — an empty `match` is rejected
+  outright to prevent an accidental full-table wipe.
+- **The target file is snapshotted** to `.openislands/history/`, so every write is reversible
   with `rollback`.
 
-Then the rows land: appended to a flat file (a new CSV row, a push onto a JSON array, a line
-added to NDJSON) or `INSERT`ed into the SQLite table. A SQLite insert needs the file and table
-to exist already; a flat file is created if it's missing.
+Then the write lands: rows appended or replaced in a flat file, or the matched rows deleted /
+patched. A SQLite insert needs the file and table to exist already; a flat file is created if
+it's missing.
 
-Inserts are all-or-nothing and path-confined: an action can only write the one `source` file
+All writes are all-or-nothing and path-confined: an action can only write the one `source` file
 its dataset names. There is no general file write.
+
+<Callout type="warn" title="No null in flat files">
+CSV and other flat-file datasets store no null. Pass `""` for an empty string value, or omit
+the field entirely to apply its `default`. Sending `null` in a row is a validation error.
+</Callout>
 
 ## Running an action
 
@@ -98,14 +122,22 @@ Actions belong to the agent edit loop, not to a CLI command. An agent:
 
 1. Calls **`oi.app().listActions()`** to get each declared action and its resolved row JSON Schema
    (the live schema merged with `fields`). That schema is its grounding for a valid row.
-2. Calls **`oi.app().runActions([{ action, rows }])`**, which validates and inserts as above, returning the
-   count `inserted` and a `checkpoint_id`.
+2. Calls **`oi.app().runActions([...])`** with one call object per action:
+
+| Mode | Call shape |
+| --- | --- |
+| `insert` | `{ action, rows: [{ col: val, ... }, ...] }` |
+| `replace` | `{ action, rows: [{ col: val, ... }, ...] }` |
+| `delete` | `{ action, match: { col: val, ... } }` |
+| `update` | `{ action, match: { col: val, ... }, set: { col: newVal, ... } }` |
+
+Multiple calls in one `runActions` are atomic by default — if any call fails validation,
+nothing is written; a mid-batch write failure rolls back earlier writes automatically.
 
 <Callout type="info" title="Note">
 
-Because the only mutation is a schema-checked insert, diffed against the live data and
-snapshotted before it runs, data that tries to talk an agent into a bad write still can't get
-past validation or escape `rollback`.
+Because every mutation is schema-checked and snapshotted before it runs, data that tries to
+talk an agent into a bad write still can't get past validation or escape `rollback`.
 
 </Callout>
 

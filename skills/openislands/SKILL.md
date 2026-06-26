@@ -43,15 +43,16 @@ returns the app-scoped API — **omit `id` when there's only one app**, else pas
 `apps/`. On the app:
 
 - **Orient / read:** `getOverview({verbosity?})`, `getManifest()`, `getDataSchema(dataset)`,
-  `runSql({sql?|dataset?,limit?,verbosity?})` (ad-hoc read-only SELECTs), `validateSql(sql)` (dry-run a
-  transform), `validateManifest(manifest?)`.
+  `runSql({sql?|dataset?,limit?,verbosity?})` (ad-hoc read-only SELECTs), `previewDataset(dataset)`
+  (alias for `runSql({ dataset })` — the findable name for reading back a dataset), `validateSql(sql)`
+  (dry-run a transform), `validateManifest(manifest?)`.
 - **Island catalog:** `listIslands()`, `getIslandSchema(type)`.
 - **Edit (read-many / write-one):** `patchManifest(patch)` (preferred — one section at a time) or
   `replaceManifest(manifest)` (full rewrite) → returns a `proposal_id` + a diff, writes **nothing** →
   `applyEdit(proposal_id)` writes it and returns a `checkpoint_id` → `rollback(checkpoint_id?)` undoes
   it. `listCheckpoints()` / `pruneCheckpoints(keep?)`.
-- **Typed data:** `listActions()` / `runActions([{ action, rows }], { atomic? })` (typed appends); `listQueries()` /
-  `runQuery(name, params?, opts?)` (typed reads).
+- **Typed data:** `listActions()` / `runActions([{ action, rows? | match? | set? }], { atomic? })`
+  (insert / replace / delete / update); `listQueries()` / `runQuery(name, params?, opts?)` (typed reads).
 - **Connectors:** `listConnectors()` / `runSync(name)` (provider pulls).
 
 Every method returns a JSON object carrying an `ok` flag — on `ok:false`, read `error` / `errors`
@@ -104,7 +105,9 @@ persists between calls, so you can stage in one and apply in the next.
   A page uses either a flat `islands` array or tabbed `groups`, not both. A group is
   `{ id, title?, islands }` and renders as a tab (deep-linked via `?group=<id>`) — reach for groups
   to split a busy page instead of adding a second sidebar page.
-- **actions** — declare a typed `insert` into a writable dataset; run rows through `runActions`.
+- **actions** — declare a typed write (`insert` / `replace` / `delete` / `update`) into a writable
+  dataset; run rows through `runActions`. The match predicate and new values for `delete`/`update`
+  are passed at call time, not in the manifest.
 - **queries** — declare a typed, parameterized read; run it through `runQuery`. No raw SQL in queries —
   heavy shaping lives in a `sql` transform the query reads from.
 
@@ -201,7 +204,17 @@ await app.patchManifest({ actions: { log_txn: { dataset: "transactions", mode: "
 return await app.runActions([{ action: "log_txn", rows: [{ amount: 50, kind: "in" }] }]);
 ```
 
-Every row is validated all-or-nothing and the file is snapshotted for rollback.
+Every row is validated all-or-nothing and the file is snapshotted for rollback. Flat-file
+datasets (CSV) store no null — pass `""` for an empty value, or omit the field to use its `default`.
+
+**Correct a value or delete a row.** Actions support `insert`, `replace`, `delete`, and `update`.
+The match predicate and new values are passed at call time. An empty `match` is rejected:
+
+```js
+// correct a value, then delete a row — declare actions with mode "update" / "delete"
+await app.runActions([{ action: "fix_meal", match: { id: "m-42" }, set: { protein_g: 30 } }]);
+return await app.runActions([{ action: "delete_meal", match: { id: "m-42" } }]);
+```
 
 **Add a typed read (query).** Declarative, parameterized, no raw SQL:
 
@@ -216,10 +229,11 @@ return await app.runQuery("by_class", { class: "BTC" });
 **Remove something.** In a record section, set the entry to `null`:
 `app.patchManifest({ queries: { by_class: null }, actions: { log_txn: null } })`. For pages, use `remove_pages`.
 
-**Connectors.** `app.listConnectors()` shows each connector's status. If `connected` is false it needs a
-secret or OAuth — **authorizing is human-only** (the Connect button in the running dashboard). Surface
-that to the user; don't try to sync. When connected, `app.runSync(name)` pulls into its datasets
-(checkpointed).
+**Connectors.** `app.listConnectors()` shows each connector's status. **Keyless** connectors
+(`auth: none`) need no human action — call `runSync(name)` directly. For OAuth2/bearer connectors,
+authorization is human-only (the Connect button in the running dashboard) — surface that to the user
+if `connected` is false; don't try to sync. When connected, `app.runSync(name)` pulls into its
+datasets (checkpointed).
 
 ## Rules that keep the app healthy
 
