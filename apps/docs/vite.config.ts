@@ -47,6 +47,13 @@ export default defineConfig({
           crawlLinks: true,
         },
       },
+      // Prerender each route one at a time. The default concurrency (os.cpus().length)
+      // races several routes through the in-process render server at once, and under that
+      // load a large response's body stream gets cut at the first ~64KiB chunk before
+      // `res.text()` drains it — so a >64KiB page (e.g. islands/charts) is silently written
+      // truncated, losing its trailing hydration <script> and shipping as dead HTML. Which
+      // page loses the race varies per build. Serial prerender removes the race.
+      prerender: { concurrency: 1 },
       pages: [
         { path: "/" },
         ...docPaths.map((path) => ({ path })),
