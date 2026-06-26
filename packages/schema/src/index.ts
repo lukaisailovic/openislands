@@ -1068,6 +1068,29 @@ export interface ValidationResult {
   custom: { page: string; index: number; type: string }[];
 }
 
+/** Copyable correct-shape examples for the nested structures agents most often guess wrong.
+ *  Appended to a validation error so the fix is one step, not guess→fail→retry. Failure-path only. */
+function shapeExample(kind: "drilldown" | "goals" | "content.editor" | "select-filter"): string {
+  switch (kind) {
+    case "drilldown":
+      return ` — drilldown shape: { "island": <a full island config>, "match": { "<embedded-dataset-col>": "<clicked-row-field>" } }. Example: {"island":{"type":"table.grid","dataset":"line_items","columns":["sku","qty"]},"match":{"order_id":"id"}}`;
+    case "goals":
+      return ` — each goal: { "value": "<field>", "goal": { "min"?: <num|col>, "max"?: <num|col> }, "label"?, "unit"? } (at least one of min/max). Example: {"value":"protein_g","goal":{"min":120},"label":"Protein","unit":"g"}`;
+    case "content.editor":
+      return ` — set exactly one of file or dir. Single file: {"type":"content.editor","file":"docs/runbook.md"}. Directory: {"type":"content.editor","dir":"docs","groups":[{"id":"guides","match":["guides/**"]}]}`;
+    case "select-filter":
+      return ` — select filter shape: { "id": "...", "type": "select", "bind": { "<dataset>": "<categorical-column>" }, "multiple"?: false }. Example: {"id":"region","type":"select","bind":{"sales":"region"},"multiple":false}`;
+  }
+}
+
+/** Maps a failing island type + Zod issue path to its copyable shape example, "" when none applies. */
+function exampleForIssue(type: string, path: string): string {
+  if ((type === "table.grid" || type === "timeline.feed") && path.startsWith("drilldown")) return shapeExample("drilldown");
+  if (type === "gauge.goal" && path.startsWith("goals")) return shapeExample("goals");
+  if (type === "content.editor" && /^(file|dir|groups|include|csv)/.test(path)) return shapeExample("content.editor");
+  return "";
+}
+
 /**
  * Validate a manifest. Built-in islands are validated strictly against their
  * schema; unknown types are accepted as *custom* islands (the typed extension
@@ -1241,11 +1264,12 @@ export function validateManifest(input: unknown): ValidationResult {
       if (!result.success) {
         for (const issue of result.error.issues) {
           const path = issue.path.join(".");
+          const base = path ? `${path}: ${issue.message}` : issue.message;
           errors.push({
             page: pageId,
             index,
             type,
-            message: path ? `${path}: ${issue.message}` : issue.message,
+            message: base + exampleForIssue(type, path),
             field: path || undefined,
           });
         }
@@ -1284,7 +1308,7 @@ export function validateManifest(input: unknown): ValidationResult {
               page: pageId,
               index,
               type,
-              message: `goals[${goalIndex}] needs at least one of min or max`,
+              message: `goals[${goalIndex}] needs at least one of min or max` + shapeExample("goals"),
               field: `goals.${goalIndex}.goal`,
             });
           }
@@ -1299,7 +1323,9 @@ export function validateManifest(input: unknown): ValidationResult {
             page: pageId,
             index,
             type,
-            message: hasFile ? "content.editor takes either 'file' or 'dir', not both" : "content.editor needs a 'file' or a 'dir'",
+            message:
+              (hasFile ? "content.editor takes either 'file' or 'dir', not both" : "content.editor needs a 'file' or a 'dir'") +
+              shapeExample("content.editor"),
             field: hasFile ? undefined : "dir",
           });
         } else if (hasFile && (Array.isArray(cfg.groups) || Array.isArray(cfg.include) || cfg.csv === true)) {
@@ -1307,7 +1333,7 @@ export function validateManifest(input: unknown): ValidationResult {
             page: pageId,
             index,
             type,
-            message: "content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set",
+            message: "content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set" + shapeExample("content.editor"),
             field: "groups",
           });
         }
@@ -1318,7 +1344,7 @@ export function validateManifest(input: unknown): ValidationResult {
           page: pageId,
           index,
           type,
-          message: "drilldown needs at least one match column",
+          message: "drilldown needs at least one match column" + shapeExample("drilldown"),
           field: "drilldown.match",
         });
       }
@@ -1351,7 +1377,8 @@ export function validateManifest(input: unknown): ValidationResult {
       for (const rawFilter of page.filters as Record<string, unknown>[]) {
         const r = PageFilter.safeParse(rawFilter);
         if (!r.success) {
-          pageError(`filters: ${r.error.issues[0]?.message ?? "invalid"}`);
+          const suffix = rawFilter.type === "select" ? shapeExample("select-filter") : "";
+          pageError(`filters: ${r.error.issues[0]?.message ?? "invalid"}${suffix}`);
           continue;
         }
         if (seenFilterIds.has(r.data.id)) pageError(`duplicate filter id '${r.data.id}'`);

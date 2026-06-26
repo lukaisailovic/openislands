@@ -466,7 +466,7 @@ describe("rich feed rows + drilldown", () => {
     expect(err!.type).toBe("timeline.feed");
     expect(err!.page).toBe("overview");
     expect(err!.index).toBe(0);
-    expect(err!.message).toBe("drilldown needs at least one match column");
+    expect(err!.message).toContain("drilldown needs at least one match column");
   });
 
   it("emits feed + drilldown properties in the JSON Schema with no leaked $refs", () => {
@@ -1014,7 +1014,7 @@ describe("content.editor", () => {
     expect(err).toBeDefined();
     expect(err!.page).toBe("p");
     expect(err!.index).toBe(0);
-    expect(err!.message).toBe("content.editor takes either 'file' or 'dir', not both");
+    expect(err!.message).toContain("content.editor takes either 'file' or 'dir', not both");
   });
 
   it("rejects declaring neither file nor dir, pointing at dir", () => {
@@ -1023,7 +1023,7 @@ describe("content.editor", () => {
     const err = r.errors.find((e) => e.type === "content.editor");
     expect(err).toBeDefined();
     expect(err!.field).toBe("dir");
-    expect(err!.message).toBe("content.editor needs a 'file' or a 'dir'");
+    expect(err!.message).toContain("content.editor needs a 'file' or a 'dir'");
   });
 
   it("rejects csv, include, or groups paired with a single file", () => {
@@ -1032,7 +1032,7 @@ describe("content.editor", () => {
     const err = r.errors.find((e) => e.type === "content.editor");
     expect(err).toBeDefined();
     expect(err!.field).toBe("groups");
-    expect(err!.message).toBe("content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set");
+    expect(err!.message).toContain("content.editor 'groups', 'include', and 'csv' only apply when 'dir' is set");
     expect(validateManifest(editorManifest({ file: "data/docs/readme.md", groups: [{ id: "g", match: ["*"] }] })).ok).toBe(false);
     expect(validateManifest(editorManifest({ file: "data/docs/readme.md", include: ["*.md"] })).ok).toBe(false);
   });
@@ -1375,5 +1375,90 @@ describe("page filters", () => {
     const r = validateManifest(withFilters([{ id: "period", type: "daterange", bind: { ghost: "month" } }]));
     expect(r.ok).toBe(false);
     expect(r.errors.some((e) => e.page === "overview" && e.message.includes("unknown dataset 'ghost'"))).toBe(true);
+  });
+});
+
+describe("validation errors carry a copyable correct-shape example", () => {
+  const withIsland = (island: unknown) => {
+    const m = structuredClone(goodManifest) as Record<string, unknown>;
+    (m.pages as { id: string; islands: unknown[] }[])[0]!.islands = [island];
+    return m;
+  };
+
+  it("attaches the drilldown example when a table.grid drilldown is the wrong shape", () => {
+    const r = validateManifest(
+      withIsland({ type: "table.grid", dataset: "net_worth", columns: [{ field: "a" }], drilldown: "by_id" }),
+    );
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "table.grid" && e.field?.startsWith("drilldown"));
+    expect(err).toBeDefined();
+    expect(err!.message).toContain(`{"island":{"type":"table.grid","dataset":"line_items","columns":["sku","qty"]},"match":{"order_id":"id"}}`);
+  });
+
+  it("attaches the drilldown example on the empty-match semantic check", () => {
+    const r = validateManifest(
+      withIsland({
+        type: "table.grid",
+        dataset: "net_worth",
+        columns: [{ field: "a" }],
+        drilldown: { match: {}, island: { type: "note.card", markdown: "x" } },
+      }),
+    );
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.field === "drilldown.match");
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("drilldown shape:");
+    expect(err!.message).toContain(`"order_id":"id"`);
+  });
+
+  it("attaches the goals example when a gauge.goal entry has neither min nor max", () => {
+    const r = validateManifest(
+      withIsland({ type: "gauge.goal", dataset: "net_worth", goals: [{ value: "net_worth_eur", goal: {} }] }),
+    );
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "gauge.goal");
+    expect(err).toBeDefined();
+    expect(err!.message).toContain("at least one of min/max");
+    expect(err!.message).toContain(`"protein_g"`);
+  });
+
+  it("attaches the goals example when goals is the wrong type (generic Zod path)", () => {
+    const r = validateManifest(withIsland({ type: "gauge.goal", dataset: "net_worth", goals: "all" }));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "gauge.goal" && e.field?.startsWith("goals"));
+    expect(err).toBeDefined();
+    expect(err!.message).toContain(`"protein_g"`);
+  });
+
+  it("attaches the content.editor example when neither file nor dir is set", () => {
+    const r = validateManifest(editorManifest({}));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "content.editor");
+    expect(err).toBeDefined();
+    expect(err!.message).toContain(`{"type":"content.editor","file":"docs/runbook.md"}`);
+  });
+
+  it("attaches the content.editor example when both file and dir are set", () => {
+    const r = validateManifest(editorManifest({ file: "a.md", dir: "docs" }));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.type === "content.editor");
+    expect(err).toBeDefined();
+    expect(err!.message).toContain(`{"type":"content.editor","file":"docs/runbook.md"}`);
+  });
+
+  it("attaches the select-filter example when a select filter is missing bind", () => {
+    const r = validateManifest(withFilters([{ id: "cat", type: "select" }]));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.page === "overview" && e.message.startsWith("filters:"));
+    expect(err).toBeDefined();
+    expect(err!.message).toContain(`"bind":{"sales":"region"}`);
+  });
+
+  it("does not attach the select-filter example to a malformed daterange filter", () => {
+    const r = validateManifest(withFilters([{ id: "period", type: "daterange" }]));
+    expect(r.ok).toBe(false);
+    const err = r.errors.find((e) => e.page === "overview" && e.message.startsWith("filters:"));
+    expect(err).toBeDefined();
+    expect(err!.message).not.toContain(`"bind":{"sales":"region"}`);
   });
 });
