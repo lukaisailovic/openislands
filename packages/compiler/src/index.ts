@@ -16,6 +16,7 @@ import duckdb, { type DuckDBValue } from "@duckdb/node-api";
 import { type ContentStore, getContentStore, isHiddenPath, resolveWithinRoot } from "@openislands/storage";
 import { BUILTIN_ISLAND_TYPES, flattenPageIslands, isSqliteSource, lintManifest, validateManifest, type Manifest, type DatasetSpec, type IslandError, type IslandType, type QuerySearch } from "@openislands/schema";
 import { queryResultToArrowIPC } from "./arrow.js";
+import { createInMemoryDuckDB } from "./writers.js";
 import { checkCustomIsland } from "./customSchema.js";
 import { checkConnectors } from "./connectors.js";
 import { checkQueries } from "./queries.js";
@@ -60,7 +61,7 @@ export {
   type UpdateResult,
   type ValidatedRows,
 } from "./actions.js";
-export { resolveWriter, extensionOf, type DatasetWriter, type WriteTarget } from "./writers.js";
+export { resolveWriter, extensionOf, createInMemoryDuckDB, type DatasetWriter, type WriteTarget } from "./writers.js";
 export {
   listConnectorStatuses,
   runConnectorSync,
@@ -215,7 +216,7 @@ async function registerDatasets(
 async function buildEngine(projectDir: string): Promise<Engine> {
   const store = getContentStore(projectDir);
   const manifest = await readManifest(projectDir);
-  const instance = await DuckDBInstance.create(":memory:");
+  const instance = await createInMemoryDuckDB();
   const conn = await instance.connect();
   await store.configureEngine(conn);
   const ftsTargets = ftsTargetsForManifest(manifest);
@@ -797,7 +798,7 @@ export async function inspectManifestDatasets(
   manifest: Manifest,
 ): Promise<{ columns: Map<string, Column[]>; failures: Map<string, string> }> {
   const store = getContentStore(projectDir);
-  const instance = await DuckDBInstance.create(":memory:");
+  const instance = await createInMemoryDuckDB();
   const conn = await instance.connect();
   try {
     await store.configureEngine(conn);
@@ -826,7 +827,7 @@ export async function inferFile(absPath: string): Promise<SourceSchema> {
   if (ext === ".sqlite" || ext === ".db") {
     throw new Error(`sqlite file ${absPath} can't be inferred loosely — declare it as a project dataset with a 'table' instead`);
   }
-  const instance = await DuckDBInstance.create(":memory:");
+  const instance = await createInMemoryDuckDB();
   const conn = await instance.connect();
   try {
     const reader = await conn.runAndReadAll(`SELECT * FROM ${fileReaderExpr(absPath, absPath)} LIMIT 0`);

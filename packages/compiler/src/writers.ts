@@ -15,11 +15,25 @@
  * Row validation and rollback snapshots live one layer up (actions.ts) and wrap
  * these writers; a writer only performs the physical mutation.
  */
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import duckdb from "@duckdb/node-api";
 import { SQLITE_SOURCE_EXTENSIONS } from "@openislands/schema";
 import type { ContentStore } from "@openislands/storage";
 
 const { DuckDBInstance } = duckdb;
+
+const DUCKDB_TEMP_DIRECTORY = join(tmpdir(), "openislands-duckdb");
+
+/**
+ * In-memory DuckDB instance with an explicit, writable spill directory. Without an
+ * explicit temp_directory DuckDB spills to ./.tmp relative to the process cwd, which
+ * fails the moment a query spills to disk and the cwd isn't writable (e.g. WORKDIR
+ * /app owned by root in the Docker image: "IO Error: Failed to create directory .tmp").
+ */
+export function createInMemoryDuckDB(): Promise<InstanceType<typeof DuckDBInstance>> {
+  return DuckDBInstance.create(":memory:", { temp_directory: DUCKDB_TEMP_DIRECTORY });
+}
 
 /** Where a dataset's rows physically live: its content source, plus the table name when that source is a SQLite database. */
 export interface WriteTarget {
@@ -207,7 +221,7 @@ class SqliteWriter implements DatasetWriter {
       throw new Error(`sqlite database not found: ${this.path} — provide the file with table "${this.table}"`);
     }
     const localFile = await this.store.localPath(this.path);
-    const instance = await DuckDBInstance.create(":memory:");
+    const instance = await createInMemoryDuckDB();
     const conn = await instance.connect();
     const table = `_w.${quoteIdent(this.table)}`;
     try {
